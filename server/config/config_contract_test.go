@@ -1,8 +1,10 @@
+// Moonbook modification notice: configuration contract coverage updated, 2026-08-14.
 package config
 
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -10,13 +12,30 @@ import (
 
 func TestShippedServerConfigsMatchSchema(t *testing.T) {
 	tests := []struct {
-		name       string
-		path       string
-		kubernetes bool
+		name string
+		path string
+		env  map[string]string
 	}{
 		{name: "default", path: "../config.yaml"},
 		{name: "docker", path: "../config.docker.yaml"},
-		{name: "kubernetes", path: "../../deploy/kubernetes/server/gva-server-configmap.yaml", kubernetes: true},
+		{
+			name: "moonbook",
+			path: "../config.moonbook.yaml.tpl",
+			env: map[string]string{
+				"MOONBOOK_JWT_SIGNING_KEY": "test-jwt-signing-key",
+				"MOONBOOK_SERVER_PORT":     "18888",
+				"POSTGRES_HOST_PORT":       "15432",
+				"POSTGRES_DB":              "moonbook",
+				"POSTGRES_USER":            "moonbook",
+				"POSTGRES_PASSWORD":        "test-postgres-password",
+				"REDIS_HOST_PORT":          "16379",
+				"REDIS_PASSWORD":           "test-redis-password",
+				"MINIO_API_HOST_PORT":      "19000",
+				"MINIO_ROOT_USER":          "moonbook",
+				"MINIO_ROOT_PASSWORD":      "test-minio-password",
+				"MINIO_BUCKET":             "moonbook-content",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -25,18 +44,13 @@ func TestShippedServerConfigsMatchSchema(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tt.kubernetes {
-				var manifest struct {
-					Data map[string]string `yaml:"data"`
+			if len(tt.env) > 0 {
+				content = []byte(os.Expand(string(content), func(key string) string {
+					return tt.env[key]
+				}))
+				if strings.Contains(string(content), "${") {
+					t.Fatal("配置模板渲染后仍包含未解析变量")
 				}
-				if err := yaml.Unmarshal(content, &manifest); err != nil {
-					t.Fatal(err)
-				}
-				embedded, ok := manifest.Data["config.yaml"]
-				if !ok || len(bytes.TrimSpace([]byte(embedded))) == 0 {
-					t.Fatal("Kubernetes ConfigMap 缺少非空 data.config.yaml")
-				}
-				content = []byte(embedded)
 			}
 
 			decoder := yaml.NewDecoder(bytes.NewReader(content))

@@ -6,8 +6,8 @@
 
 | 里程碑 | 状态 | 当前证据 |
 | --- | --- | --- |
-| M0 冻结、基线与盘点 | 进行中 | GVA 与旧仓库基线已锁定；reader-ui 已原样迁入；首版功能/API/数据清单已建立 |
-| M1 工程与本地基础设施 | 未开始 | - |
+| M0 冻结、基线与盘点 | 已完成 | GVA 与旧仓库基线已锁定；reader-ui 原样迁入并通过 536 个基线测试；功能、API、数据和容量盘点范围已建立 |
+| M1 工程与本地基础设施 | 进行中 | Moonbook 专用 PostgreSQL、Redis、MinIO Compose 与配置模板已完成真实健康验证 |
 | M2 小说核心与对象存储 | 未开始 | - |
 | M3 读者域与零修改兼容 | 未开始 | - |
 | M4 交易、支付与运营 | 未开始 | - |
@@ -33,13 +33,21 @@
 - 旧仓库存在约 8 GB 数据库备份，但新仓库未复制该敏感/大体积文件；完整数据副本演练将在 M6 使用受控来源执行。
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
 
+## M1 已验证单元
+
+- `compose.yaml` 使用独立 `moonbook` 项目、网络和命名卷启动 PostgreSQL 17.6、Redis 7.4.5 与 MinIO 固定版本。
+- `.env.example`、`server/config.moonbook.yaml.tpl` 和 `scripts/render-local-config.sh` 提供无生产秘密的本地配置生成流程；生成文件权限为 `0600` 且无未解析变量。
+- `scripts/verify-infrastructure.sh` 已用容器内客户端证明 PostgreSQL 接受连接、Redis 密码认证成功、MinIO readiness 正常，并独立读取策略确认 `moonbook-content` Bucket 为私有。
+- `server/config/config_contract_test.go` 对 Moonbook 模板执行确定性渲染和 YAML 严格字段校验；`CGO_ENABLED=0 GOCACHE=/private/tmp/moonbook-go-cache go test ./config ./core/... ./initialize/...` 通过。
+- 本机 Go 1.25.12 在 macOS ARM 启用 cgo 时会在上游 `github.com/shoenig/go-m1cpu v0.1.6` 初始化期间崩溃；当前以禁用 cgo 的可重复测试路径规避，不归因于 Moonbook 配置改动。
+
 ## 当前工作
 
-完成 M0 的清单交叉核对、盘点脚本自测和提交；随后进入 M1，替换上游 MySQL 示例 Compose，建立 Moonbook 专用 PostgreSQL、Redis 和 MinIO 基础设施。
+继续完成 M1 工程基座：反向代理、模块依赖规则、版本化 PostgreSQL 迁移、健康与优雅停机、错误与追踪规范、持久化任务和业务迁移工具骨架、CI 与一键验证入口。
 
 ## 下一步
 
-1. 交叉核对旧业务页面、Controller 和迁移映射是否均有归属。
-2. 验证盘点脚本帮助、缺参和 Shell 语法路径。
-3. 提交 M0 盘点证据。
-4. 开始 M1 Compose、配置和真实基础设施集成验证。
+1. 建立 Moonbook 模块目录、依赖规则和 PostgreSQL 版本化迁移框架。
+2. 实现存活/就绪检查、请求追踪、统一错误与指标基线。
+3. 建立持久化任务和旧 MySQL 迁移命令骨架。
+4. 补齐反向代理、CI 和一键验证入口，并从空环境执行 M1 完整验收。
