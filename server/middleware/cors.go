@@ -1,3 +1,4 @@
+// Moonbook modification notice: strict CORS semantics corrected, 2026-08-14.
 package middleware
 
 import (
@@ -34,7 +35,12 @@ func CorsByRules() gin.HandlerFunc {
 		return Cors()
 	}
 	return func(c *gin.Context) {
-		whitelist := checkCors(c.GetHeader("origin"))
+		origin := c.GetHeader("Origin")
+		if origin == "" {
+			c.Next()
+			return
+		}
+		whitelist := checkCors(origin)
 
 		// 通过检查, 添加请求头
 		if whitelist != nil {
@@ -48,12 +54,14 @@ func CorsByRules() gin.HandlerFunc {
 		}
 
 		// 严格白名单模式且未通过检查，直接拒绝处理请求
-		if whitelist == nil && global.GVA_CONFIG.Cors.Mode == "strict-whitelist" && !(c.Request.Method == "GET" && c.Request.URL.Path == "/health") {
+		if whitelist == nil && global.GVA_CONFIG.Cors.Mode == "strict-whitelist" {
 			c.AbortWithStatus(http.StatusForbidden)
+			return
 		} else {
 			// 非严格白名单模式，无论是否通过检查均放行所有 OPTIONS 方法
 			if c.Request.Method == http.MethodOptions {
 				c.AbortWithStatus(http.StatusNoContent)
+				return
 			}
 		}
 

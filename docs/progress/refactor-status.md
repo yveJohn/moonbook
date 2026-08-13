@@ -42,15 +42,19 @@
 - `server/internal/platform/migrate` 使用嵌入式 Goose 和 PostgreSQL 会话锁管理前向迁移，`scripts/migrate-local.sh` 提供本地 `status/up` 入口；真实 PostgreSQL 已验证 `current=0 target=1 pending=true`、首次 `applied=1`、完成后 `pending=false`、重复执行 `applied=0`。
 - 首个迁移建立 `platform_jobs`、`platform_job_attempts`、`migration_checkpoints` 和 `migration_errors`，为持久化任务、租约重试和旧数据迁移检查点提供 PostgreSQL 事实表；元数据核对确认 4 张表和 43 个约束存在。
 - `server/internal/modules` 建立小说、读者、交易和内容生产模块边界，依赖扫描测试禁止业务模块直接依赖 GVA 全局实现或绕过其他模块公开合同。
+- `/health/live` 与 `/health/ready` 已完成运行时验证：live 返回 200，ready 在 11ms 内确认 migrations、MinIO、PostgreSQL、Redis 均为 `ok`；探测器具备 2 秒硬超时，失败响应只暴露依赖状态。两次 SIGINT 验证均记录优雅关闭完成。
+- 严格 CORS 已启用并修正无 `Origin` 的反向代理/健康请求语义；运行时确认非浏览器健康请求通过、非白名单 Origin 返回 403。
 - 本机 Go 1.25.12 在 macOS ARM 启用 cgo 时会在上游 `github.com/shoenig/go-m1cpu v0.1.6` 初始化期间崩溃；当前以禁用 cgo 的可重复测试路径规避，不归因于 Moonbook 配置改动。
 
 ## 当前工作
 
 继续完成 M1 工程基座：反向代理、模块依赖规则、版本化 PostgreSQL 迁移、健康与优雅停机、错误与追踪规范、持久化任务和业务迁移工具骨架、CI 与一键验证入口。
 
+当前空库只包含 Moonbook 平台迁移；GVA 基座表尚未纳入版本化迁移。真实启动虽然能提供健康端点，但日志出现 `sys_apis`、`sys_timed_tasks`、`jwt_blacklists` 等关系不存在，管理后台不可用，因此 M1 空环境启动条件尚未满足。
+
 ## 下一步
 
-1. 建立 Moonbook 模块目录、依赖规则和 PostgreSQL 版本化迁移框架。
-2. 实现存活/就绪检查、请求追踪、统一错误与指标基线。
-3. 建立持久化任务和旧 MySQL 迁移命令骨架。
+1. 将 GVA 管理基座表和必需初始数据纳入 PostgreSQL 版本化迁移，消除空库启动缺表错误。
+2. 补齐统一错误规范、Prometheus 指标与任务运行指标。
+3. 实现持久化任务领取、租约、重试恢复和旧 MySQL 迁移命令骨架。
 4. 补齐反向代理、CI 和一键验证入口，并从空环境执行 M1 完整验收。

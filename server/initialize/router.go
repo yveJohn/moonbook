@@ -1,3 +1,4 @@
+// Moonbook modification notice: runtime health and strict CORS routes updated, 2026-08-14.
 package initialize
 
 import (
@@ -6,6 +7,7 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/docs"
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/health"
 	"github.com/flipped-aurora/gin-vue-admin/server/middleware"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
@@ -60,9 +62,7 @@ func Routers() *gin.Engine {
 	Router.Use(middleware.UploadResponseHeaders(global.GVA_CONFIG.Local.StorePath))
 	Router.StaticFS(global.GVA_CONFIG.Local.StorePath, justFilesFilesystem{http.Dir(global.GVA_CONFIG.Local.StorePath)})
 	// Router.Use(middleware.LoadTls())  // 如果需要使用https 请打开此中间件 然后前往 core/server.go 将启动模式 更变为 Router.RunTLS("端口","你的cre/pem文件","你的key文件")
-	// 跨域，如需跨域可以打开下面的注释
-	// Router.Use(middleware.Cors()) // 直接放行全部跨域请求
-	// Router.Use(middleware.CorsByRules()) // 按照配置的规则放行跨域请求
+	Router.Use(middleware.CorsByRules())
 	docs.SwaggerInfo.BasePath = global.GVA_CONFIG.System.RouterPrefix
 	Router.GET(global.GVA_CONFIG.System.RouterPrefix+"/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	logger.Bg().Mod("system").Info("register swagger handler")
@@ -75,9 +75,10 @@ func Routers() *gin.Engine {
 
 	{
 		// 健康监测
-		PublicGroup.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, "ok")
-		})
+		checker := runtimeHealthChecker()
+		PublicGroup.GET("/health", health.Live)
+		PublicGroup.GET("/health/live", health.Live)
+		PublicGroup.GET("/health/ready", checker.Ready)
 	}
 	{
 		systemRouter.InitBaseRouter(PublicGroup) // 注册基础功能路由 不做鉴权
