@@ -9,7 +9,8 @@ type InitRouter struct{}
 func (s *InitRouter) InitInitRouter(Router *gin.RouterGroup) {
 	initRouter := Router.Group("init")
 	{
-		initRouter.POST("initdb", dbApi.InitDB)   // 初始化数据库
-		initRouter.POST("checkdb", dbApi.CheckDB) // 检测是否需要初始化数据库
+		// Moonbook databases are provisioned by versioned migrations and the
+		// administrator bootstrap CLI. Keep only the frontend compatibility probe.
+		initRouter.POST("checkdb", dbApi.CheckDB)
 	}
 }

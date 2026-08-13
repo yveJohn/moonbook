@@ -12,6 +12,10 @@ scripts/render-local-config.sh
 docker compose --env-file .env up -d postgres redis minio minio-init
 scripts/verify-infrastructure.sh
 scripts/migrate-local.sh up
+MOONBOOK_ADMIN_USERNAME=admin \
+MOONBOOK_ADMIN_PASSWORD='<至少 12 位的本地初始密码>' \
+MOONBOOK_ADMIN_NICKNAME='Moonbook Admin' \
+scripts/bootstrap-local-admin.sh
 ```
 
 生成的 `server/config.moonbook.local.yaml` 权限为 `0600`，被 Git 忽略。启动 Go 服务时使用：
@@ -22,6 +26,8 @@ GVA_CONFIG=config.moonbook.local.yaml go run .
 ```
 
 应用启动前必须先执行版本化迁移。`scripts/migrate-local.sh status` 显示当前版本、目标版本和是否存在待执行迁移；`up` 使用事务和 PostgreSQL 会话锁执行所有待执行迁移，重复执行不会重复创建业务对象。迁移事实记录在 `moonbook_schema_version`，不得通过 GORM `AutoMigrate` 替代 Moonbook 业务迁移。
+
+数据库迁移不会写入默认管理员或示例用户。首次部署必须通过 `scripts/bootstrap-local-admin.sh` 显式引导管理员；用户名和密码仅从进程环境变量读取，密码至少 12 位。命令在事务和 PostgreSQL advisory lock 下执行，只允许空的 `sys_users` 表引导一次，重复执行会拒绝覆盖。新管理员首次登录后必须修改初始密码。Moonbook 不提供 GVA 的 HTTP `/init/initdb` 建库入口。
 
 ## 本地端口
 
