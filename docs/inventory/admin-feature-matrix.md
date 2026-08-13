@@ -26,7 +26,8 @@
 | 书籍管理 | `novel/book` / `NovelBookController` | 查询、新增、编辑、状态、推荐、分类/子分类、定价 | 待补 | 基线已盘点 |
 | 章节管理 | `novel/chapter` / `NovelChapterController` | 目录、正文查看/编辑、状态、统计、删除 | 待补 | 基线已盘点 |
 | 分类与子分类 | 书籍页面及相关 API/SQL | 分类筛选、方向、子分类关系 | 待补 | 基线已盘点 |
-| 作者信息 | 书籍领域及旧数据表 | 作者关联、展示与迁移 | 待补 | 基线已盘点 |
+| 小说分类 | 书籍领域、现行字典及历史分类表 | 一级/二级分类 CRUD、排序、启停、迁移 | `novel_categories`、`/novel/categories`、`view/novel/metadata` | M2 元数据切片已实现；待书籍关联闭环 |
+| 作者信息 | 书籍领域及旧数据表 | 作者 CRUD、状态、作品方向、历史 ID 与迁移 | `novel_authors`、`/novel/authors`、`view/novel/authors` | M2 元数据切片已实现；待书籍关联闭环 |
 | SEO 配置 | `novel/readerSeo` / `NovelReaderSeoController` | SEO 开关、站点信息、robots、sitemap | 待补 | 基线已盘点 |
 | 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | AI 建议、采用、失败重试 | M5 补齐 | 基线已盘点 |
 

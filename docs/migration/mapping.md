@@ -6,8 +6,9 @@
 
 | 数据域 | 主要旧表/来源 | 目标 | ID 规则 | 校验重点 | 状态 |
 | --- | --- | --- | --- | --- | --- |
+| 分类 | 现行 `sys_dict_data` 的 `novel_book_category` / `novel_book_sub_category`、历史 `book_category` | `novel_categories` | `dict_code`/历史分类 ID 原值写入 bigint；`dict_value` 保留为稳定 code | code、名称、类型、排序、启停及来源 | M2 元数据切片已实现 |
 | 书籍 | `novel_book`、历史 `book`、分类/子分类关系 | PostgreSQL 小说域 | 原值保留 | 行数、分类、状态、字数、末章 | 待 M2 设计 |
-| 作者 | 历史 `author`、`book_author` 和现有书籍字段 | PostgreSQL 作者与关联 | 原值保留 | 书籍作者关联、孤立作者 | 待 M2 设计 |
+| 作者 | 当前 `novel_book.author_id/author_name`、历史 `book_author`、`author` | `novel_authors`；书籍关联在 M2 书籍切片补齐 | 当前/历史作者 ID 原值优先作为 bigint 主键；更早 `author` 同时保留 `legacy_author_id` | 当前书籍作者优先，不按同名擅自合并不同旧 ID，孤立作者显式保留 | M2 元数据切片已实现 |
 | 章节元数据 | `novel_chapter`、历史 `book_index` | PostgreSQL 章节 | 原值保留 | 章节序号、书籍关联、状态、字数 | 待 M2 设计 |
 | 章节正文 | `novel_chapter_content`、`book_content0..9`、TXT 文件 | MinIO + PostgreSQL 对象引用 | chapter ID 原值 | 对象数、总字节、SHA-256、缺失正文 | 待 M2/M6 设计 |
 | 封面和附件 | 书籍 URL、`sys_file/sys_oss`、导入原文件 | MinIO 文件命名空间 | 业务 ID 原值 | 下载可用性、大小、哈希、来源 | 待 M2/M6 设计 |

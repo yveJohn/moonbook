@@ -37,7 +37,7 @@ jobs:
         run: go test -race ./internal/... ./config ./core/... ./initialize/... ./middleware ./cmd/moonbook-admin ./cmd/moonbook-config ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
       - name: Build management frontend
         working-directory: web
-        run: pnpm install --frozen-lockfile && pnpm run build
+        run: pnpm install --frozen-lockfile && pnpm run test:moonbook && pnpm run build
       - name: Test and build frozen reader frontend
         working-directory: reader-ui
         run: npm ci && npm test && npm run build
