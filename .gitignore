@@ -1,1 +1,38 @@
 .superpowers/
+
+# Local environment and generated output
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+
+# Go backend
+server/log/
+server/uploads/
+server/gva
+server/server
+server/latest_log
+server/__debug_bin*
+server/*.local.yaml
+server/.gva-build/
+
+# Frontends
+web/node_modules/
+web/dist/
+reader-ui/node_modules/
+reader-ui/build/
+reader-ui/dist/
+reader-ui/coverage/
+reader-ui/.vite/
+reader-ui/*.tsbuildinfo
+reader-ui/vite.config.d.ts
+reader-ui/vite.config.js
+
+# Local tools and editors
+.idea/
+.vscode/
+.local/
+*.iml
+*.sw?
