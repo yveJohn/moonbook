@@ -3,7 +3,7 @@
 ## 1. 文档状态
 
 - 日期：2026-08-14
-- 状态：设计已确认，等待用户复核书面规格
+- 状态：设计及书面规格已获用户批准
 - 新项目目录：`/Users/yve/code/ai-project/moonbook`
 - 旧项目目录：`/Users/yve/Documents/moonbook`
 - 目标：基于固定的 Gin-Vue-Admin `main` 提交，完整重构管理后台后端与管理前端，并让现有读者端零代码修改接入新后端
