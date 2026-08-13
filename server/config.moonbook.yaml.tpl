@@ -142,3 +142,7 @@ app:
   node: local
   app-id: moonbook
   env: dev
+
+metrics:
+  enabled: true
+  token: "${MOONBOOK_METRICS_TOKEN}"

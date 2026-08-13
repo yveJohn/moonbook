@@ -39,4 +39,6 @@ type Server struct {
 
 	// 应用身份（日志静态字段 node/app_id/env）
 	App App `mapstructure:"app" json:"app" yaml:"app"`
+
+	Metrics Metrics `mapstructure:"metrics" json:"metrics" yaml:"metrics"`
 }

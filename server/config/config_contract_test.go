@@ -24,6 +24,7 @@ func TestShippedServerConfigsMatchSchema(t *testing.T) {
 			env: map[string]string{
 				"MOONBOOK_JWT_SIGNING_KEY": "test-jwt-signing-key",
 				"MOONBOOK_SERVER_PORT":     "18888",
+				"MOONBOOK_METRICS_TOKEN":   "test-metrics-token",
 				"POSTGRES_HOST_PORT":       "15432",
 				"POSTGRES_DB":              "moonbook",
 				"POSTGRES_USER":            "moonbook",

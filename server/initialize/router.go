@@ -2,12 +2,14 @@
 package initialize
 
 import (
+	"database/sql"
 	"net/http"
 	"os"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/docs"
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/health"
+	platformmetrics "github.com/flipped-aurora/gin-vue-admin/server/internal/platform/metrics"
 	"github.com/flipped-aurora/gin-vue-admin/server/middleware"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
@@ -40,6 +42,15 @@ func Routers() *gin.Engine {
 	Router := gin.New()
 	// RequestMeta 必须最先：保证 panic 日志与 X-Request-Id 响应头都带 request_id
 	Router.Use(middleware.RequestMeta())
+	var runtimeMetrics *platformmetrics.Metrics
+	if global.GVA_CONFIG.Metrics.Enabled {
+		var sqlDB *sql.DB
+		if global.GVA_DB != nil {
+			sqlDB, _ = global.GVA_DB.DB()
+		}
+		runtimeMetrics = platformmetrics.New(sqlDB)
+		Router.Use(runtimeMetrics.Middleware())
+	}
 	// 使用自定义的 Recovery 中间件，记录 panic 并入库
 	Router.Use(middleware.GinRecovery(true))
 	// 全局访问日志 + 唯一 body/resp 捕获点（供 OperationRecord 复用）
@@ -79,6 +90,9 @@ func Routers() *gin.Engine {
 		PublicGroup.GET("/health", health.Live)
 		PublicGroup.GET("/health/live", health.Live)
 		PublicGroup.GET("/health/ready", checker.Ready)
+		if runtimeMetrics != nil {
+			PublicGroup.GET("/metrics", gin.WrapH(runtimeMetrics.Handler(global.GVA_CONFIG.Metrics.Token)))
+		}
 	}
 	{
 		systemRouter.InitBaseRouter(PublicGroup) // 注册基础功能路由 不做鉴权

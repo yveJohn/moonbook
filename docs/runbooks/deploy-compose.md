@@ -25,6 +25,15 @@ cd server
 GVA_CONFIG=config.moonbook.local.yaml go run .
 ```
 
+Prometheus 指标默认位于 `GET /metrics`，必须使用 `.env` 中的 `MOONBOOK_METRICS_TOKEN`：
+
+```bash
+curl -H "Authorization: Bearer $MOONBOOK_METRICS_TOKEN" \
+  http://127.0.0.1:18888/metrics
+```
+
+执行手工抓取时不得启用 shell `set -x`，也不得分享包含请求头的调试输出。未配置 Token 时端点返回 503，未授权请求返回 401。生产环境必须通过 Secret 注入独立高熵 Token，并在 Prometheus `bearer_token_file` 中引用挂载的 Secret，不得使用 `.env.example` 的本地占位值。指标使用路由模板而不是原始路径，不包含用户 ID、对象 ID、错误文本或请求正文。
+
 应用启动前必须先执行版本化迁移。`scripts/migrate-local.sh status` 显示当前版本、目标版本和是否存在待执行迁移；`up` 使用事务和 PostgreSQL 会话锁执行所有待执行迁移，重复执行不会重复创建业务对象。迁移事实记录在 `moonbook_schema_version`，不得通过 GORM `AutoMigrate` 替代 Moonbook 业务迁移。
 
 数据库迁移不会写入默认管理员或示例用户。首次部署必须通过 `scripts/bootstrap-local-admin.sh` 显式引导管理员；用户名和密码仅从进程环境变量读取，密码至少 12 位。命令在事务和 PostgreSQL advisory lock 下执行，只允许空的 `sys_users` 表引导一次，重复执行会拒绝覆盖。新管理员首次登录后必须修改初始密码。Moonbook 不提供 GVA 的 HTTP `/init/initdb` 建库入口。
