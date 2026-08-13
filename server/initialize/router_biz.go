@@ -1,6 +1,8 @@
 package initialize
 
 import (
+	"github.com/flipped-aurora/gin-vue-admin/server/global"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/gin-gonic/gin"
 )
@@ -16,5 +18,10 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	publicGroup := routers[1]
 
 	holder(publicGroup, privateGroup)
+	db, err := global.GVA_DB.DB()
+	if err != nil {
+		panic("open novel metadata database: " + err.Error())
+	}
+	metadata.RegisterRoutes(privateGroup, db)
 
 }
