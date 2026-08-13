@@ -17,6 +17,16 @@ REPOSITORY          = registry.cn-hangzhou.aliyuncs.com/${IMAGE_NAME}
 TAGS_OPT           ?= latest
 PLUGIN             ?= email
 
+.PHONY: verify verify-m1 scan-secrets
+
+verify: verify-m1
+
+verify-m1:
+	./scripts/verify-m1.sh
+
+scan-secrets:
+	./scripts/scan-secrets.sh
+
 #容器环境前后端共同打包
 build: build-web build-server
 	docker run --name build-local --rm -v $(shell pwd):/go/src/${PROJECT_NAME} -w /go/src/${PROJECT_NAME} ${BUILD_IMAGE_SERVER} make build-local

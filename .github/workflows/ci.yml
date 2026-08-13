@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: npm
+          cache-dependency-path: reader-ui/package-lock.json
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+          run_install: false
+      - name: Verify Go formatting and modules
+        working-directory: server
+        run: |
+          test -z "$(gofmt -l internal/modules internal/platform cmd/moonbook-admin cmd/moonbook-config cmd/moonbook-legacy-migrate cmd/moonbook-migrate)"
+          go mod verify
+          go vet ./internal/... ./config ./core/... ./initialize/... ./middleware ./cmd/moonbook-admin ./cmd/moonbook-config ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
+      - name: Test Moonbook foundation
+        working-directory: server
+        run: go test -race ./internal/... ./config ./core/... ./initialize/... ./middleware ./cmd/moonbook-admin ./cmd/moonbook-config ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
+      - name: Build management frontend
+        working-directory: web
+        run: pnpm install --frozen-lockfile && pnpm run build
+      - name: Test and build frozen reader frontend
+        working-directory: reader-ui
+        run: npm ci && npm test && npm run build
+      - name: Scan repository secrets
+        run: scripts/scan-secrets.sh
+
+  m1-compose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify empty-environment M1 stack
+        run: scripts/verify-m1.sh

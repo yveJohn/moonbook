@@ -7,7 +7,7 @@
 | 里程碑 | 状态 | 当前证据 |
 | --- | --- | --- |
 | M0 冻结、基线与盘点 | 已完成 | GVA 与旧仓库基线已锁定；reader-ui 原样迁入并通过 536 个基线测试；功能、API、数据和容量盘点范围已建立 |
-| M1 工程与本地基础设施 | 进行中 | 本地基础设施、版本迁移、GVA PostgreSQL 基座、健康检查及受控管理员引导已通过真实运行验证 |
+| M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
 | M2 小说核心与对象存储 | 未开始 | - |
 | M3 读者域与零修改兼容 | 未开始 | - |
 | M4 交易、支付与运营 | 未开始 | - |
@@ -51,16 +51,24 @@
 - 受 Bearer Token 保护的 `/metrics` 暴露 Go/进程、HTTP 请求量/延迟/在途请求以及持久化任务状态和过期租约指标；真实运行验证未授权为 401、授权抓取成功、任务三种状态和 1 条过期租约正确，HTTP 标签使用低基数路由模板。
 - `server/internal/platform/jobs` 完成幂等入队、module/type 定向并发领取、租约续期、旧 worker 防护、有限重试与指数退避；启动和配置重载会事务性恢复过期租约并同步关闭 attempt 审计。真实 PostgreSQL + race 测试覆盖并发 worker、重复入队、可重试恢复和尝试耗尽终态。
 - `moonbook-legacy-migrate preflight` 建立旧 MySQL 迁移 Runner、stage/batch 合同、检查点和错误清单写入；任何 stage 前强制验证源 MySQL 全局只读模式，已完成 stage 幂等跳过。具体业务转换和同事务目标写入按 M2-M6 逐域补齐。
+- 完整 Compose 应用栈包含 Go API、GVA 管理前端、冻结版 Reader SSR、Nginx 双入口网关、PostgreSQL、Redis、MinIO，以及一次性迁移和管理员引导任务；API 无宿主端口且以 `uid=100(moonbook)` 非 root 用户运行，管理端 `/api/` 和读者端 `/dev-api/` 路径均通过真实 HTTP 验证。
+- 后端镜像在启动时使用 `moonbook-config` 将环境变量经 YAML 编码写入 `0600` 配置，并用标准 URL 编码生成 PostgreSQL DSN；特殊字符、缺失变量和文件权限已有自动化测试。管理前端使用 Node 22、固定 pnpm 10.15.1 和提交的锁文件构建。
+- `make verify-m1` 已从空命名卷完整通过九阶段：三项基础设施健康、迁移 current=target 且重跑 `applied=0`、网关双入口、readiness 四依赖、指标 401/200、首管理员引导与真实登录、强制改密、SIGTERM 优雅关闭及恢复、Gitleaks 零新增秘密；测试项目、网络和卷在结束时自动清理。
+- `.github/workflows/ci.yml` 建立 Moonbook 基座质量门和真实 Docker Compose M1 门；Go 门覆盖 Moonbook 模块/平台/命令及关联配置、核心、初始化和中间件，管理端按 pnpm 锁文件构建，冻结 Reader 执行 536 个测试并构建，仓库由固定 Gitleaks 8.28.0 扫描。
+- Gitleaks 对固定基线的 6 个已审计误报使用精确 `文件:规则:行号` fingerprint 放行：过期 GVA README 媒体 JWT、Reader 合成密码夹具、GVA 公共对象 Key；任意新增或行漂移会重新失败。
 - 本机 Go 1.25.12 在 macOS ARM 启用 cgo 时会在上游 `github.com/shoenig/go-m1cpu v0.1.6` 初始化期间崩溃；当前以禁用 cgo 的可重复测试路径规避，不归因于 Moonbook 配置改动。
+- 固定 GVA 的仓库级 `go test ./...` 仍包含不适合作为 Moonbook CI 门的上游基线测试：MCP 客户端依赖本机 8888 服务、自动代码测试依赖相对模板/全局数据库、部分插件渲染断言，以及受限沙箱中的 IPv6 `httptest` 监听。CI 不宣称这些基线用例通过；Moonbook 新增及 M1 关联包全部纳入明确测试范围，后续触及对应上游模块时必须逐项收敛。
+
+## M1 退出结论
+
+M1 已满足退出条件：空环境可由一条命令构建并启动，PostgreSQL 从零迁移，真实 PostgreSQL/Redis/MinIO 及完整应用栈通过集成验收，仓库秘密扫描为零新增命中。默认本地 PostgreSQL、Redis 和 MinIO 保持运行，验证期间的应用栈和测试卷均已清理。
 
 ## 当前工作
 
-继续完成 M1 工程基座：反向代理、模块依赖规则、版本化 PostgreSQL 迁移、健康与优雅停机、错误与追踪规范、持久化任务和业务迁移工具骨架、CI 与一键验证入口。
-
-GVA 基座空库启动条件已经满足。继续补齐 M1 的可观测性、错误规范、任务可靠性、业务迁移命令、反向代理、CI 和完整空环境一键验收。
+进入 M2 小说核心与对象存储，先从旧系统事实和功能矩阵提取分类、作者、书籍、章节、标签和发布状态的模型与行为，再纵向完成 PostgreSQL 模型、MinIO 对象服务、管理 API/页面、迁移映射和测试。
 
 ## 下一步
 
-1. 补齐统一错误规范、Prometheus 指标与任务运行指标。
-2. 实现持久化任务领取、租约、重试恢复和旧 MySQL 迁移命令骨架。
-3. 补齐反向代理、CI 和一键验证入口，并从空环境执行 M1 完整验收。
+1. 审计旧小说域实体、管理接口、管理页面和 Reader 调用语义，确定 M2 第一条分类/作者纵向切片。
+2. 新增 M2 PostgreSQL 迁移和旧表转换映射，保持旧 `bigint` ID 并补齐 JavaScript 字符串边界测试。
+3. 建立 MinIO 版本化对象服务，再完成书籍/章节正文闭环及孤立对象回收。

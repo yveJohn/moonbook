@@ -1,0 +1,9 @@
+# Frozen GVA README expired signed media URL.
+/repo/README.md:jwt:39
+# Frozen reader UI synthetic password fixtures.
+/repo/reader-ui/src/pages/SettingsPage.test.tsx:generic-api-key:411
+/repo/reader-ui/src/pages/SettingsPage.test.tsx:generic-api-key:415
+/repo/reader-ui/src/pages/SettingsPage.test.tsx:generic-api-key:416
+# Frozen GVA public upload object-key fixtures.
+/repo/server/source/media/file_upload_download.go:generic-api-key:47
+/repo/server/source/media/file_upload_download.go:generic-api-key:60
