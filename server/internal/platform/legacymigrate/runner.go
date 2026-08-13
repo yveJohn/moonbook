@@ -55,11 +55,15 @@ func NewRunner(source, target *sql.DB, migration string, batchSize int) (*Runner
 
 func VerifySourceReadOnly(ctx context.Context, source *sql.DB) error {
 	var readOnly, superReadOnly int
-	if err := source.QueryRowContext(ctx, "SELECT @@global.read_only, @@global.super_read_only").Scan(&readOnly, &superReadOnly); err != nil {
+	var characterSet string
+	if err := source.QueryRowContext(ctx, "SELECT @@global.read_only, @@global.super_read_only, @@character_set_connection").Scan(&readOnly, &superReadOnly, &characterSet); err != nil {
 		return fmt.Errorf("verify legacy MySQL read-only mode: %w", err)
 	}
 	if readOnly != 1 && superReadOnly != 1 {
 		return errors.New("legacy MySQL is writable; migration requires read_only or super_read_only")
+	}
+	if !strings.EqualFold(characterSet, "utf8mb4") {
+		return fmt.Errorf("legacy MySQL connection charset is %s; migration requires utf8mb4", characterSet)
 	}
 	return nil
 }

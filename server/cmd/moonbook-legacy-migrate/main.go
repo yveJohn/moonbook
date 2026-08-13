@@ -19,8 +19,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || flag.Arg(0) != "preflight" {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate preflight")
+	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -55,12 +55,22 @@ func run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	if err := runner.Run(ctx, legacymigrate.PreflightStage{}); err != nil {
+	stages := []legacymigrate.Stage{legacymigrate.PreflightStage{}}
+	if flag.Arg(0) == "novel-metadata" {
+		stages = append(stages,
+			legacymigrate.NovelCategoryDictionaryStage{},
+			legacymigrate.LegacyBookCategoryStage{},
+			legacymigrate.NovelBookAuthorStage{},
+			legacymigrate.LegacyAuthorTableStage{Table: "book_author"},
+			legacymigrate.LegacyAuthorTableStage{Table: "author"},
+		)
+	}
+	if err := runner.Run(ctx, stages...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	fmt.Println("migration=moonbook-v1 stage=preflight status=complete")
+	fmt.Printf("migration=moonbook-v1 command=%s status=complete\n", flag.Arg(0))
 	return 0
 }
