@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/flipped-aurora/gin-vue-admin/server/core"
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/initialize"
@@ -48,6 +50,12 @@ func initializeSystem() {
 	if global.GVA_DB != nil {
 		initialize.RegisterDataScopeCallbacks() // 注册数据权限 GORM 回调
 		initialize.RegisterTables()             // 初始化表
-		initialize.LoadTimedTasks()             // 从 DB 恢复定时任务调度(必须在建表后)
+		recovered, err := initialize.RecoverPlatformJobs()
+		if err != nil {
+			global.GVA_LOG.Error("恢复持久化任务失败", zap.Error(err))
+			os.Exit(1)
+		}
+		global.GVA_LOG.Info("持久化任务恢复完成", zap.Int64("recovered", recovered))
+		initialize.LoadTimedTasks() // 从 DB 恢复定时任务调度(必须在建表后)
 	}
 }

@@ -37,6 +37,12 @@ func Reload() error {
 		RegisterDataScopeCallbacks()
 		// 确保数据库表结构是最新的
 		RegisterTables()
+		recovered, err := RecoverPlatformJobs()
+		if err != nil {
+			logger.Bg().Mod("jobs").Err(err).Error("恢复持久化任务失败")
+			return err
+		}
+		logger.Bg().Mod("jobs").Field("recovered", recovered).Info("持久化任务恢复完成")
 	}
 
 	// 重新初始化定时任务
