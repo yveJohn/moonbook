@@ -10,8 +10,8 @@
 | 书籍 | `novel_book`、历史 `book`、分类/子分类关系 | PostgreSQL 小说域 | 原值保留 | 行数、分类、状态、字数、末章 | 待 M2 设计 |
 | 作者 | 当前 `novel_book.author_id/author_name`、历史 `book_author`、`author` | `novel_authors`；书籍关联在 M2 书籍切片补齐 | 当前/历史作者 ID 原值优先作为 bigint 主键；更早 `author` 同时保留 `legacy_author_id` | 当前书籍作者优先，不按同名擅自合并不同旧 ID，孤立作者显式保留 | M2 元数据切片已实现 |
 | 章节元数据 | `novel_chapter`、历史 `book_index` | PostgreSQL 章节 | 原值保留 | 章节序号、书籍关联、状态、字数 | 待 M2 设计 |
-| 章节正文 | `novel_chapter_content`、`book_content0..9`、TXT 文件 | MinIO + PostgreSQL 对象引用 | chapter ID 原值 | 对象数、总字节、SHA-256、缺失正文 | 待 M2/M6 设计 |
-| 封面和附件 | 书籍 URL、`sys_file/sys_oss`、导入原文件 | MinIO 文件命名空间 | 业务 ID 原值 | 下载可用性、大小、哈希、来源 | 待 M2/M6 设计 |
+| 章节正文 | `novel_chapter_content`、`book_content0..9`、TXT 文件 | MinIO `chapters/{bookId}/{chapterId}/v{version}.txt` + `novel_objects` / `novel_object_references` | book/chapter ID 原值进入对象键和 bigint 关联 | 上传后 Stat 校验字节数与 SHA-256，通过后才允许事务切换引用 | M2 版本化对象服务已实现；待章节迁移接入 |
+| 封面和附件 | 书籍 URL、`sys_file/sys_oss`、导入原文件 | 封面使用 MinIO `covers/{bookId}/v{version}.{ext}`；其他文件后续按独立命名空间接入同一对象注册模式 | 业务 ID 原值 | 下载可用性、大小、哈希、来源 | M2 封面对象能力已实现；待书籍迁移接入 |
 | 读者账号 | `reader_user`、历史 `user` | PostgreSQL 读者域 | 原值保留 | 用户名唯一、状态、密码摘要 | 待 M3 设计 |
 | 书架/历史/偏好/点赞 | `reader_bookshelf`、`reader_reading_history`、`reader_reading_preference`、`reader_book_like`、历史对应表 | PostgreSQL 读者域 | 原值保留 | 外键、去重、进度、Long ID | 待 M3 设计 |
 | 反馈 | `reader_feedback`、历史 `user_feedback` | PostgreSQL 读者域 | 原值保留 | 状态、回复和时间 | 待 M3 设计 |
@@ -42,4 +42,7 @@
 - 所有目标字段必须有转换规则和空值策略；
 - 所有金额与权益必须有双向核对 SQL；
 - 所有 MinIO 对象必须有来源、对象键、字节数和哈希；
+- `novel_objects` 只在 MinIO 上传并以 `StatObject` 校验后进入 `verified`；`novel_object_references` 只能通过复合外键引用同一 kind/book/owner 的对象；
+- 激活新版本和旧版本转 `orphaned` 在同一 PostgreSQL 事务完成，上传成功但事务未提交的对象保持无引用；
+- 回收只处理超过宽限期且无引用的 `uploading`、`failed`、`orphaned` 或可恢复 `deleting` 对象，删除过程通过事件表审计并支持进程崩溃后幂等收敛；
 - 所有转换错误必须进入错误清单，禁止静默丢弃。
