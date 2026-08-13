@@ -11,6 +11,7 @@ cp .env.example .env
 scripts/render-local-config.sh
 docker compose --env-file .env up -d postgres redis minio minio-init
 scripts/verify-infrastructure.sh
+scripts/migrate-local.sh up
 ```
 
 生成的 `server/config.moonbook.local.yaml` 权限为 `0600`，被 Git 忽略。启动 Go 服务时使用：
@@ -19,6 +20,8 @@ scripts/verify-infrastructure.sh
 cd server
 GVA_CONFIG=config.moonbook.local.yaml go run .
 ```
+
+应用启动前必须先执行版本化迁移。`scripts/migrate-local.sh status` 显示当前版本、目标版本和是否存在待执行迁移；`up` 使用事务和 PostgreSQL 会话锁执行所有待执行迁移，重复执行不会重复创建业务对象。迁移事实记录在 `moonbook_schema_version`，不得通过 GORM `AutoMigrate` 替代 Moonbook 业务迁移。
 
 ## 本地端口
 

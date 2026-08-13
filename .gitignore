@@ -12,6 +12,7 @@ coverage/
 server/log/
 server/uploads/
 server/gva
+server/moonbook-migrate
 server/server
 server/latest_log
 server/__debug_bin*
