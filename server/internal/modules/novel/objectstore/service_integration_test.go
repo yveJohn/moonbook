@@ -56,6 +56,43 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 	}
 	service := NewService(db, store)
 	suffix := time.Now().UnixNano()
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		rows, err := db.QueryContext(cleanupCtx, `SELECT object_key FROM novel_objects WHERE book_id BETWEEN $1 AND $2`, suffix, suffix+3)
+		if err != nil {
+			t.Errorf("list test objects for cleanup: %v", err)
+			return
+		}
+		var keys []string
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				t.Errorf("scan test object for cleanup: %v", err)
+				rows.Close()
+				return
+			}
+			keys = append(keys, key)
+		}
+		if err := rows.Close(); err != nil {
+			t.Errorf("close test object cleanup rows: %v", err)
+			return
+		}
+		for _, key := range keys {
+			if err := store.Remove(cleanupCtx, key); err != nil {
+				t.Errorf("remove test object %s: %v", key, err)
+			}
+		}
+		for _, query := range []string{
+			`DELETE FROM novel_object_references WHERE book_id BETWEEN $1 AND $2`,
+			`DELETE FROM novel_object_events WHERE object_id IN (SELECT id FROM novel_objects WHERE book_id BETWEEN $1 AND $2)`,
+			`DELETE FROM novel_objects WHERE book_id BETWEEN $1 AND $2`,
+		} {
+			if _, err := db.ExecContext(cleanupCtx, query, suffix, suffix+3); err != nil {
+				t.Errorf("clean test object rows: %v", err)
+			}
+		}
+	}()
 	target := Target{Kind: KindChapterContent, BookID: suffix, OwnerID: suffix}
 
 	first, err := service.UploadVerified(ctx, target, []byte("第一版正文\n"), "text/plain; charset=utf-8")
@@ -164,6 +201,65 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 	}
 	if _, err := store.Stat(ctx, failedKey); err == nil {
 		t.Fatal("failed verification object still exists")
+	}
+
+	coverTarget := Target{Kind: KindBookCover, BookID: suffix + 2, OwnerID: suffix + 2, Extension: "png"}
+	coverOne, err := service.UploadVerified(ctx, coverTarget, []byte("png-cover-v1"), "image/png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coverOne.Key != fmt.Sprintf("covers/%d/v1.png", suffix+2) {
+		t.Fatalf("first cover key=%q", coverOne.Key)
+	}
+	if err := service.Activate(ctx, coverOne.ID); err != nil {
+		t.Fatal(err)
+	}
+	coverTarget.Extension = "webp"
+	coverTwo, err := service.UploadVerified(ctx, coverTarget, []byte("webp-cover-v2"), "image/webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coverTwo.Key != fmt.Sprintf("covers/%d/v2.webp", suffix+2) {
+		t.Fatalf("second cover key=%q", coverTwo.Key)
+	}
+	if err := service.Activate(ctx, coverTwo.ID); err != nil {
+		t.Fatal(err)
+	}
+	data, active, err = service.ReadActive(ctx, coverTarget)
+	if err != nil || string(data) != "webp-cover-v2" || active.ID != coverTwo.ID || active.ContentType != "image/webp" {
+		t.Fatalf("active cover=%+v data=%q err=%v", active, data, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT state FROM novel_objects WHERE id=$1`, coverOne.ID).Scan(&firstState); err != nil || firstState != StateOrphaned {
+		t.Fatalf("previous cover state=%q err=%v", firstState, err)
+	}
+
+	fingerprintTarget := Target{Kind: KindBookCover, BookID: suffix + 3, OwnerID: suffix + 3, Extension: "png"}
+	fingerprint := strings.Repeat("a", 64)
+	start := make(chan struct{})
+	results := make(chan Object, 2)
+	errors := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			object, err := service.UploadVerifiedWithOptions(ctx, fingerprintTarget, []byte("legacy-concurrent-cover"), "image/png", UploadOptions{Source: "legacy", SourceFingerprint: fingerprint})
+			results <- object
+			errors <- err
+		}()
+	}
+	close(start)
+	firstConcurrent, secondConcurrent := <-results, <-results
+	if err := <-errors; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errors; err != nil {
+		t.Fatal(err)
+	}
+	if firstConcurrent.ID != secondConcurrent.ID {
+		t.Fatalf("concurrent fingerprint objects differ: %d != %d", firstConcurrent.ID, secondConcurrent.ID)
+	}
+	var fingerprintCount int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM novel_objects WHERE book_id=$1 AND source_fingerprint=$2`, fingerprintTarget.BookID, fingerprint).Scan(&fingerprintCount); err != nil || fingerprintCount != 1 {
+		t.Fatalf("fingerprint object count=%d err=%v", fingerprintCount, err)
 	}
 }
 

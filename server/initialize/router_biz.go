@@ -2,7 +2,9 @@ package initialize
 
 import (
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/books"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/gin-gonic/gin"
 )
@@ -23,5 +25,11 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 		panic("open novel metadata database: " + err.Error())
 	}
 	metadata.RegisterRoutes(privateGroup, db)
+	minio := global.GVA_CONFIG.Minio
+	blobs, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: minio.Endpoint, AccessKey: minio.AccessKeyId, SecretKey: minio.AccessKeySecret, Bucket: minio.BucketName, UseSSL: minio.UseSSL})
+	if err != nil {
+		panic("initialize novel object store: " + err.Error())
+	}
+	books.RegisterRoutes(privateGroup, db, objectstore.NewService(db, blobs))
 
 }

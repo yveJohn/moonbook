@@ -8,6 +8,7 @@ test('preserves bigint IDs beyond JavaScript safe integer range', () => {
   assert.equal(assertLongId(id), id)
   assert.equal(appendLongId('/novel/authors', id), `/novel/authors/${id}`)
   assert.equal(appendLongId('/novel/categories', '9007199254740993'), '/novel/categories/9007199254740993')
+  assert.equal(appendLongId('/novel/books', '9007199254740995'), '/novel/books/9007199254740995')
 })
 
 test('rejects number conversion and non-decimal ID forms', () => {

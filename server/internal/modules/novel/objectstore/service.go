@@ -15,7 +15,10 @@ import (
 	"time"
 )
 
-var extensionPattern = regexp.MustCompile(`^[a-z0-9]{1,10}$`)
+var (
+	extensionPattern   = regexp.MustCompile(`^[a-z0-9]{1,10}$`)
+	fingerprintPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+)
 
 type Service struct {
 	db    *sql.DB
@@ -55,6 +58,10 @@ func objectKey(target Target, version int) string {
 }
 
 func (service *Service) UploadVerified(ctx context.Context, target Target, content []byte, contentType string) (Object, error) {
+	return service.UploadVerifiedWithOptions(ctx, target, content, contentType, UploadOptions{Source: "native"})
+}
+
+func (service *Service) UploadVerifiedWithOptions(ctx context.Context, target Target, content []byte, contentType string, options UploadOptions) (Object, error) {
 	clean, err := normalizeTarget(target)
 	if err != nil {
 		return Object{}, err
@@ -63,9 +70,46 @@ func (service *Service) UploadVerified(ctx context.Context, target Target, conte
 	if contentType == "" || len(contentType) > 191 {
 		return Object{}, errors.New("content type is required")
 	}
+	options.Source = strings.TrimSpace(options.Source)
+	options.SourceFingerprint = strings.TrimSpace(options.SourceFingerprint)
+	if options.Source == "" {
+		options.Source = "native"
+	}
+	if options.Source != "native" && options.Source != "legacy" && options.Source != "import" {
+		return Object{}, errors.New("object source is invalid")
+	}
+	if options.SourceFingerprint != "" && !fingerprintPattern.MatchString(options.SourceFingerprint) {
+		return Object{}, errors.New("source fingerprint must be a lowercase SHA-256")
+	}
+	if options.Source == "legacy" && options.SourceFingerprint == "" {
+		return Object{}, errors.New("legacy objects require a source fingerprint")
+	}
+	if options.SourceFingerprint != "" {
+		connection, err := service.db.Conn(ctx)
+		if err != nil {
+			return Object{}, fmt.Errorf("open source object lock connection: %w", err)
+		}
+		defer connection.Close()
+		lockKey := fmt.Sprintf("source:%s:%d:%d:%s", clean.Kind, clean.BookID, clean.OwnerID, options.SourceFingerprint)
+		if _, err := connection.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 1))`, lockKey); err != nil {
+			return Object{}, fmt.Errorf("lock source object: %w", err)
+		}
+		defer func() {
+			unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = connection.ExecContext(unlockCtx, `SELECT pg_advisory_unlock(hashtextextended($1, 1))`, lockKey)
+		}()
+	}
 	digest := sha256.Sum256(content)
 	hash := hex.EncodeToString(digest[:])
-	object, err := service.reserve(ctx, clean, contentType)
+	if options.SourceFingerprint != "" {
+		if existing, found, err := service.findSourceObject(ctx, clean, options.SourceFingerprint); err != nil {
+			return Object{}, err
+		} else if found {
+			return existing, nil
+		}
+	}
+	object, err := service.reserve(ctx, clean, contentType, options)
 	if err != nil {
 		return Object{}, err
 	}
@@ -94,7 +138,7 @@ func (service *Service) UploadVerified(ctx context.Context, target Target, conte
 	return object, nil
 }
 
-func (service *Service) reserve(ctx context.Context, target Target, contentType string) (Object, error) {
+func (service *Service) reserve(ctx context.Context, target Target, contentType string, options UploadOptions) (Object, error) {
 	tx, err := service.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Object{}, err
@@ -112,9 +156,9 @@ func (service *Service) reserve(ctx context.Context, target Target, contentType 
 	key := objectKey(target, version)
 	var object Object
 	err = tx.QueryRowContext(ctx, `INSERT INTO novel_objects
-		(object_kind,book_id,owner_id,version,object_key,content_type)
-		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id,created_at`, target.Kind, target.BookID, target.OwnerID, version, key, contentType).
+		(object_kind,book_id,owner_id,version,object_key,content_type,source,source_fingerprint)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,''))
+		RETURNING id,created_at`, target.Kind, target.BookID, target.OwnerID, version, key, contentType, options.Source, options.SourceFingerprint).
 		Scan(&object.ID, &object.CreatedAt)
 	if err != nil {
 		return Object{}, fmt.Errorf("reserve object version: %w", err)
@@ -131,6 +175,22 @@ func (service *Service) reserve(ctx context.Context, target Target, contentType 
 	object.ContentType = contentType
 	object.State = StateUploading
 	return object, nil
+}
+
+func (service *Service) findSourceObject(ctx context.Context, target Target, fingerprint string) (Object, bool, error) {
+	var object Object
+	err := service.db.QueryRowContext(ctx, `SELECT id,version,object_key,sha256,byte_size,content_type,state,created_at
+		FROM novel_objects WHERE object_kind=$1 AND book_id=$2 AND owner_id=$3 AND source_fingerprint=$4
+		AND state IN ('verified','active','orphaned')`, target.Kind, target.BookID, target.OwnerID, fingerprint).
+		Scan(&object.ID, &object.Version, &object.Key, &object.SHA256, &object.ByteSize, &object.ContentType, &object.State, &object.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Object{}, false, nil
+	}
+	if err != nil {
+		return Object{}, false, fmt.Errorf("load object by source fingerprint: %w", err)
+	}
+	object.Target = target
+	return object, true, nil
 }
 
 func (service *Service) markVerified(ctx context.Context, id int64, hash string, size int64) error {
@@ -220,6 +280,9 @@ func (service *Service) ReadActive(ctx context.Context, target Target) ([]byte, 
 		FROM novel_object_references r JOIN novel_objects o ON o.id=r.object_id
 		WHERE r.object_kind=$1 AND r.book_id=$2 AND r.owner_id=$3 AND o.state='active'`, clean.Kind, clean.BookID, clean.OwnerID).
 		Scan(&object.ID, &object.Version, &object.Key, &object.SHA256, &object.ByteSize, &object.ContentType, &object.State, &object.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, Object{}, fmt.Errorf("%w for %s %d", ErrActiveObjectNotFound, clean.Kind, clean.OwnerID)
+	}
 	if err != nil {
 		return nil, Object{}, fmt.Errorf("load active object: %w", err)
 	}

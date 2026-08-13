@@ -51,6 +51,7 @@
   "/src/view/media/scanUpload.vue": "scanUpload",
   "/src/view/media/upload.vue": "Upload",
   "/src/view/novel/authors/index.vue": "NovelAuthors",
+  "/src/view/novel/books/index.vue": "NovelBooks",
   "/src/view/novel/metadata/index.vue": "NovelMetadata",
   "/src/view/person/person.vue": "Person",
   "/src/view/routerHolder.vue": "RouterHolder",

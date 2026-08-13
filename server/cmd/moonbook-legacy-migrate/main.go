@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/legacymigrate"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -19,8 +20,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -55,10 +56,15 @@ func run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	timeout, err := migrationTimeout(os.Getenv("MOONBOOK_MIGRATION_TIMEOUT"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stages := []legacymigrate.Stage{legacymigrate.PreflightStage{}}
-	if flag.Arg(0) == "novel-metadata" {
+	if flag.Arg(0) == "novel-metadata" || flag.Arg(0) == "novel-books" {
 		stages = append(stages,
 			legacymigrate.NovelCategoryDictionaryStage{},
 			legacymigrate.LegacyBookCategoryStage{},
@@ -67,10 +73,60 @@ func run() int {
 			legacymigrate.LegacyAuthorTableStage{Table: "author"},
 		)
 	}
+	if flag.Arg(0) == "novel-books" {
+		objects, downloader, err := coverDependencies(target)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		stages = append(stages, legacymigrate.NovelBooksStage{}, legacymigrate.NovelBookSubCategoriesStage{}, legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader})
+	}
 	if err := runner.Run(ctx, stages...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	fmt.Printf("migration=moonbook-v1 command=%s status=complete\n", flag.Arg(0))
 	return 0
+}
+
+func migrationTimeout(raw string) (time.Duration, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 12 * time.Hour, nil
+	}
+	value, err := time.ParseDuration(strings.TrimSpace(raw))
+	if err != nil || value < time.Minute || value > 24*time.Hour {
+		return 0, fmt.Errorf("MOONBOOK_MIGRATION_TIMEOUT must be between 1m and 24h")
+	}
+	return value, nil
+}
+
+func coverDependencies(target *sql.DB) (*objectstore.Service, *legacymigrate.CoverDownloader, error) {
+	endpoint := strings.TrimSpace(os.Getenv("MOONBOOK_MINIO_ENDPOINT"))
+	accessKey := strings.TrimSpace(os.Getenv("MINIO_ROOT_USER"))
+	secretKey := strings.TrimSpace(os.Getenv("MINIO_ROOT_PASSWORD"))
+	bucket := strings.TrimSpace(os.Getenv("MINIO_BUCKET"))
+	if endpoint == "" || accessKey == "" || secretKey == "" || bucket == "" {
+		return nil, nil, fmt.Errorf("novel-books requires MOONBOOK_MINIO_ENDPOINT, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD, and MINIO_BUCKET")
+	}
+	useSSL := false
+	if raw := strings.TrimSpace(os.Getenv("MOONBOOK_MINIO_USE_SSL")); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, nil, fmt.Errorf("MOONBOOK_MINIO_USE_SSL must be true or false")
+		}
+		useSSL = value
+	}
+	store, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: endpoint, AccessKey: accessKey, SecretKey: secretKey, Bucket: bucket, UseSSL: useSSL})
+	if err != nil {
+		return nil, nil, err
+	}
+	timeout, err := legacymigrate.ParseCoverDownloadTimeout(os.Getenv("MOONBOOK_LEGACY_COVER_TIMEOUT_SECONDS"))
+	if err != nil {
+		return nil, nil, err
+	}
+	downloader, err := legacymigrate.NewCoverDownloader(timeout, legacymigrate.ParseAllowedCoverHosts(os.Getenv("MOONBOOK_LEGACY_COVER_ALLOWED_HOSTS")))
+	if err != nil {
+		return nil, nil, err
+	}
+	return objectstore.NewService(target, store), downloader, nil
 }

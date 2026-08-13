@@ -1,6 +1,9 @@
 package objectstore
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestNormalizeTargetAndObjectKey(t *testing.T) {
 	chapter, err := normalizeTarget(Target{Kind: KindChapterContent, BookID: 42, OwnerID: 42, Extension: "html"})
@@ -32,5 +35,29 @@ func TestNormalizeTargetAndObjectKey(t *testing.T) {
 func TestSafeExtension(t *testing.T) {
 	if got := SafeExtension("cover.Final.WEBP"); got != "webp" {
 		t.Fatalf("SafeExtension() = %q", got)
+	}
+}
+
+func TestDetectCover(t *testing.T) {
+	for _, test := range []struct {
+		data        []byte
+		contentType string
+		extension   string
+	}{
+		{[]byte{0xff, 0xd8, 0xff, 0xdb, 0, 0}, "image/jpeg", "jpg"},
+		{[]byte("\x89PNG\r\n\x1a\n"), "image/png", "png"},
+		{[]byte("GIF89a"), "image/gif", "gif"},
+		{append([]byte("RIFF\x00\x00\x00\x00WEBPVP8 "), make([]byte, 20)...), "image/webp", "webp"},
+	} {
+		contentType, extension, ok := DetectCover(test.data)
+		if !ok || contentType != test.contentType || extension != test.extension {
+			t.Fatalf("DetectCover()=(%q,%q,%v)", contentType, extension, ok)
+		}
+	}
+	if _, _, ok := DetectCover([]byte("not an image")); ok {
+		t.Fatal("plain text should not be a cover")
+	}
+	if !errors.Is(ErrActiveObjectNotFound, ErrActiveObjectNotFound) {
+		t.Fatal("not-found sentinel must support errors.Is")
 	}
 }

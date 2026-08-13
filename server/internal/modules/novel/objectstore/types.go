@@ -1,6 +1,12 @@
 package objectstore
 
-import "time"
+import (
+	"errors"
+	"net/http"
+	"time"
+)
+
+var ErrActiveObjectNotFound = errors.New("active object not found")
 
 const (
 	KindChapterContent = "chapter_content"
@@ -34,6 +40,11 @@ type Object struct {
 	CreatedAt   time.Time
 }
 
+type UploadOptions struct {
+	Source            string
+	SourceFingerprint string
+}
+
 type BlobStat struct {
 	Key         string
 	SHA256      string
@@ -45,4 +56,19 @@ type CollectResult struct {
 	Examined int
 	Deleted  int
 	Failed   int
+}
+
+func DetectCover(data []byte) (contentType, extension string, ok bool) {
+	switch http.DetectContentType(data) {
+	case "image/jpeg":
+		return "image/jpeg", "jpg", true
+	case "image/png":
+		return "image/png", "png", true
+	case "image/gif":
+		return "image/gif", "gif", true
+	case "image/webp":
+		return "image/webp", "webp", true
+	default:
+		return "", "", false
+	}
 }

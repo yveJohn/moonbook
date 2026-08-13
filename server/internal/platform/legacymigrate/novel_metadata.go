@@ -297,7 +297,7 @@ func mapBookAuthorStatus(status int) string {
 }
 
 func syncIdentitySequence(ctx context.Context, target *sql.Tx, table string) error {
-	if table != "novel_categories" && table != "novel_authors" {
+	if table != "novel_categories" && table != "novel_authors" && table != "novel_books" {
 		return fmt.Errorf("unsupported identity table %q", table)
 	}
 	query := fmt.Sprintf(`SELECT setval(pg_get_serial_sequence('%s','id'), GREATEST((SELECT COALESCE(max(id),1) FROM %s),1), true)`, table, table)
