@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/managementresponse"
 	"github.com/flipped-aurora/gin-vue-admin/server/middleware"
-	commonresponse "github.com/flipped-aurora/gin-vue-admin/server/model/common/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -136,7 +136,7 @@ func (handler *Handler) listCategories(c *gin.Context) {
 	for _, item := range page.Items {
 		items = append(items, toCategoryResponse(item))
 	}
-	commonresponse.OkWithDetailed(commonresponse.PageResult{List: items, Total: page.Total, Page: page.Page, PageSize: page.PageSize}, "获取成功", c)
+	managementresponse.OK(c, managementresponse.Page{List: items, Total: page.Total, Page: page.Page, PageSize: page.PageSize}, "获取成功")
 }
 
 func (handler *Handler) createCategory(c *gin.Context) {
@@ -150,7 +150,7 @@ func (handler *Handler) createCategory(c *gin.Context) {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	commonresponse.OkWithDetailed(toCategoryResponse(item), "创建成功", c)
+	managementresponse.OK(c, toCategoryResponse(item), "创建成功")
 }
 
 func (handler *Handler) updateCategory(c *gin.Context) {
@@ -169,7 +169,7 @@ func (handler *Handler) updateCategory(c *gin.Context) {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	commonresponse.OkWithDetailed(toCategoryResponse(item), "更新成功", c)
+	managementresponse.OK(c, toCategoryResponse(item), "更新成功")
 }
 
 func (handler *Handler) deleteCategory(c *gin.Context) {
@@ -181,7 +181,7 @@ func (handler *Handler) deleteCategory(c *gin.Context) {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	commonresponse.OkWithMessage("删除成功", c)
+	managementresponse.Message(c, "删除成功")
 }
 
 func (handler *Handler) listAuthors(c *gin.Context) {
@@ -199,7 +199,7 @@ func (handler *Handler) listAuthors(c *gin.Context) {
 	for _, item := range page.Items {
 		items = append(items, toAuthorResponse(item))
 	}
-	commonresponse.OkWithDetailed(commonresponse.PageResult{List: items, Total: page.Total, Page: page.Page, PageSize: page.PageSize}, "获取成功", c)
+	managementresponse.OK(c, managementresponse.Page{List: items, Total: page.Total, Page: page.Page, PageSize: page.PageSize}, "获取成功")
 }
 
 func (handler *Handler) createAuthor(c *gin.Context) {
@@ -213,7 +213,7 @@ func (handler *Handler) createAuthor(c *gin.Context) {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	commonresponse.OkWithDetailed(toAuthorResponse(item), "创建成功", c)
+	managementresponse.OK(c, toAuthorResponse(item), "创建成功")
 }
 
 func (handler *Handler) updateAuthor(c *gin.Context) {
@@ -232,7 +232,7 @@ func (handler *Handler) updateAuthor(c *gin.Context) {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	commonresponse.OkWithDetailed(toAuthorResponse(item), "更新成功", c)
+	managementresponse.OK(c, toAuthorResponse(item), "更新成功")
 }
 
 func (handler *Handler) deleteAuthor(c *gin.Context) {
@@ -244,7 +244,7 @@ func (handler *Handler) deleteAuthor(c *gin.Context) {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	commonresponse.OkWithMessage("删除成功", c)
+	managementresponse.Message(c, "删除成功")
 }
 
 func toCategoryResponse(item Category) categoryResponse {
