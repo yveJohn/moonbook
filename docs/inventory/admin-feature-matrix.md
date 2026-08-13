@@ -23,11 +23,11 @@
 
 | 功能 | 旧页面/Controller | 关键操作 | 新系统证据 | 状态 |
 | --- | --- | --- | --- | --- |
-| 书籍管理 | `novel/book` / `NovelBookController` | 查询、新增、编辑、状态、推荐、分类/子分类、定价 | 待补 | 基线已盘点 |
+| 书籍管理 | `novel/book` / `NovelBookController` | 查询、新增、编辑、状态、推荐、分类/子分类、标签、定价、封面 | `novel_books`、`/novel/books`、`view/novel/books`、`moonbook-legacy-migrate novel-books` | M2 书籍纵向切片已实现并通过真实 HTTP/双库/MinIO 验收 |
 | 章节管理 | `novel/chapter` / `NovelChapterController` | 目录、正文查看/编辑、状态、统计、删除 | 待补 | 基线已盘点 |
 | 分类与子分类 | 书籍页面及相关 API/SQL | 分类筛选、方向、子分类关系 | 待补 | 基线已盘点 |
-| 小说分类 | 书籍领域、现行字典及历史分类表 | 一级/二级分类 CRUD、排序、启停、迁移 | `novel_categories`、`/novel/categories`、`view/novel/metadata` | M2 元数据切片已实现；待书籍关联闭环 |
-| 作者信息 | 书籍领域及旧数据表 | 作者 CRUD、状态、作品方向、历史 ID 与迁移 | `novel_authors`、`/novel/authors`、`view/novel/authors` | M2 元数据切片已实现；待书籍关联闭环 |
+| 小说分类 | 书籍领域、现行字典及历史分类表 | 一级/二级分类 CRUD、排序、启停、迁移 | `novel_categories`、`/novel/categories`、`view/novel/metadata`、`novel_book_sub_categories` | M2 元数据及书籍关联已实现 |
+| 作者信息 | 书籍领域及旧数据表 | 作者 CRUD、状态、作品方向、历史 ID 与迁移 | `novel_authors`、`/novel/authors`、`view/novel/authors`、`novel_books.author_id` | M2 元数据及书籍关联已实现 |
 | SEO 配置 | `novel/readerSeo` / `NovelReaderSeoController` | SEO 开关、站点信息、robots、sitemap | 待补 | 基线已盘点 |
 | 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | AI 建议、采用、失败重试 | M5 补齐 | 基线已盘点 |
 

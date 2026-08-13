@@ -21,3 +21,18 @@ go run ./cmd/moonbook-legacy-migrate novel-metadata
 ```
 
 该命令会先执行同一个只读预检，再按顺序迁移现行分类字典、历史分类、现行书籍作者、`book_author` 和更早期的 `author`。每个阶段按 bigint 游标分批，并与 checkpoint、错误清单在同一 PostgreSQL 事务提交。`sys_dict_data` 与 `novel_book` 是当前业务必需来源，缺表会失败；更早期的补充表不存在时会在 checkpoint 元数据中明确记录 `table_not_found`。
+
+M2 书籍、副分类和封面迁移：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-books
+```
+
+`novel-books` 包含 `novel-metadata` 的全部前置阶段，然后迁移 `novel_book`、`reader_product(product_type='book')`、`novel_book_sub_category_rel` 和非空 `legacy_cover_url`。除两个数据库 DSN 外，还必须通过 Secret 注入 `MOONBOOK_MINIO_ENDPOINT`、`MINIO_ROOT_USER`、`MINIO_ROOT_PASSWORD`、`MINIO_BUCKET`；TLS 端点设置 `MOONBOOK_MINIO_USE_SSL=true`。迁移程序不会输出这些值。
+
+封面下载默认总超时 20 秒、最多 3 次重定向、最大 10 MiB，只接受 HTTP(S) 和 JPEG/PNG/WebP/GIF 魔数。非白名单地址只能使用 80/443 端口，DNS 解析结果只要包含环回、私网、链路本地或其他非公网地址就拒绝；连接阶段会再次解析和校验，防止重定向及 DNS 重绑定绕过。旧封面确实位于受控内网时，才可通过 `MOONBOOK_LEGACY_COVER_ALLOWED_HOSTS` 显式配置逗号分隔的主机名/IP；该变量不能填写 URL、路径或凭据。`MOONBOOK_LEGACY_COVER_TIMEOUT_SECONDS` 可在 1 至 120 秒间调整单个下载超时。
+
+封面 URL 仅以 SHA-256 指纹写入对象元数据，避免带签名参数的 URL 泄漏；实际 URL 仍只保留在 `novel_books.legacy_cover_url` 供错误排查。下载、格式、上传或激活失败会写入 `migration_errors`，不会覆盖已有活动封面。MinIO 写入经大小和 SHA-256 校验后才激活 PostgreSQL 引用；同一书籍和 URL 指纹重跑不会新建重复版本。
+
+整个命令默认最多运行 12 小时，可用 `MOONBOOK_MIGRATION_TIMEOUT` 在 `1m` 至 `24h` 间调整，例如 `6h`。超时只会中断当前批次；已提交批次的 checkpoint 保留，重新执行同一命令会从游标继续。正式演练必须根据容量和耗时报告设置小于停机窗口且留有核对、冒烟和回退余量的值。
