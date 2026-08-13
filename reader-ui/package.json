@@ -1,0 +1,37 @@
+{
+  "name": "moonbook-reader-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "react-router dev --config vite.config.ts --host 0.0.0.0 --port 5174",
+    "build": "react-router build --config vite.config.ts",
+    "start": "react-router-serve ./build/server/index.js",
+    "preview": "react-router-serve ./build/server/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@react-router/node": "7.18.0",
+    "@react-router/serve": "7.18.0",
+    "animal-island-ui": "^0.9.5",
+    "axios": "^1.13.6",
+    "lucide-react": "^1.24.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-router-dom": "7.18.0",
+    "isbot": "^5"
+  },
+  "devDependencies": {
+    "@react-router/dev": "7.18.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "jsdom": "^29.1.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.2",
+    "vitest": "^4.0.18"
+  }
+}
