@@ -1,0 +1,14 @@
+.git/
+.env
+.env.*
+!.env.example
+web/node_modules/
+web/dist/
+reader-ui/node_modules/
+reader-ui/build/
+reader-ui/coverage/
+server/log/
+server/uploads/
+server/*.local.yaml
+*.log
+.DS_Store

@@ -1,31 +1,33 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.24.2-alpine3.21 AS builder
 
-WORKDIR /go/src/github.com/flipped-aurora/gin-vue-admin/server
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-server . \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-migrate ./cmd/moonbook-migrate \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-admin ./cmd/moonbook-admin \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-config ./cmd/moonbook-config
 
-RUN go env -w GO111MODULE=on \
-    && go env -w GOPROXY=https://goproxy.cn,direct \
-    && go env -w CGO_ENABLED=0 \
-    && go env \
-    && go mod tidy \
-    && go build -o server .
+FROM alpine:3.21
 
-FROM alpine:latest
+RUN apk add --no-cache ca-certificates curl tzdata \
+    && addgroup -S moonbook \
+    && adduser -S -G moonbook -h /app moonbook
 
-LABEL MAINTAINER="SliverHorn@sliver_horn@qq.com"
-# 设置时区
-ENV TZ=Asia/Shanghai
-RUN apk update && apk add --no-cache tzdata openntpd \
-    && ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+WORKDIR /app
+COPY --from=builder /out/ /app/
+COPY --chown=moonbook:moonbook config.moonbook.yaml.tpl /app/config.moonbook.yaml.tpl
+COPY --chown=moonbook:moonbook resource /app/resource
+COPY --chown=moonbook:moonbook deploy/compose/server-entrypoint.sh /usr/local/bin/moonbook-entrypoint
 
-WORKDIR /go/src/github.com/flipped-aurora/gin-vue-admin/server
+RUN chmod 0755 /usr/local/bin/moonbook-entrypoint \
+    && mkdir -p /run/moonbook /app/log /app/uploads \
+    && chown -R moonbook:moonbook /run/moonbook /app/log /app/uploads
 
-COPY --from=0 /go/src/github.com/flipped-aurora/gin-vue-admin/server/server ./
-COPY --from=0 /go/src/github.com/flipped-aurora/gin-vue-admin/server/resource ./resource/
-COPY --from=0 /go/src/github.com/flipped-aurora/gin-vue-admin/server/config.docker.yaml ./
-
-# 挂载目录：如果使用了sqlite数据库，容器命令示例：docker run -d -v /宿主机路径/gva.db:/go/src/github.com/flipped-aurora/gin-vue-admin/server/gva.db -p 8888:8888 --name gva-server-v1 gva-server:1.0
-# VOLUME ["/go/src/github.com/flipped-aurora/gin-vue-admin/server"]
-
+USER moonbook
 EXPOSE 8888
-ENTRYPOINT ./server -c config.docker.yaml
+ENTRYPOINT ["moonbook-entrypoint"]
+CMD ["moonbook-server", "-c", "/run/moonbook/config.yaml"]

@@ -1,25 +1,16 @@
-# 如果需要用 cicd ，请设置环境变量：
-# variables:
-#     DOCKER_BUILDKIT: 1
+FROM node:22.18.0-alpine3.22 AS build
 
-FROM node:20-slim AS base
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
-COPY . /app
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
 WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
+COPY package.json pnpm-lock.yaml ./
+RUN --mount=type=cache,id=moonbook-web-pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm run build
 
+FROM nginx:1.28.0-alpine3.21
 
-FROM base AS prod-deps
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod
-
-FROM base AS build
-COPY --from=prod-deps /app/node_modules /app/node_modules
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install && pnpm run build
-
-
-FROM nginx:alpine
-LABEL MAINTAINER="bypanghu@163.com"
-COPY --from=base  /app/.docker-compose/nginx/conf.d/my.conf /etc/nginx/conf.d/my.conf
-COPY --from=build  /app/dist /usr/share/nginx/html
-RUN ls -al /usr/share/nginx/html
+COPY .docker-compose/nginx/conf.d/my.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080

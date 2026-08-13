@@ -9,6 +9,8 @@ __debug_bin*
 /gva
 /gvaai
 /mcp
+!/mcp/
+!/mcp/**
 /mcp-cli
 /.gva-build/
 /gvaruntime/

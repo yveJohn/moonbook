@@ -1,6 +1,6 @@
 # Moonbook modification notice: local generated configuration template, 2026-08-14.
 jwt:
-  signing-key: "${MOONBOOK_JWT_SIGNING_KEY}"
+  signing-key: ${MOONBOOK_JWT_SIGNING_KEY}
   expires-time: 7d
   buffer-time: 1d
   issuer: moonbook
@@ -23,8 +23,8 @@ zap:
 
 redis:
   useCluster: false
-  addr: "127.0.0.1:${REDIS_HOST_PORT}"
-  password: "${REDIS_PASSWORD}"
+  addr: ${MOONBOOK_REDIS_ADDR}
+  password: ${REDIS_PASSWORD}
   db: 0
   clusterAddrs: []
 
@@ -67,12 +67,12 @@ system:
   disable-auto-migrate: true
 
 pgsql:
-  path: 127.0.0.1
-  port: "${POSTGRES_HOST_PORT}"
+  path: ${MOONBOOK_POSTGRES_HOST}
+  port: ${MOONBOOK_POSTGRES_PORT}
   config: "sslmode=disable TimeZone=Asia/Kuala_Lumpur"
-  db-name: "${POSTGRES_DB}"
-  username: "${POSTGRES_USER}"
-  password: "${POSTGRES_PASSWORD}"
+  db-name: ${POSTGRES_DB}
+  username: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
   max-idle-conns: 10
   max-open-conns: 50
   conn-max-lifetime: 3600
@@ -103,13 +103,13 @@ cloudflare-r2: {}
 hua-wei-obs: {}
 
 minio:
-  endpoint: "127.0.0.1:${MINIO_API_HOST_PORT}"
-  access-key-id: "${MINIO_ROOT_USER}"
-  access-key-secret: "${MINIO_ROOT_PASSWORD}"
-  bucket-name: "${MINIO_BUCKET}"
+  endpoint: ${MOONBOOK_MINIO_ENDPOINT}
+  access-key-id: ${MINIO_ROOT_USER}
+  access-key-secret: ${MINIO_ROOT_PASSWORD}
+  bucket-name: ${MINIO_BUCKET}
   use-ssl: false
   base-path: ""
-  bucket-url: "http://127.0.0.1:${MINIO_API_HOST_PORT}/${MINIO_BUCKET}"
+  bucket-url: ${MOONBOOK_MINIO_BUCKET_URL}
 
 media:
   chunk-dir: uploads/chunks
@@ -145,4 +145,4 @@ app:
 
 metrics:
   enabled: true
-  token: "${MOONBOOK_METRICS_TOKEN}"
+  token: ${MOONBOOK_METRICS_TOKEN}
