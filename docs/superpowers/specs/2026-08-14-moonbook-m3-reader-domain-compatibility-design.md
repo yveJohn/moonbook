@@ -77,12 +77,14 @@ Commerce 提供批量 `AccessReader` 合同，输入读者、书籍和章节，�
 
 ## 5. 数据模型
 
-M3 通过新的前向迁移新增正式表，不修改 `00001` 至 `00011`。Reader 表固定为 `reader_accounts`、`reader_sessions`、`reader_bookshelf_entries`、`reader_book_likes`、`reader_reading_history`、`reader_reading_preferences` 和 `reader_feedback`；Commerce 表固定为 `commerce_products`、`commerce_chapter_pricing_config`、`commerce_membership_grants` 和 `commerce_entitlements`。
+M3 通过新的前向迁移新增正式表，不修改 `00001` 至 `00011`。Reader 表固定为 `reader_accounts`、`reader_sessions`、`reader_invite_codes`、`reader_invite_relations`、`reader_bookshelf_entries`、`reader_book_likes`、`reader_reading_history`、`reader_reading_preferences` 和 `reader_feedback`；Commerce 表固定为 `commerce_products`、`commerce_chapter_pricing_config`、`commerce_membership_grants` 和 `commerce_entitlements`。
 
 ### 5.1 Reader 规范事实
 
 - 读者账号：旧 ID、用户名、昵称、密码摘要及算法、状态、摘要升级时间和审计时间；
 - 读者会话：只保存可撤销会话的安全摘要、有效期和撤销状态，不保存明文 Token；
+- 邀请码：编码、邀请人、状态、使用上限、已用次数和过期时间；注册必须原子消费有效邀请码，并为新读者幂等生成自己的自动邀请码；
+- 邀请关系：邀请人、被邀请人、邀请码和关系状态唯一保存；注册关系事实在 M3 建立，注册奖励记录与发放在 M4 完成；
 - 书架：读者与书籍唯一关系；
 - 点赞：读者与书籍唯一关系，并与书籍点赞汇总保持事务一致；
 - 阅读历史：读者与书籍唯一当前进度，保存章节、位置、百分比和最后阅读时间；
@@ -231,10 +233,11 @@ PostgreSQL、Redis 和 MinIO 错误映射为稳定兼容错误。正文对象缺
 M3 在现有 `moonbook-legacy-migrate` 中按可恢复阶段迁移：
 
 1. 读者账号与密码摘要；
-2. 完成访问判断所需的商品、定价、会员和权益；
-3. 书架与点赞；
-4. 阅读历史与偏好；
-5. 反馈。
+2. 邀请码与邀请关系；
+3. 完成访问判断所需的商品、定价、会员和权益；
+4. 书架与点赞；
+5. 阅读历史与偏好；
+6. 反馈。
 
 主要来源包括 `reader_user`、历史 `user`、`reader_product`、`reader_entitlement`、`reader_membership_grant`、`reader_bookshelf`、`reader_book_like`、`reader_reading_history`、`reader_reading_preference`、`reader_feedback` 及经盘点确认仍有有效独有数据的历史对应表。
 
@@ -249,7 +252,7 @@ M3 在现有 `moonbook-legacy-migrate` 中按可恢复阶段迁移：
 - 不在日志或错误清单记录密码摘要全文、Token、反馈全文或正文；
 - 不因单条坏数据静默丢弃，也不覆盖非 legacy 来源的目标记录。
 
-钱包、流水、订单和支付不在这些阶段迁移。权益若引用尚未迁移的历史订单，保存脱敏旧引用和来源类型，待 M4 迁移订单后核对，不伪造订单记录。
+钱包、流水、订单、邀请奖励记录和支付不在这些阶段迁移。权益若引用尚未迁移的历史订单，保存脱敏旧引用和来源类型，待 M4 迁移订单后核对，不伪造订单记录。邀请码消费和邀请关系是注册所需的 Reader 事实，不等同于 M4 的奖励发放。
 
 ## 12. 测试与验证
 
