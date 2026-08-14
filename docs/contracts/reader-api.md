@@ -92,6 +92,8 @@
 
 ## M3 待固化证据
 
+认证 HTTP 包装和 Long ID 边界已有可执行证据：`server/internal/modules/reader/auth/http_contract_test.go`，并与 `service_test.go`、真实 PostgreSQL/Redis 集成测试共同覆盖登录、未登录和会话语义。
+
 - [ ] 每个接口的正常请求与响应 JSON 快照
 - [ ] 未登录、Token 过期、封禁和权限不足响应
 - [ ] `null`、空数组、缺省字段和分页边界
