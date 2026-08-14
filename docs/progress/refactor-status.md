@@ -138,7 +138,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Commerce 访问合同已实现批量商品、定价、会员和权益读取；章节目录与正文访问使用统一访问判定和 46101-46105 兼容错误。
 - Reader 个人数据已实现：书架、点赞、阅读历史、偏好和反馈；写操作按 reader_id 隔离，点赞在 PostgreSQL 事务内锁书并重算汇总，历史写入校验书籍/章节归属和可见状态。
 - 当前代码证据提交为 `b908041`、`163664b`、`86fd095`、`b983227`、`4af0f25`、`daa3654`、`f5cd1bd`、`4976066`、`ce7de9d`、`97ba7fe`、`b195dae`。
-- Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，批量读者隔离修复提交 `725c5ad`）。冻结 `reader-ui` 离线测试已通过 44 个测试文件/536 个用例，SSR 生产构建通过；隔离 mock API 上首页、登录页和 robots 的 SSR HTTP 验证通过（首页含 SSR 内容与 JSON-LD，登录页为 `noindex,nofollow`）。真实 API 的书库/书籍页面、浏览器关键旅程和 8GB 副本演练仍未完成，不能作为 M3 退出证据。
+- Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，批量读者隔离修复提交 `725c5ad`）。认证 HTTP 包装契约测试提交 `cfcb2a9` 已验证 Long ID 字符串和未登录错误语义。冻结 `reader-ui` 离线测试已通过 44 个测试文件/536 个用例，SSR 生产构建通过；隔离 mock API 上首页、登录页和 robots 的 SSR HTTP 验证通过（首页含 SSR 内容与 JSON-LD，登录页为 `noindex,nofollow`）。真实 API 的书库/书籍页面、浏览器关键旅程和 8GB 副本演练仍未完成，不能作为 M3 退出证据。
 
 下一步：
 
