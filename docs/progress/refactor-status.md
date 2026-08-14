@@ -158,3 +158,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 新增 `moonbook-finance-reconcile` 命令和 `commerce/reconcile`，逐钱包按不可变流水重算余额、收入和支出累计值；输出差异明细并在存在差异时返回非零退出码，作为迁移演练和切换验收硬门。
 - 新增充值档位管理 API 和管理页面（`GET/POST/PUT/DELETE /reader/payment/rechargeProducts`），充值档位 ID、钻石数量和价格在管理前端按字符串处理；数据库序列保证并发创建不发生 `max(id)+1` 冲突。
 - 新增支付渠道管理 API 和管理页面（`GET/PUT /reader/payment/channels`），支持渠道启停和凭据已配置状态检查；支付 PID/密钥只从环境变量读取，管理响应不返回敏感值。前向迁移版本已推进至 `00018`。
+- 新增充值订单管理 API 和页面（`GET /reader/payment/orders`、`GET /reader/payment/orders/:id`），支持订单号/读者关键词、状态筛选、详情及网关交易信息只读审计；真实 PostgreSQL 集成测试覆盖列表、分页筛选和详情，迁移版本推进至 `00019`。主动同步、回调日志管理和人工补单仍待实现。
