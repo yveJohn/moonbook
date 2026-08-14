@@ -4,8 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
 
@@ -49,4 +54,81 @@ func (r SQLRepository) Get(ctx context.Context, id int64) (Order, error) {
 		return Order{}, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "消费订单不存在")
 	}
 	return o, err
+}
+
+func (r SQLRepository) CreateMockRecharge(ctx context.Context, in MockRechargeInput, operatorID int64) (Order, error) {
+	readerID, err := strconv.ParseInt(in.ReaderID, 10, 64)
+	if err != nil {
+		return Order{}, err
+	}
+	amount, err := strconv.ParseInt(in.RechargeCoinAmount, 10, 64)
+	if err != nil {
+		return Order{}, err
+	}
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Order{}, err
+	}
+	defer tx.Rollback()
+	var exists bool
+	if err = tx.QueryRowContext(ctx, `SELECT true FROM reader_accounts WHERE id=$1 FOR KEY SHARE`, readerID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return Order{}, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "读者不存在")
+	} else if err != nil {
+		return Order{}, err
+	}
+	key := "mock_recharge_create:" + in.RequestID
+	orderNo := fmt.Sprintf("MR-%d-%d", readerID, time.Now().UnixNano())
+	var orderID int64
+	err = tx.QueryRowContext(ctx, `INSERT INTO reader_purchase_orders(order_no,reader_id,order_type,product_type,product_name_snapshot,price_coin_snapshot,recharge_coin_amount,bonus_coin_amount,status,idempotency_key,remark,operator_id) VALUES($1,$2,'mock_recharge','recharge','模拟充值',$3,$3,0,'pending',$4,$5,$6) ON CONFLICT(reader_id,idempotency_key) DO UPDATE SET updated_at=reader_purchase_orders.updated_at RETURNING id`, orderNo, readerID, amount, key, in.Remark, operatorID).Scan(&orderID)
+	if err != nil {
+		return Order{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Order{}, err
+	}
+	return r.Get(ctx, orderID)
+}
+
+func (r SQLRepository) ConfirmMockRecharge(ctx context.Context, orderID, operatorID int64) (Order, error) {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Order{}, err
+	}
+	defer tx.Rollback()
+	var readerID, amount int64
+	var orderNo, orderType, status, remark string
+	err = tx.QueryRowContext(ctx, `SELECT reader_id,order_no,order_type,recharge_coin_amount,status,COALESCE(remark,'') FROM reader_purchase_orders WHERE id=$1 FOR UPDATE`, orderID).Scan(&readerID, &orderNo, &orderType, &amount, &status, &remark)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Order{}, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "模拟充值订单不存在")
+	}
+	if err != nil {
+		return Order{}, err
+	}
+	if orderType != "mock_recharge" {
+		return Order{}, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "订单类型不支持模拟充值确认")
+	}
+	if status == "paid" {
+		if err = tx.Commit(); err != nil {
+			return Order{}, err
+		}
+		return r.Get(ctx, orderID)
+	}
+	if status != "pending" {
+		return Order{}, apperror.New(apperror.CodeConflict, http.StatusConflict, "订单状态不支持确认")
+	}
+	orderIDText := strconv.FormatInt(orderID, 10)
+	confirmKey := "mock_recharge_confirm:" + orderNo
+	if _, err = wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: readerID, LedgerNo: "MR-" + orderIDText, BizType: "mock_recharge", BizID: &orderIDText, OrderNo: &orderNo, Direction: "income", CoinType: "recharge", Amount: amount, Remark: &remark, IdempotencyKey: &confirmKey}); err != nil {
+		return Order{}, err
+	}
+	if err = invitereward.GrantFirstRechargeTx(ctx, tx, readerID); err != nil {
+		return Order{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE reader_purchase_orders SET status='paid',operator_id=$2,paid_time=now(),updated_at=now() WHERE id=$1`, orderID, operatorID); err != nil {
+		return Order{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Order{}, err
+	}
+	return r.Get(ctx, orderID)
 }

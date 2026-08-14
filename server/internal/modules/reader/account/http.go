@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
@@ -140,12 +141,13 @@ func (h *Handler) inviteDashboard(c *gin.Context) {
 		accountError(c, err)
 		return
 	}
-	var registerReward, firstRecharge int64
-	_ = h.db.QueryRowContext(c, `SELECT invitee_reward_coin,0 FROM reader_invite_reward_config WHERE id=1 AND enabled`).Scan(&registerReward, &firstRecharge)
+	var registerReward int64
+	firstRecharge := invitereward.FirstRechargeRewardCoin
+	_ = h.db.QueryRowContext(c, `SELECT invitee_reward_coin FROM reader_invite_reward_config WHERE id=1 AND enabled`).Scan(&registerReward)
 	var invited int64
 	_ = h.db.QueryRowContext(c, `SELECT count(*) FROM reader_invite_relations WHERE inviter_reader_id=$1 AND status='active'`, rid).Scan(&invited)
 	var total int64
-	_ = h.db.QueryRowContext(c, `SELECT COALESCE(sum(amount),0) FROM reader_wallet_ledgers WHERE reader_id=$1 AND biz_type='invite_reward' AND coin_type='bonus' AND direction='income'`, rid).Scan(&total)
-	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": "邀请你加入月白书城，点击 {{link}} 注册", "registerRewardCoin": strconv.FormatInt(registerReward, 10), "firstRechargeRewardCoin": "0", "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(total, 10), "rewards": []any{}}
+	_ = h.db.QueryRowContext(c, `SELECT COALESCE(sum(amount),0) FROM reader_wallet_ledgers WHERE reader_id=$1 AND biz_type IN ('invite_reward','invite_first_recharge_reward') AND coin_type='bonus' AND direction='income'`, rid).Scan(&total)
+	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": "邀请你加入月白书城，点击 {{link}} 注册", "registerRewardCoin": strconv.FormatInt(registerReward, 10), "firstRechargeRewardCoin": strconv.FormatInt(firstRecharge, 10), "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(total, 10), "rewards": []any{}}
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: data})
 }

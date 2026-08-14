@@ -61,7 +61,7 @@ func (accountContractConn) QueryContext(_ context.Context, query string, _ []dri
 	case strings.Contains(query, "SELECT code FROM reader_invite_codes"):
 		return contractRows([]string{"code"}, []driver.Value{"ACCOUNT-CONTRACT"}), nil
 	case strings.Contains(query, "SELECT invitee_reward_coin"):
-		return contractRows([]string{"invitee_reward_coin", "first_recharge"}, []driver.Value{accountSafeID, int64(0)}), nil
+		return contractRows([]string{"invitee_reward_coin"}, []driver.Value{accountSafeID}), nil
 	case strings.Contains(query, "SELECT count(*) FROM reader_invite_relations"):
 		return contractRows([]string{"count"}, []driver.Value{accountSafeID}), nil
 	case strings.Contains(query, "SELECT COALESCE(sum(amount)"):
@@ -118,7 +118,7 @@ func TestAccountHTTPContractKeepsEntitlementProductAndInviteLongValues(t *testin
 		},
 		{
 			"invite dashboard", http.MethodPost, "/reader/me/invite/code",
-			`{"code":200,"msg":"查询成功","data":{"readerId":"9223372036854775807","inviteCode":"ACCOUNT-CONTRACT","inviteCodeAvailable":true,"shareTextTemplate":"邀请你加入月白书城，点击 {{link}} 注册","registerRewardCoin":"9007199254740993","firstRechargeRewardCoin":"0","invitedCount":"9007199254740993","totalRewardCoin":"9223372036854775807","rewards":[]}}`,
+			`{"code":200,"msg":"查询成功","data":{"readerId":"9223372036854775807","inviteCode":"ACCOUNT-CONTRACT","inviteCodeAvailable":true,"shareTextTemplate":"邀请你加入月白书城，点击 {{link}} 注册","registerRewardCoin":"9007199254740993","firstRechargeRewardCoin":"100","invitedCount":"9007199254740993","totalRewardCoin":"9223372036854775807","rewards":[]}}`,
 		},
 	}
 	for _, test := range tests {

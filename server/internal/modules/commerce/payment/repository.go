@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 )
 
@@ -52,6 +53,9 @@ func (r SQLRepository) Process(ctx context.Context, c Callback) error {
 	ledgerNo := "R" + strconv64(orderID)
 	ledger, e := wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: readerID, LedgerNo: ledgerNo, BizType: "epusdt_recharge", BizID: biz, OrderNo: &c.OrderNo, Direction: "income", CoinType: "recharge", Amount: diamonds, Remark: strPtr("USDT充值"), IdempotencyKey: &key})
 	if e != nil {
+		return e
+	}
+	if e = invitereward.GrantFirstRechargeTx(ctx, tx, readerID); e != nil {
 		return e
 	}
 	if _, e = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_trade_id=$1,actual_amount=$2,receive_address=$3,block_transaction_id=$4,gateway_status=2,status='paid',wallet_ledger_id=$5,paid_time=now(),updated_at=now() WHERE id=$6`, c.TradeID, c.ActualAmount, c.ReceiveAddress, c.TransactionID, ledger.ID, orderID); e != nil {

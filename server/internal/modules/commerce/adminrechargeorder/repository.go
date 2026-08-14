@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
@@ -107,6 +108,9 @@ func (r SQLRepository) ManualPay(ctx context.Context, id int64, in ManualPayInpu
 	ledgerNo := fmt.Sprintf("MR-%d-%d", orderID, time.Now().UnixNano())
 	ledger, err := wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: readerID, LedgerNo: ledgerNo, BizType: "manual_recharge", BizID: &bizID, OrderNo: &orderNo, Direction: "income", CoinType: "recharge", Amount: diamonds, Remark: &in.Remark, IdempotencyKey: &key})
 	if err != nil {
+		return Order{}, err
+	}
+	if err = invitereward.GrantFirstRechargeTx(ctx, tx, readerID); err != nil {
 		return Order{}, err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_trade_id=NULLIF($1,''),actual_amount=$2,status='paid',wallet_ledger_id=$3,paid_time=now(),updated_at=now() WHERE id=$4`, in.GatewayTradeID, in.ActualAmount, ledger.ID, orderID); err != nil {
