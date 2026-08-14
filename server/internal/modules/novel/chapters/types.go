@@ -25,6 +25,7 @@ type Input struct {
 	BookPriceCoin int64
 	ChapterStatus string
 	AICleanStatus string
+	SourceType    string
 	Content       *string
 }
 

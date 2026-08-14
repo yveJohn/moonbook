@@ -17,6 +17,7 @@ const JobType = "forum_import"
 type Result struct {
 	TotalChapterCount, ImportedChapterCount, EmptyChapterCount, DuplicateChapterCount int
 	QualityStatus, QualitySummary                                                     string
+	Chapters                                                                          []ParsedChapter
 }
 type Executor interface {
 	Execute(context.Context, Task) (Result, error)
@@ -31,8 +32,12 @@ type Worker struct {
 	Jobs     *jobs.Repository
 	Logs     fetchlog.SQLRepository
 	Executor Executor
+	Writer   ChapterWriter
 	WorkerID string
 	Lease    time.Duration
+}
+type ChapterWriter interface {
+	Import(context.Context, Task, []ParsedChapter) (int, error)
 }
 
 func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
@@ -64,6 +69,13 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	result, execErr := w.Executor.Execute(ctx, task)
 	if execErr != nil {
 		return true, w.finishFailureTask(ctx, job, task, execErr)
+	}
+	if w.Writer != nil && len(result.Chapters) > 0 {
+		imported, writeErr := w.Writer.Import(ctx, task, result.Chapters)
+		if writeErr != nil {
+			return true, w.finishFailureTask(ctx, job, task, writeErr)
+		}
+		result.ImportedChapterCount = imported
 	}
 	if _, err = w.DB.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status='succeeded',quality_status=$2,quality_summary=$3,total_chapter_count=$4,imported_chapter_count=$5,empty_chapter_count=$6,duplicate_chapter_count=$7,end_time=now(),updated_at=now() WHERE id=$1`, taskID, result.QualityStatus, result.QualitySummary, result.TotalChapterCount, result.ImportedChapterCount, result.EmptyChapterCount, result.DuplicateChapterCount); err != nil {
 		return true, w.finishFailureTask(ctx, job, task, err)

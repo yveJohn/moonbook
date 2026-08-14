@@ -64,12 +64,13 @@ func (e *HTTPExecutor) Execute(ctx context.Context, task Task) (Result, error) {
 	if len(strings.TrimSpace(string(body))) == 0 {
 		return Result{}, errors.New("forum response is empty")
 	}
-	chapters := len(chapterMarker.FindAll(body, -1))
+	parsed := ParseForumChapters(body)
+	chapters := len(parsed)
 	quality := "passed"
 	summary := fmt.Sprintf("响应 %d 字节，识别章节标记 %d 个", len(body), chapters)
 	if chapters == 0 {
 		quality = "warning"
 		summary = "响应成功但未识别章节标记"
 	}
-	return Result{TotalChapterCount: chapters, ImportedChapterCount: 0, QualityStatus: quality, QualitySummary: summary}, nil
+	return Result{TotalChapterCount: chapters, ImportedChapterCount: 0, QualityStatus: quality, QualitySummary: summary, Chapters: parsed}, nil
 }

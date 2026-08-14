@@ -40,6 +40,10 @@ func normalizeInput(input Input, creating bool) (Input, error) {
 	input.ChapterName = strings.TrimSpace(input.ChapterName)
 	input.ChapterStatus = strings.TrimSpace(input.ChapterStatus)
 	input.AICleanStatus = strings.TrimSpace(input.AICleanStatus)
+	input.SourceType = strings.TrimSpace(input.SourceType)
+	if input.SourceType == "" {
+		input.SourceType = "manual"
+	}
 	if input.BookID <= 0 || input.ChapterName == "" || len([]rune(input.ChapterName)) > 255 {
 		return Input{}, invalid("书籍和章节名称不能为空，章节名称不能超过 255 个字符")
 	}
@@ -56,6 +60,11 @@ func normalizeInput(input Input, creating bool) (Input, error) {
 	case "pending", "cleaning", "cleaned", "discarded", "failed", "expired", "skipped":
 	default:
 		return Input{}, invalid("AI 清洗状态无效")
+	}
+	switch input.SourceType {
+	case "manual", "legacy", "txt_import", "forum_crawl":
+	default:
+		return Input{}, invalid("章节来源无效")
 	}
 	if creating && input.Content == nil {
 		empty := ""
@@ -129,7 +138,7 @@ func (service *Service) Create(ctx context.Context, raw Input) (Chapter, error) 
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO novel_chapters
 			(id,book_id,chapter_no,chapter_name,word_count,is_vip,book_price_coin,chapter_status,ai_clean_status,source_type)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual')`, id, input.BookID, chapterNo, input.ChapterName, countWords(text), input.IsVIP, input.BookPriceCoin, input.ChapterStatus, input.AICleanStatus)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, input.BookID, chapterNo, input.ChapterName, countWords(text), input.IsVIP, input.BookPriceCoin, input.ChapterStatus, input.AICleanStatus, input.SourceType)
 		if err != nil {
 			return mapWriteError(err)
 		}
@@ -263,6 +272,12 @@ func (service *Service) Get(ctx context.Context, id int64) (Chapter, error) {
 		return Chapter{}, apperror.Wrap(err, apperror.CodeInternal, http.StatusInternalServerError, "查询章节失败")
 	}
 	return chapter, nil
+}
+
+func (service *Service) HasChapterNo(ctx context.Context, bookID int64, chapterNo int) (bool, error) {
+	var exists bool
+	err := service.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM novel_chapters WHERE book_id=$1 AND chapter_no=$2 AND deleted_at IS NULL)`, bookID, chapterNo).Scan(&exists)
+	return exists, err
 }
 
 type rowScanner interface{ Scan(...any) error }
