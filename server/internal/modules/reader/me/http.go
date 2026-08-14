@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
+	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -75,7 +76,7 @@ func (h *Handler) listBookshelf(c *gin.Context) {
 	}
 	out := make([]map[string]any, 0, len(v))
 	for _, x := range v {
-		m := map[string]any{"bookshelfId": strconv.FormatInt(x.ID, 10), "bookId": strconv.FormatInt(x.BookID, 10), "bookName": x.BookName, "authorName": x.AuthorName, "lastChapterId": nil, "lastChapterName": nil, "lastReadTime": x.LastReadAt}
+		m := map[string]any{"bookshelfId": strconv.FormatInt(x.ID, 10), "bookId": strconv.FormatInt(x.BookID, 10), "bookName": x.BookName, "authorName": x.AuthorName, "lastChapterId": nil, "lastChapterName": nil, "lastReadTime": readerwire.DateTimePointer(x.LastReadAt)}
 		if x.LastChapterID != nil {
 			m["lastChapterId"] = strconv.FormatInt(*x.LastChapterID, 10)
 		}
@@ -102,7 +103,7 @@ func (h *Handler) addBookshelf(c *gin.Context) {
 		fail(c, e)
 		return
 	}
-	m := map[string]any{"bookshelfId": strconv.FormatInt(v.ID, 10), "bookId": strconv.FormatInt(v.BookID, 10), "bookName": v.BookName, "authorName": v.AuthorName, "lastChapterId": nil, "lastChapterName": nil, "lastReadTime": v.LastReadAt}
+	m := map[string]any{"bookshelfId": strconv.FormatInt(v.ID, 10), "bookId": strconv.FormatInt(v.BookID, 10), "bookName": v.BookName, "authorName": v.AuthorName, "lastChapterId": nil, "lastChapterName": nil, "lastReadTime": readerwire.DateTimePointer(v.LastReadAt)}
 	if v.LastChapterID != nil {
 		m["lastChapterId"] = strconv.FormatInt(*v.LastChapterID, 10)
 	}
@@ -142,7 +143,7 @@ func (h *Handler) listLikes(c *gin.Context) {
 	}
 	out := make([]map[string]any, 0, len(v))
 	for _, x := range v {
-		out = append(out, map[string]any{"likeId": strconv.FormatInt(x.BookLikeID, 10), "bookId": strconv.FormatInt(x.BookID, 10), "bookName": x.BookName, "authorName": x.AuthorName, "bookDesc": x.Description, "categoryCode": x.CategoryCode, "categoryName": x.CategoryName, "wordCount": x.WordCount, "likeCount": x.LikeCount, "likedAt": x.LikedAt})
+		out = append(out, map[string]any{"likeId": strconv.FormatInt(x.BookLikeID, 10), "bookId": strconv.FormatInt(x.BookID, 10), "bookName": x.BookName, "authorName": x.AuthorName, "bookDesc": x.Description, "categoryCode": x.CategoryCode, "categoryName": x.CategoryName, "wordCount": x.WordCount, "likeCount": x.LikeCount, "likedAt": readerwire.DateTime(x.LikedAt)})
 	}
 	ok(c, out, "查询成功")
 }
@@ -185,7 +186,7 @@ func feedbackMap(v Feedback) map[string]any {
 	if v.Reply != nil && *v.Reply != "" {
 		reply = *v.Reply
 	}
-	return map[string]any{"id": strconv.FormatInt(v.ID, 10), "content": v.Content, "status": v.Status, "replyContent": reply, "replyTime": v.RepliedAt, "createTime": v.CreatedAt}
+	return map[string]any{"id": strconv.FormatInt(v.ID, 10), "content": v.Content, "status": v.Status, "replyContent": reply, "replyTime": readerwire.DateTimePointer(v.RepliedAt), "createTime": readerwire.DateTime(v.CreatedAt)}
 }
 func (h *Handler) createFeedback(c *gin.Context) {
 	rid, e := id(c)
@@ -225,7 +226,7 @@ func (h *Handler) listFeedbacks(c *gin.Context) {
 	c.JSON(http.StatusOK, pageResponse{Code: 200, Msg: "查询成功", Rows: out, Total: total})
 }
 func historyMap(v History) map[string]any {
-	return map[string]any{"historyId": strconv.FormatInt(v.ID, 10), "bookId": strconv.FormatInt(v.BookID, 10), "chapterId": strconv.FormatInt(v.ChapterID, 10), "chapterNo": v.ChapterNo, "chapterName": v.ChapterName, "positionType": v.PositionType, "positionValue": v.PositionValue, "progressPercent": v.ProgressPercent, "lastReadTime": v.LastReadAt}
+	return map[string]any{"historyId": strconv.FormatInt(v.ID, 10), "bookId": strconv.FormatInt(v.BookID, 10), "chapterId": strconv.FormatInt(v.ChapterID, 10), "chapterNo": v.ChapterNo, "chapterName": v.ChapterName, "positionType": v.PositionType, "positionValue": v.PositionValue, "progressPercent": v.ProgressPercent, "lastReadTime": readerwire.DateTime(v.LastReadAt)}
 }
 func (h *Handler) listHistory(c *gin.Context) {
 	rid, e := id(c)

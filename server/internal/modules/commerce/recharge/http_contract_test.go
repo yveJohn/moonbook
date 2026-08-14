@@ -54,7 +54,8 @@ func (r *rechargeContractRepo) GetOrder(_ context.Context, readerID int64, order
 
 func rechargeContractOrder(id, productID string) Order {
 	gatewayTradeID, receiveAddress := "gateway-contract", "T-contract"
-	walletLedgerID, expireTime := "9223372036854775806", "2026-08-15T03:14:05Z"
+	walletLedgerID := "9223372036854775806"
+	expireTime := time.Date(2026, 8, 15, 3, 14, 5, 0, time.UTC)
 	createdAt := time.Date(2026, 8, 15, 3, 4, 5, 0, time.UTC)
 	return Order{
 		ID: id, ReaderID: "9223372036854775807", OrderNo: "R-contract", SourceType: "preset",
@@ -92,11 +93,11 @@ func TestRechargeHTTPContractKeepsIDsAmountsAndNulls(t *testing.T) {
 		},
 		{
 			"create preset order", http.MethodPost, "/reader/me/recharge/orders", `{"productId":"9007199254740993","requestId":"request-contract"}`,
-			`{"code":200,"msg":"订单创建成功","data":{"id":"9223372036854775807","orderNo":"R-contract","readerId":"9223372036854775807","sourceType":"preset","productId":"9007199254740993","diamondAmount":"9007199254740993","priceUsdt":"123456789.12345678","provider":"epusdt","currency":"USDT","token":"USDT","network":"TRC20","gatewayTradeId":"gateway-contract","actualAmount":null,"receiveAddress":"T-contract","paymentUrl":null,"blockTransactionId":null,"status":"pending","gatewayStatus":null,"walletLedgerId":"9223372036854775806","expireTime":"2026-08-15T03:14:05Z","paidTime":null,"failureCode":null,"failureMessage":null,"createTime":"2026-08-15T03:04:05Z","updateTime":"2026-08-15T03:04:05Z"}}`,
+			`{"code":200,"msg":"订单创建成功","data":{"id":"9223372036854775807","orderNo":"R-contract","readerId":"9223372036854775807","sourceType":"preset","productId":"9007199254740993","diamondAmount":"9007199254740993","priceUsdt":"123456789.12345678","provider":"epusdt","currency":"USDT","token":"USDT","network":"TRC20","gatewayTradeId":"gateway-contract","actualAmount":null,"receiveAddress":"T-contract","paymentUrl":null,"blockTransactionId":null,"status":"pending","gatewayStatus":null,"walletLedgerId":"9223372036854775806","expireTime":"2026-08-15 03:14:05","paidTime":null,"failureCode":null,"failureMessage":null,"createTime":"2026-08-15 03:04:05","updateTime":"2026-08-15 03:04:05"}}`,
 		},
 		{
 			"get custom order", http.MethodGet, "/reader/me/recharge/orders/9223372036854775807", "",
-			`{"code":200,"msg":"查询成功","data":{"id":"9223372036854775807","orderNo":"R-contract","readerId":"9223372036854775807","sourceType":"preset","productId":null,"diamondAmount":"9007199254740993","priceUsdt":"123456789.12345678","provider":"epusdt","currency":"USDT","token":"USDT","network":"TRC20","gatewayTradeId":"gateway-contract","actualAmount":null,"receiveAddress":"T-contract","paymentUrl":null,"blockTransactionId":null,"status":"pending","gatewayStatus":null,"walletLedgerId":"9223372036854775806","expireTime":"2026-08-15T03:14:05Z","paidTime":null,"failureCode":null,"failureMessage":null,"createTime":"2026-08-15T03:04:05Z","updateTime":"2026-08-15T03:04:05Z"}}`,
+			`{"code":200,"msg":"查询成功","data":{"id":"9223372036854775807","orderNo":"R-contract","readerId":"9223372036854775807","sourceType":"preset","productId":null,"diamondAmount":"9007199254740993","priceUsdt":"123456789.12345678","provider":"epusdt","currency":"USDT","token":"USDT","network":"TRC20","gatewayTradeId":"gateway-contract","actualAmount":null,"receiveAddress":"T-contract","paymentUrl":null,"blockTransactionId":null,"status":"pending","gatewayStatus":null,"walletLedgerId":"9223372036854775806","expireTime":"2026-08-15 03:14:05","paidTime":null,"failureCode":null,"failureMessage":null,"createTime":"2026-08-15 03:04:05","updateTime":"2026-08-15 03:04:05"}}`,
 		},
 	}
 	for _, test := range tests {

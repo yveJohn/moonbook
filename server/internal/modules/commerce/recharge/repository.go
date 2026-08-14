@@ -118,7 +118,7 @@ func (r SQLRepository) CreateOrder(ctx context.Context, req CreateRequest) (Orde
 	return r.GetOrder(ctx, req.ReaderID, strconv.FormatInt(id, 10))
 }
 
-const orderSelect = `SELECT o.id,o.reader_id,o.diamond_amount::text,COALESCE(o.product_id::text,''),o.order_no,o.source_type,o.price_usdt::text,o.provider,o.currency,o.token,o.network,o.gateway_trade_id,o.actual_amount::text,o.receive_address,o.payment_url,o.block_transaction_id,o.status,o.gateway_status,o.wallet_ledger_id::text,o.expire_time::text,o.paid_time::text,o.failure_code,o.failure_message,o.created_at,o.updated_at FROM reader_recharge_orders o`
+const orderSelect = `SELECT o.id,o.reader_id,o.diamond_amount::text,COALESCE(o.product_id::text,''),o.order_no,o.source_type,o.price_usdt::text,o.provider,o.currency,o.token,o.network,o.gateway_trade_id,o.actual_amount::text,o.receive_address,o.payment_url,o.block_transaction_id,o.status,o.gateway_status,o.wallet_ledger_id::text,o.expire_time,o.paid_time,o.failure_code,o.failure_message,o.created_at,o.updated_at FROM reader_recharge_orders o`
 
 func (r SQLRepository) GetOrder(ctx context.Context, readerID int64, orderID string) (Order, error) {
 	var o Order

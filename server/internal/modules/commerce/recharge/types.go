@@ -22,7 +22,8 @@ type Order struct {
 	GatewayTradeID, ActualAmount, ReceiveAddress, PaymentURL, BlockTransactionID *string
 	Status                                                                       string
 	GatewayStatus                                                                *int
-	WalletLedgerID, ExpireTime, PaidTime, FailureCode, FailureMessage            *string
+	WalletLedgerID, FailureCode, FailureMessage                                  *string
+	ExpireTime, PaidTime                                                         *time.Time
 	CreateTime, UpdateTime                                                       time.Time
 }
 type CreateRequest struct {

@@ -8,6 +8,7 @@ import (
 
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
+	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/gin-gonic/gin"
 )
 
@@ -77,7 +78,7 @@ func (h *Handler) entitlements(c *gin.Context) {
 	out["membershipPermanent"] = permanent
 	out["membershipActive"] = permanent || expire.Valid
 	if expire.Valid {
-		out["membershipExpireTime"] = expire.Time.UTC().Format("2006-01-02 15:04:05")
+		out["membershipExpireTime"] = readerwire.DateTime(expire.Time)
 	}
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: out})
 }
@@ -105,7 +106,7 @@ func (h *Handler) membershipProducts(c *gin.Context) {
 		if days.Valid {
 			duration = int(days.Int64)
 		}
-		out = append(out, map[string]any{"id": strconv.FormatInt(id, 10), "productType": typ, "targetId": nil, "productName": name, "priceCoin": strconv.FormatInt(price, 10), "allowBonusCoin": bonus, "durationDays": duration, "saleStatus": status, "sortOrder": sort, "remark": "", "createTime": created.UTC().Format("2006-01-02 15:04:05"), "updateTime": updated.UTC().Format("2006-01-02 15:04:05")})
+		out = append(out, map[string]any{"id": strconv.FormatInt(id, 10), "productType": typ, "targetId": nil, "productName": name, "priceCoin": strconv.FormatInt(price, 10), "allowBonusCoin": bonus, "durationDays": duration, "saleStatus": status, "sortOrder": sort, "remark": "", "createTime": readerwire.DateTime(created), "updateTime": readerwire.DateTime(updated)})
 	}
 	if err = rows.Err(); err != nil {
 		accountError(c, err)

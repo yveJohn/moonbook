@@ -107,6 +107,8 @@
 | 钱包、流水、充值商品/报价/订单 6 条 | `wallet/http_contract_test.go`、`recharge/http_contract_test.go` 已逐条执行 JSON 快照 | 共享 Reader 鉴权已覆盖；充值参数和仓储错误仍待 HTTP 错误快照 | 余额、流水、钻石、USDT 金额、ID 均为字符串；分页归一化和订单 `null` 已覆盖 | 正常响应矩阵完成 |
 | 签到、邀请、权益、会员产品、购买 8 条 | `checkin/http_contract_test.go`、`account/http_contract_test.go`、`purchase/http_contract_test.go` 已逐条执行 JSON 快照 | 报价变化、余额不足、重复请求等服务语义已有测试，HTTP 错误快照仍待补 | 奖励、余额扣减、报价、商品/订单/权益 ID 均为字符串；订单 `null` 和旧日期格式已覆盖 | 正常响应矩阵完成 |
 
+Reader 线协议日期统一由 `server/internal/modules/reader/wire` 输出 UTC 的 `yyyy-MM-dd HH:mm:ss`，与旧 Java `spring.jackson.date-format` 一致；个人数据、作品/章节、钱包流水、充值订单、购买订单和会员商品的 HTTP 快照均已固定该格式，零值与空指针保持 `null`。
+
 - [ ] 每个接口的正常请求与响应 JSON 快照
 - [ ] 未登录、Token 过期、封禁和权限不足响应
 - [ ] `null`、空数组、缺省字段和分页边界

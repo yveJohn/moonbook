@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
@@ -11,7 +12,8 @@ import (
 
 func TestSummaryKeepsLongIDsAsStrings(t *testing.T) {
 	id := int64(math.MaxInt64)
-	b := summary(Book{ID: id, LastChapterID: &id})
+	updatedAt := time.Date(2026, 8, 15, 6, 7, 8, 0, time.UTC)
+	b := summary(Book{ID: id, LastChapterID: &id, LastChapterUpdatedAt: &updatedAt})
 	data, err := json.Marshal(b)
 	if err != nil {
 		t.Fatal(err)
@@ -22,6 +24,9 @@ func TestSummaryKeepsLongIDsAsStrings(t *testing.T) {
 	}
 	if got["bookId"] != "9223372036854775807" || got["lastChapterId"] != "9223372036854775807" {
 		t.Fatalf("unexpected IDs: %s", data)
+	}
+	if got["lastChapterUpdateTime"] != "2026-08-15 06:07:08" {
+		t.Fatalf("unexpected date: %s", data)
 	}
 }
 

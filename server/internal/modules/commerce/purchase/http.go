@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"time"
 
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
+	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -55,7 +55,7 @@ func longString(raw json.RawMessage) (string, error) {
 	return "", ErrInvalidRequest
 }
 func orderJSON(o Order) map[string]any {
-	return map[string]any{"id": emptyNull(o.ID), "orderNo": emptyNull(o.OrderNo), "readerId": o.ReaderID, "orderType": o.OrderType, "productId": emptyNull(o.ProductID), "productType": o.ProductType, "targetId": emptyNull(o.TargetID), "bookIdSnapshot": emptyNull(o.BookIDSnapshot), "productNameSnapshot": emptyNull(o.ProductName), "priceCoinSnapshot": emptyNull(o.PriceCoin), "chapterWordCountSnapshot": numberNull(o.ChapterWordCount), "pricingWordUnitSnapshot": numberNull(o.PricingWordUnit), "pricingCoinUnitSnapshot": emptyNull(o.PricingCoinUnit), "rechargeCoinAmount": o.RechargeCoinAmount, "bonusCoinAmount": o.BonusCoinAmount, "status": o.Status, "idempotencyKey": o.IdempotencyKey, "remark": o.Remark, "operatorId": emptyNull(o.OperatorID), "paidTime": datePointer(o.PaidTime), "createTime": dateValue(o.CreateTime), "updateTime": dateValue(o.UpdateTime)}
+	return map[string]any{"id": emptyNull(o.ID), "orderNo": emptyNull(o.OrderNo), "readerId": o.ReaderID, "orderType": o.OrderType, "productId": emptyNull(o.ProductID), "productType": o.ProductType, "targetId": emptyNull(o.TargetID), "bookIdSnapshot": emptyNull(o.BookIDSnapshot), "productNameSnapshot": emptyNull(o.ProductName), "priceCoinSnapshot": emptyNull(o.PriceCoin), "chapterWordCountSnapshot": numberNull(o.ChapterWordCount), "pricingWordUnitSnapshot": numberNull(o.PricingWordUnit), "pricingCoinUnitSnapshot": emptyNull(o.PricingCoinUnit), "rechargeCoinAmount": o.RechargeCoinAmount, "bonusCoinAmount": o.BonusCoinAmount, "status": o.Status, "idempotencyKey": o.IdempotencyKey, "remark": o.Remark, "operatorId": emptyNull(o.OperatorID), "paidTime": readerwire.DateTimePointer(o.PaidTime), "createTime": readerwire.DateTime(o.CreateTime), "updateTime": readerwire.DateTime(o.UpdateTime)}
 }
 func emptyNull(s string) any {
 	if s == "" || s == "0" {
@@ -69,18 +69,6 @@ func numberNull(s string) any {
 	}
 	n, _ := strconv.Atoi(s)
 	return n
-}
-func datePointer(value *time.Time) any {
-	if value == nil {
-		return nil
-	}
-	return value.UTC().Format("2006-01-02 15:04:05")
-}
-func dateValue(value time.Time) any {
-	if value.IsZero() {
-		return nil
-	}
-	return value.UTC().Format("2006-01-02 15:04:05")
 }
 func (h *Handler) membership(c *gin.Context) {
 	var in struct {

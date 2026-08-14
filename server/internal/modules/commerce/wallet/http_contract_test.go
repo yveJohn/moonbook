@@ -67,7 +67,7 @@ func TestWalletHTTPContractKeepsIDsAndAmountsAsStrings(t *testing.T) {
 		},
 		{
 			"ledger page", "/reader/me/wallet/ledgers?coinType=bonus&pageNum=0&pageSize=1000",
-			`{"code":200,"msg":"查询成功","rows":[{"id":"9223372036854775807","readerId":"9223372036854775807","ledgerNo":"L-contract","bizType":"recharge","bizId":"9223372036854775806","orderNo":null,"direction":"income","coinType":"bonus","amount":"9007199254740993","balanceBefore":"9223372036854775806","balanceAfter":"9223372036854775807","remark":"契约流水","createTime":"2026-08-15T02:03:04Z"}],"total":1}`,
+			`{"code":200,"msg":"查询成功","rows":[{"id":"9223372036854775807","readerId":"9223372036854775807","ledgerNo":"L-contract","bizType":"recharge","bizId":"9223372036854775806","orderNo":null,"direction":"income","coinType":"bonus","amount":"9007199254740993","balanceBefore":"9223372036854775806","balanceAfter":"9223372036854775807","remark":"契约流水","createTime":"2026-08-15 02:03:04"}],"total":1}`,
 		},
 	}
 	for _, test := range tests {

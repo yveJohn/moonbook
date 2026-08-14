@@ -5,11 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
+	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -87,7 +87,7 @@ func summary(book Book) map[string]any {
 		out["lastChapterId"] = strconv.FormatInt(*book.LastChapterID, 10)
 	}
 	if book.LastChapterUpdatedAt != nil {
-		out["lastChapterUpdateTime"] = book.LastChapterUpdatedAt.UTC().Format(time.RFC3339Nano)
+		out["lastChapterUpdateTime"] = readerwire.DateTimePointer(book.LastChapterUpdatedAt)
 	}
 	return out
 }
@@ -120,7 +120,7 @@ func history(v *History) any {
 		"historyId": strconv.FormatInt(v.ID, 10), "bookId": strconv.FormatInt(v.BookID, 10),
 		"chapterId": strconv.FormatInt(v.ChapterID, 10), "chapterNo": v.ChapterNo, "chapterName": v.ChapterName,
 		"positionType": v.PositionType, "positionValue": v.PositionValue, "progressPercent": v.ProgressPercent,
-		"lastReadTime": v.LastReadAt,
+		"lastReadTime": readerwire.DateTime(v.LastReadAt),
 	}
 }
 
@@ -242,7 +242,7 @@ func (h *Handler) chapters(c *gin.Context) {
 		if chapter.Access.BookID != "" {
 			access = map[string]any{"bookId": chapter.Access.BookID, "chapterId": chapter.Access.ChapterID, "chargeMode": chapter.Access.ChargeMode, "readable": chapter.Access.Readable, "accessReason": chapter.Access.AccessReason, "membershipEntitled": chapter.Access.MembershipEntitled, "bookPurchased": chapter.Access.BookPurchased, "chapterPurchased": chapter.Access.ChapterPurchased, "purchasable": chapter.Access.Purchasable, "chapterWordCount": chapter.Access.ChapterWordCount, "pricingWordUnit": chapter.Access.PricingWordUnit, "pricingCoinUnit": chapter.Access.PricingCoinUnit, "chapterPrice": chapter.Access.ChapterPrice}
 		}
-		out = append(out, map[string]any{"chapterId": strconv.FormatInt(chapter.ID, 10), "bookId": strconv.FormatInt(chapter.BookID, 10), "chapterNo": chapter.No, "chapterName": chapter.Name, "wordCount": chapter.WordCount, "updateTime": chapter.UpdatedAt.UTC().Format(time.RFC3339Nano), "accessStatus": access, "productStatus": productStatus(normalizeBookStatus(chapter.Access))})
+		out = append(out, map[string]any{"chapterId": strconv.FormatInt(chapter.ID, 10), "bookId": strconv.FormatInt(chapter.BookID, 10), "chapterNo": chapter.No, "chapterName": chapter.Name, "wordCount": chapter.WordCount, "updateTime": readerwire.DateTime(chapter.UpdatedAt), "accessStatus": access, "productStatus": productStatus(normalizeBookStatus(chapter.Access))})
 	}
 	ok(c, out, "查询成功")
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
+	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -78,7 +79,7 @@ func (h *Handler) ledgers(c *gin.Context) {
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, v := range rows {
-		out = append(out, map[string]any{"id": strconv.FormatInt(v.ID, 10), "readerId": strconv.FormatInt(v.ReaderID, 10), "ledgerNo": v.LedgerNo, "bizType": v.BizType, "bizId": v.BizID, "orderNo": v.OrderNo, "direction": v.Direction, "coinType": v.CoinType, "amount": strconv.FormatInt(v.Amount, 10), "balanceBefore": strconv.FormatInt(v.BalanceBefore, 10), "balanceAfter": strconv.FormatInt(v.BalanceAfter, 10), "remark": v.Remark, "createTime": v.CreatedAt})
+		out = append(out, map[string]any{"id": strconv.FormatInt(v.ID, 10), "readerId": strconv.FormatInt(v.ReaderID, 10), "ledgerNo": v.LedgerNo, "bizType": v.BizType, "bizId": v.BizID, "orderNo": v.OrderNo, "direction": v.Direction, "coinType": v.CoinType, "amount": strconv.FormatInt(v.Amount, 10), "balanceBefore": strconv.FormatInt(v.BalanceBefore, 10), "balanceAfter": strconv.FormatInt(v.BalanceAfter, 10), "remark": v.Remark, "createTime": readerwire.DateTime(v.CreatedAt)})
 	}
 	c.JSON(http.StatusOK, pageResponse{Code: 200, Msg: "查询成功", Rows: out, Total: total})
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
+	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -120,7 +121,7 @@ func (h *Handler) get(c *gin.Context) {
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: orderJSON(v)})
 }
 func orderJSON(v Order) map[string]any {
-	return map[string]any{"id": v.ID, "orderNo": v.OrderNo, "readerId": v.ReaderID, "sourceType": v.SourceType, "productId": nullIfEmpty(v.ProductID), "diamondAmount": v.DiamondAmount, "priceUsdt": v.PriceUSDT, "provider": v.Provider, "currency": v.Currency, "token": v.Token, "network": v.Network, "gatewayTradeId": v.GatewayTradeID, "actualAmount": v.ActualAmount, "receiveAddress": v.ReceiveAddress, "paymentUrl": v.PaymentURL, "blockTransactionId": v.BlockTransactionID, "status": v.Status, "gatewayStatus": v.GatewayStatus, "walletLedgerId": v.WalletLedgerID, "expireTime": v.ExpireTime, "paidTime": v.PaidTime, "failureCode": v.FailureCode, "failureMessage": v.FailureMessage, "createTime": v.CreateTime, "updateTime": v.UpdateTime}
+	return map[string]any{"id": v.ID, "orderNo": v.OrderNo, "readerId": v.ReaderID, "sourceType": v.SourceType, "productId": nullIfEmpty(v.ProductID), "diamondAmount": v.DiamondAmount, "priceUsdt": v.PriceUSDT, "provider": v.Provider, "currency": v.Currency, "token": v.Token, "network": v.Network, "gatewayTradeId": v.GatewayTradeID, "actualAmount": v.ActualAmount, "receiveAddress": v.ReceiveAddress, "paymentUrl": v.PaymentURL, "blockTransactionId": v.BlockTransactionID, "status": v.Status, "gatewayStatus": v.GatewayStatus, "walletLedgerId": v.WalletLedgerID, "expireTime": readerwire.DateTimePointer(v.ExpireTime), "paidTime": readerwire.DateTimePointer(v.PaidTime), "failureCode": v.FailureCode, "failureMessage": v.FailureMessage, "createTime": readerwire.DateTime(v.CreateTime), "updateTime": readerwire.DateTime(v.UpdateTime)}
 }
 func nullIfEmpty(v string) any {
 	if v == "" {

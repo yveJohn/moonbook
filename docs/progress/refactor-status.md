@@ -145,6 +145,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Reader 逐接口矩阵开始按路由组收敛：个人数据的书架、点赞、反馈、历史、偏好共 13 条路由已完成正常 JSON 快照，覆盖显式 `data:null`、空数组/分页归一化和两个 Long ID 边界；认证契约补齐过期、撤销、封禁账号的统一业务 `401`。公开接口仍有精选/随机/分类/SEO 边界，Commerce 仍有签到/权益/购买等 HTTP 快照待补，不能据此关闭 M3。
 - Commerce HTTP 契约第一批补齐钱包、流水、充值商品/报价/订单 6 条正常响应，覆盖最大 `int64` 字符串 ID、所有余额/币值/USDT 字符串、分页归一化和订单 `null`。
 - Commerce 剩余签到、邀请、权益、会员产品和三类购买 8 条正常 HTTP 快照已补齐；购买订单恢复旧 DTO 的备注、操作人和三个时间字段，真实 PostgreSQL 验证首次写入与幂等重取均返回完整时间。Commerce 正常响应矩阵现已闭合，错误/并发 HTTP 矩阵仍待逐项固定。
+- Reader 兼容 DTO 的日期已集中统一为旧 Java `yyyy-MM-dd HH:mm:ss`，覆盖个人数据、作品/章节、钱包流水、充值/购买订单和会员商品；Go 默认 RFC3339 不再进入这些读者响应，空时间仍为 `null`。单元快照与真实 PostgreSQL/Redis/MinIO 回归通过。
 - 隔离 Compose 浏览器环境已验证注册后 `/me` 所需的 `GET /reader/me/entitlements`、`GET /reader/products/membership`、`POST /reader/me/invite/code` 均经 Reader 网关返回 HTTP 200；邀请码首次生成使用 PostgreSQL 事务和 advisory lock 并保证重复请求复用同一邀请码。Reader Origin 已加入严格 CORS 白名单，注册请求从 `127.0.0.1` 页面返回 200。浏览器关键旅程已于 2026-08-15 补齐，8GB 副本演练仍待完成。
 
 下一步：
