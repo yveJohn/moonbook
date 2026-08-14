@@ -179,3 +179,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 
 - 新增论坛来源管理 API 和页面（`GET/POST/PUT/DELETE /novel/crawl/sources`），迁移 `00036` 同时建立来源/板块事实表和 GVA 菜单权限；来源 URL、响应编码、请求间隔和排序在服务端校验，Cookie 只返回是否配置，编辑留空不会清除既有 Cookie，真实 PostgreSQL 集成测试覆盖 CRUD、筛选和敏感字段脱敏。
 - 新增论坛板块管理 API 和页面（`GET/POST/PUT/DELETE /novel/crawl/boards`），迁移 `00037` 注册菜单、API 和超级管理员权限；板块来源关联、来源启停约束、同来源名称唯一、URL 域名、分页模板和自动跟进参数在服务端校验，Long ID 全程字符串化。导入任务引用保护将在任务模块落地后补齐。
+- 新增论坛帖子候选管理 API 和页面（`GET /novel/crawl/candidates`、`GET /novel/crawl/candidates/:id`、`PUT /novel/crawl/candidates/skip`、`PUT /novel/crawl/candidates/restore`、`DELETE /novel/crawl/candidates`），迁移 `00038` 建立候选事实表、状态约束、来源/板块引用和唯一外部帖子索引；列表筛选、详情、状态流转和已导入候选删除保护通过真实 PostgreSQL 集成测试。发现扫描和导入执行将在长任务模块接入。

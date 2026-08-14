@@ -83,6 +83,7 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00035_reader_recharge_order_sync.sql",
 		"00036_novel_crawl_forum_source.sql",
 		"00037_novel_crawl_forum_board_admin.sql",
+		"00038_novel_crawl_thread_candidate.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
