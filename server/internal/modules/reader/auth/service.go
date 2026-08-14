@@ -138,6 +138,26 @@ func (s *Service) Login(ctx context.Context, username, password, ip string) (Acc
 	return AccessToken{AccessToken: token, ExpiresAt: expires}, nil
 }
 
+// CreateToken creates a Reader session for an account that has just been
+// committed by another Reader transaction (for example invitation signup).
+// It intentionally does not perform password checks or rate-limit accounting;
+// the caller must have completed those checks before invoking it.
+func (s *Service) CreateToken(ctx context.Context, readerID int64) (AccessToken, error) {
+	expires := time.Now().Add(s.tokens.TTL)
+	sessionID, err := s.repo.CreateSession(ctx, readerID, expires)
+	if err != nil {
+		return AccessToken{}, apperror.Wrap(err, apperror.CodeInternal, 500, "登录失败")
+	}
+	token, err := s.issue(readerID, sessionID, expires)
+	if err != nil {
+		return AccessToken{}, err
+	}
+	if err = s.repo.SetSessionDigest(ctx, sessionID, digest(token)); err != nil {
+		return AccessToken{}, apperror.Wrap(err, apperror.CodeInternal, 500, "登录失败")
+	}
+	return AccessToken{AccessToken: token, ExpiresAt: expires}, nil
+}
+
 func (s *Service) checkLimit(ctx context.Context, ip, username string) error {
 	if s.limiter == nil {
 		return ErrAuthUnavailable
