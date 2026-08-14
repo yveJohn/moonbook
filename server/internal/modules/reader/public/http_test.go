@@ -3,11 +3,14 @@ package public
 import (
 	"encoding/json"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
+	"github.com/gin-gonic/gin"
 )
 
 func TestSummaryKeepsLongIDsAsStrings(t *testing.T) {
@@ -44,9 +47,35 @@ func TestProductStatusKeepsLongIDsAndLoginFreeContract(t *testing.T) {
 	}
 }
 
-func TestAccessErrorUsesReaderCompatibilityCode(t *testing.T) {
-	err := accessError("chapter_purchase_required")
-	if got := apperror.Expose(err); got.HTTPStatus != 46104 || got.Message != "请先购买章节" {
-		t.Fatalf("unexpected error: %+v", got)
+func TestAccessErrorsUseReaderCompatibilityHTTPContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		reason, message string
+		code            int
+	}{
+		{reason: "login_required", code: 46101, message: "请先登录后阅读"},
+		{reason: "membership_required", code: 46102, message: "仅限会员阅读"},
+		{reason: "book_purchase_required", code: 46103, message: "请先购买作品"},
+		{reason: "chapter_purchase_required", code: 46104, message: "请先购买章节"},
+		{reason: "unsupported_mode", code: 46105, message: "作品收费模式不可用"},
+	}
+	for _, test := range tests {
+		t.Run(test.reason, func(t *testing.T) {
+			err := accessError(test.reason)
+			if got := apperror.Expose(err); got.HTTPStatus != test.code || got.Message != test.message {
+				t.Fatalf("unexpected exposed error: %+v", got)
+			}
+			router := gin.New()
+			router.GET("/access", func(c *gin.Context) { fail(c, err) })
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/access", nil))
+			var body map[string]any
+			if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if resp.Code != http.StatusOK || body["code"] != float64(test.code) || body["msg"] != test.message {
+				t.Fatalf("status=%d body=%s", resp.Code, resp.Body.String())
+			}
+		})
 	}
 }
