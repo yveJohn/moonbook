@@ -99,6 +99,7 @@ make test-reader-integration
 - 本次验证同时覆盖章节正文实际 MinIO 写入/读取和不同 reader 的批量权益隔离；测试完成后仅清理随机测试数据及 bucket，未触碰默认 `moonbook` 资源。
 - 冻结 `reader-ui` 使用本地缓存离线执行 `npm run test -- --run`，44 个测试文件、536 个用例全部通过；`npm run build` 的 SSR 生产构建通过。临时 mock API SSR 验证首页、登录页、robots 均返回预期结果，但书库页面因 mock 未提供完整数据响应返回 503，真实 API 书库/书籍/章节 SSR 和浏览器旅程仍是 M3 未关闭项。
 - 2026-08-14 在隔离 Go API `127.0.0.1:4188` + Reader SSR `127.0.0.1:4189` 上完成真实上游验证：`/reader/seo/config`、精选/随机/分页书库、分类、robots、sitemap 均返回预期 200；SSR `/`、`/books`、`/auth/login`、`/robots.txt`、`/sitemap.xml` 均返回 200，书库空状态、SEO title/canonical/JSON-LD 和登录页 `noindex,nofollow` 正确。该临时 API readiness 因隔离 MinIO bucket 未创建返回 503，未影响本次只读路由验证。
+- 新增 `reader/public/http_integration_test.go` 后，完整五包真实集成套件再次通过；该测试直接注册 Gin Reader public 路由，验证匿名分页书库、Bearer Reader 章节目录和 MinIO 正文响应，Long ID 为字符串。
 - Playwright CLI 试运行因 `@playwright/cli` 未在本机 npm 缓存且当前网络受限而未启动，浏览器级关键旅程仍未验收；不能将 curl/SSR 结果替代浏览器证据。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。
 - 当前仓库已知本机 macOS ARM cgo 会在上游 `go-m1cpu` 初始化时崩溃；计划中的后端回归应使用 `CGO_ENABLED=0` 可重复路径，race 需在官方 Linux Go 容器执行。该限制不能被记录为 M3 通过证据。
