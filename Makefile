@@ -17,7 +17,7 @@ REPOSITORY          = registry.cn-hangzhou.aliyuncs.com/${IMAGE_NAME}
 TAGS_OPT           ?= latest
 PLUGIN             ?= email
 
-.PHONY: verify verify-m1 scan-secrets
+.PHONY: verify verify-m1 scan-secrets test-reader-integration
 
 verify: verify-m1
 
@@ -26,6 +26,10 @@ verify-m1:
 
 scan-secrets:
 	./scripts/scan-secrets.sh
+
+# 真实 PostgreSQL/Redis/MinIO 集成测试；依赖连接通过 MOONBOOK_READER_TEST_* 注入。
+test-reader-integration:
+	./scripts/test-reader-integration.sh
 
 #容器环境前后端共同打包
 build: build-web build-server

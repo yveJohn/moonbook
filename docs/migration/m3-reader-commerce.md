@@ -71,7 +71,30 @@ WHERE migration_name='m3-reader-commerce'
 
 ## 当前验证状态
 
-- M3 Reader/Commerce 代码、真实迁移 stage 和五路由契约测试尚未完成，本文件中的“待实现后”是明确缺口。
-- 本次仅完成文档固化；未启动或重启 PostgreSQL、Redis、MinIO，也未执行真实 M3 集成验证。
+### 真实依赖集成测试
+
+测试代码位于以下包，并使用迁移后的真实表和真实依赖：
+
+- `internal/modules/reader/auth`：PostgreSQL 账号/会话、历史 MD5 登录升级、Redis 双维度限流和 Token 撤销。
+- `internal/modules/reader/public`：发布书籍与章节、MinIO 正文上传/激活/读取、Reader 权益判定。
+- `internal/modules/reader/me`：书架、点赞、阅读历史、偏好、反馈，以及两个 `reader_id` 的隔离。
+- `internal/modules/commerce/catalog`：商品/章节价格、会员授予、章节权益和批量访问判定隔离。
+
+一键执行：
+
+```bash
+export MOONBOOK_READER_TEST_DSN='postgres://moonbook:password@127.0.0.1:5432/moonbook_admin?sslmode=disable'
+export MOONBOOK_READER_TEST_REDIS_ADDR='127.0.0.1:6379'
+export MOONBOOK_READER_TEST_REDIS_PASSWORD=''
+export MOONBOOK_READER_TEST_MINIO_ENDPOINT='127.0.0.1:9000'
+export MOONBOOK_READER_TEST_MINIO_ACCESS_KEY='minioadmin'
+export MOONBOOK_READER_TEST_MINIO_SECRET_KEY='minioadmin'
+make test-reader-integration
+```
+
+测试仅使用上述连接指向的本地项目资源；每次运行创建随机 MinIO bucket，并在清理阶段删除 bucket、对象及带测试 ID 的数据库行。缺少任一依赖变量时测试会 `Skip`，不能将该结果作为真实集成验收证据。
+
+- M3 Reader/Commerce 代码、真实迁移 stage 和五路由契约测试已完成；本次补充的真实依赖测试覆盖上列四个模块及注册事务。
+- `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。
 - 当前仓库已知本机 macOS ARM cgo 会在上游 `go-m1cpu` 初始化时崩溃；计划中的后端回归应使用 `CGO_ENABLED=0` 可重复路径，race 需在官方 Linux Go 容器执行。该限制不能被记录为 M3 通过证据。
 - 计划命令 `go test ./internal/... ./initialize/... ./cmd/moonbook-legacy-migrate/...` 和 Docker 集成测试须在实现后运行并保存原始输出摘要。
