@@ -12,7 +12,7 @@ const invalidTokenMessage = "认证失败，无法访问系统资源"
 type readerResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
-	Data any    `json:"data,omitempty"`
+	Data any    `json:"data"`
 }
 
 func readerOK(c *gin.Context, data any, message string) {

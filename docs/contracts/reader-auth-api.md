@@ -30,7 +30,7 @@
 成功响应：`code=200,msg="操作成功"`，`data` 为登录结果：
 
 ```json
-{"code":200,"msg":"操作成功","data":{"accessToken":"<opaque>","readerId":"9223372036854775807","username":"alice","nickname":"Alice"}}
+{"code":200,"msg":"操作成功","data":{"accessToken":"<opaque>","expireIn":3600,"reader":{"readerId":"9223372036854775807","username":"alice","nickname":"Alice","status":"enabled"}}}
 ```
 
 用户名重复、邀请码缺失/过期/禁用/超限、字段校验失败使用 HTTP 200 的稳定业务错误；不得泄漏密码摘要或数据库异常。Redis 限流不可用时注册失败关闭，不能绕过限流。
@@ -56,7 +56,7 @@
 必须携带有效 Reader Token。成功响应：
 
 ```json
-{"code":200,"msg":"查询成功","data":{"id":"9223372036854775807","username":"alice","nickname":"Alice","status":"enabled","inviteCode":"ZXCV5678"}}
+{"code":200,"msg":"查询成功","data":{"readerId":"9223372036854775807","username":"alice","nickname":"Alice","status":"enabled"}}
 ```
 
 实际字段以冻结 `ReaderProfile` 类型为准；新增字段需先更新契约测试。账号状态、会话撤销和过期时间每次请求均由服务端校验，Redis 缓存丢失不得让有效 PostgreSQL 会话失效。
@@ -75,9 +75,9 @@
 
 | 场景 | 预期 | 证据状态 |
 | --- | --- | --- |
-| 五路由成功响应、字段和空值 | 与本文及冻结类型一致 | 待实现后契约测试 |
-| 无效 Reader Token | HTTP 200，`code=401` 固定消息 | 待实现后 HTTP 测试 |
+| 五路由成功响应、字段和空值 | 与本文及冻结类型一致 | `http_contract_test.go` 已逐条覆盖，空成功固定 `data:null` |
+| 无效 Reader Token | HTTP 200，`code=401` 固定消息 | `http_contract_test.go` 已覆盖缺失、过期、撤销和禁用账号 |
 | 管理员 Token 访问 Reader 私有路由 | 不获得 Reader 身份 | 待实现后隔离测试 |
-| BCrypt、历史 MD5 升级、未知摘要 | 仅成功 MD5 登录升级 BCrypt | 待实现后服务测试 |
-| Redis 不可用的认证限流 | 注册/登录失败关闭 | 待实现后集成测试 |
-| 最大 bigint ID 和字符串 JSON | 无精度损失 | 待实现后边界测试 |
+| BCrypt、历史 MD5 升级、未知摘要 | 仅成功 MD5 登录升级 BCrypt | `service_test.go` 与真实 PostgreSQL 集成测试已覆盖 |
+| Redis 不可用的认证限流 | 注册/登录失败关闭 | `service_test.go` 与真实 Redis 集成测试已覆盖 |
+| 最大 bigint ID 和字符串 JSON | 无精度损失 | `9007199254740993`、`9223372036854775807` HTTP 契约已覆盖 |
