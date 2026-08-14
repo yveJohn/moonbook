@@ -45,6 +45,13 @@ func (ReaderIdentityStage) RunBatch(ctx context.Context, source *sql.DB, target 
 		table, last = "user", 0
 	}
 	if table == "user" {
+		hasReaderUsers, err := sourceTableExists(ctx, source, "reader_user")
+		if err != nil {
+			return BatchResult{}, err
+		}
+		if hasReaderUsers {
+			return BatchResult{NextCursor: cursor, Done: true, Metadata: map[string]any{"source": "reader_user", "skipped": "legacy_user_shadowed"}}, nil
+		}
 		exists, err := sourceTableExists(ctx, source, "user")
 		if err != nil {
 			return BatchResult{}, err
@@ -93,15 +100,11 @@ func migrateReaderUsers(ctx context.Context, source *sql.DB, target *sql.Tx, las
 			result.Errors = append(result.Errors, RecordError{SourceTable: "reader_user", SourceID: strconv.FormatInt(id, 10), Code: "INVALID_PASSWORD_HASH", Message: "legacy password hash format is unsupported"})
 			continue
 		}
-		if _, err := target.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,password_algorithm,status,invite_code_id,last_login_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,NULLIF($7,0),$8,COALESCE($9,now()),COALESCE($10,now())) ON CONFLICT(id) DO UPDATE SET username=EXCLUDED.username,nickname=EXCLUDED.nickname,password_hash=EXCLUDED.password_hash,password_algorithm=EXCLUDED.password_algorithm,status=EXCLUDED.status,invite_code_id=EXCLUDED.invite_code_id,last_login_at=EXCLUDED.last_login_at,updated_at=EXCLUDED.updated_at`, id, strings.TrimSpace(username), strings.TrimSpace(nick), hash, alg, status, invite, nullableLegacyTime(login), nullableLegacyTime(created), nullableLegacyTime(updated)); err != nil {
+		if _, err := target.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,password_algorithm,status,invite_code_id,last_login_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,NULLIF($7::bigint,0),$8,COALESCE($9,now()),COALESCE($10,now())) ON CONFLICT(id) DO UPDATE SET username=EXCLUDED.username,nickname=EXCLUDED.nickname,password_hash=EXCLUDED.password_hash,password_algorithm=EXCLUDED.password_algorithm,status=EXCLUDED.status,invite_code_id=EXCLUDED.invite_code_id,last_login_at=EXCLUDED.last_login_at,updated_at=EXCLUDED.updated_at`, id, strings.TrimSpace(username), strings.TrimSpace(nick), hash, alg, status, invite, nullableLegacyTime(login), nullableLegacyTime(created), nullableLegacyTime(updated)); err != nil {
 			return BatchResult{}, err
 		}
 	}
 	result.Done = result.Processed < int64(limit)
-	if result.Done {
-		result.Done = false
-		result.NextCursor = "user:0"
-	}
 	return result, nil
 }
 

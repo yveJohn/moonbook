@@ -8,24 +8,24 @@
 
 | 旧 MySQL | 新 PostgreSQL | 规则 |
 | --- | --- | --- |
-| `reader_user.id,username,nickname,password_hash,status,token_version,invite_code_id,last_login_time,create_time,update_time` | `reader_accounts.id,username,nickname,password_digest,password_algorithm,status,used_invite_code_id,last_login_at,created_at,updated_at` | ID 原值 `bigint`；BCrypt 标记 `bcrypt`；32 位历史摘要标记 `md5_legacy`，禁止日志输出摘要 |
+| `reader_user.id,username,nickname,password_hash,status,invite_code_id,last_login_time,create_time,update_time` | `reader_accounts.id,username,nickname,password_hash,password_algorithm,status,invite_code_id,last_login_at,created_at,updated_at` | ID 原值 `bigint`；BCrypt 标记 `bcrypt`；32 位历史摘要标记 `md5`；坏摘要写 `INVALID_PASSWORD_HASH` 且禁止日志/错误输出摘要。`token_version` 不迁移，新系统使用 `reader_sessions`，切换后旧 Token 按批准边界全部失效 |
 | `reader_invite_code.id,code,inviter_reader_id,status,max_use_count,used_count,expire_time,remark,create_time,update_time` | `reader_invite_codes.id,code,inviter_reader_id,status,max_use_count,used_count,expires_at,remark,created_at,updated_at` | `code` 唯一；消费在注册事务中锁定并检查上限/过期 |
-| `reader_invite_relation.id,inviter_reader_id,invitee_reader_id,invite_code,status,create_time` | `reader_invite_relations.id,inviter_reader_id,invitee_reader_id,invite_code,status,created_at` | 被邀请人唯一；M3 只建立关系事实 |
+| `reader_invite_relation.id,inviter_reader_id,invitee_reader_id,invite_code,status,create_time` | `reader_invite_relations.id,inviter_reader_id,invitee_reader_id,invite_code_id,status,created_at` | 按 code 解析邀请码 ID；旧 `invalid` 映射 `cancelled`；缺邀请码写 `MISSING_INVITE_CODE`；被邀请人唯一 |
 | `reader_bookshelf.id,reader_id,book_id,last_chapter_id,last_read_time,create_time,update_time` | `reader_bookshelf_entries.*` | `(reader_id,book_id)` 冲突时保留目标事实并按 stage 规则更新进度 |
 | `reader_book_like.id,reader_id,book_id,create_time` | `reader_book_likes.*` | `(reader_id,book_id)` 幂等，计数由业务事务维护 |
 | `reader_reading_history.*` | `reader_reading_history.*` | `(reader_id,book_id)` 唯一；章节归属、位置和百分比重新校验 |
 | `reader_reading_preference.*` | `reader_reading_preferences.*` | 每读者单例；非法枚举写错误清单，不静默改值 |
-| `reader_feedback.*` | `reader_feedback.*` | 读者隔离；原状态映射为 `pending/replied` |
+| `reader_feedback.id,reader_id,content,status,reply_content,reply_time,create_time,update_time` | `reader_feedback.id,reader_id,content,status,reply,replied_at,created_at,updated_at` | 读者隔离；状态保留 `pending/replied`，待回复记录强制清空回复和回复时间 |
 | `reader_product.id,product_type,target_id,product_name,price_coin,allow_bonus_coin,duration_days,sale_status,sort_order` | `commerce_products.*` | 商品正式事实表；M3 只读访问，不创建购买写流程 |
 | `novel_chapter_word_pricing`（旧章节计价配置） | `commerce_chapter_pricing_config.*` | 保留字数单位/币值单位；无效配置写错误清单 |
-| `reader_membership_grant.*` | `commerce_membership_grants.*` | 保留来源引用、永久标记和有效期 |
-| `reader_entitlement.id,reader_id,entitlement_type,target_id,status,start_time,expire_time,source_order_no` | `commerce_entitlements.*` | `source_order_no` 可为空并保留旧来源类型；不复制到临时投影表 |
+| `reader_membership_grant.id,reader_id,grant_type,grant_no,create_time,after_expire_time,after_permanent,status` | `commerce_membership_grants.*` | 旧管理员发放类型 `days_7/days_30/days_90/days_365/permanent` 统一记为目标 `admin`，套餐效果由永久标记/到期时间保留，`grant_no` 保存为 `source_ref`；`confirmed -> active`、`no_change -> disabled`，其他类型/状态进入错误清单 |
+| `reader_entitlement.id,reader_id,entitlement_type,target_id,status,start_time,expire_time,source_order_no,create_time,update_time` | `commerce_entitlements.*` | 无到期时间即永久；来源订单非空时 `source_type=legacy_order` 并原值保存 `source_ref`，否则为 `legacy`；非法类型、目标或状态进入错误清单 |
 
 所有时间转换为 `timestamptz`；所有旧 ID 保留为 PostgreSQL `bigint`，迁移结束后序列推进到最大值。冲突采用唯一键 + `ON CONFLICT` 幂等策略；目标存在非 legacy 同 ID 时记录不可重试 `*_ID_CONFLICT`，不覆盖人工数据。
 
 ## Stage 与 checkpoint
 
-固定顺序：`reader-identity`、`reader-invites`、`reader-commerce`、`reader-bookshelf-likes`、`reader-history-preferences`、`reader-feedback`。每批最多 1,000 行（可由命令配置但不得一次载入整表）；Runner 在同一 PostgreSQL 事务写入目标事实、`migration_errors` 和 `migration_checkpoints`。`cursor_value` 使用源表 bigint ID，`metadata.done=true` 表示完成；重复运行已完成 stage 直接跳过，丢失 checkpoint 时依靠来源指纹和唯一键避免重复对象/事实。
+固定顺序：`reader-identity`、`reader-commerce`。`reader-commerce` 内按邀请码、邀请关系、商品、会员发放、权益、点赞、书架、历史、偏好和反馈的依赖顺序维护逐表游标。每批最多 1,000 行（可由命令配置但不得一次载入整表）；Runner 在同一 PostgreSQL 事务写入目标事实、`migration_errors` 和 `migration_checkpoints`。`cursor_value` 使用 `表名:源 bigint ID`，`metadata.done=true` 表示完成；重复运行已完成 stage 直接跳过，丢失 checkpoint 时依靠主键/业务唯一键幂等写入。
 
 核对 checkpoint：
 
@@ -97,6 +97,7 @@ make test-reader-integration
 - M3 Reader/Commerce 代码、真实迁移 stage 和五路由契约测试已完成；本次补充的真实依赖测试覆盖上列四个模块及注册事务。
 - 2026-08-14 在隔离 Compose 项目 `moonbook_m3_verify` 上完成真实验证：Flyway `current=0 target=12 pending=true`，执行后 `applied=12`，复查 `current=12 target=12 pending=false`；使用 PostgreSQL `127.0.0.1:25432`、Redis `127.0.0.1:26379`、MinIO `127.0.0.1:29000`，命令以 `CGO_ENABLED=0 -tags=integration -count=1 -v` 运行，`reader/auth`、`reader/invite`、`reader/me`、`reader/public`、`commerce/catalog` 全部 PASS。
 - 本次验证同时覆盖章节正文实际 MinIO 写入/读取和不同 reader 的批量权益隔离；测试完成后仅清理随机测试数据及 bucket，未触碰默认 `moonbook` 资源。
+- 2026-08-15 新增 `reader_migration_mysql.sql` 和真实迁移集成测试：隔离 MySQL 8.4 启用 `read_only=ON`、只读账号及 `utf8mb4` 连接，目标使用隔离 Compose PostgreSQL；以批量大小 2 完成 `reader-identity`/`reader-commerce` 并幂等重跑。验证两个大于 JavaScript 安全整数的账号、BCrypt/MD5、坏摘要脱敏错误、邀请码关联、商品、会员、两类权益、点赞、书架、完整阅读位置/进度、行高和反馈回复；检查点为 identity `3/1`、commerce `13/2`，6 个 identity 序列均推进，源 `reader_user` 行数和 `token_version` 总和保持不变。该小夹具证明映射正确性，不替代约 8GB 副本的容量与耗时演练。
 - 冻结 `reader-ui` 使用本地缓存离线执行 `npm run test -- --run`，44 个测试文件、536 个用例全部通过；`npm run build` 的 SSR 生产构建通过。临时 mock API SSR 验证首页、登录页、robots 均返回预期结果，但书库页面因 mock 未提供完整数据响应返回 503，真实 API 书库/书籍/章节 SSR 和浏览器旅程仍是 M3 未关闭项。
 - 2026-08-14 在隔离 Go API `127.0.0.1:4188` + Reader SSR `127.0.0.1:4189` 上完成真实上游验证：`/reader/seo/config`、精选/随机/分页书库、分类、robots、sitemap 均返回预期 200；SSR `/`、`/books`、`/auth/login`、`/robots.txt`、`/sitemap.xml` 均返回 200，书库空状态、SEO title/canonical/JSON-LD 和登录页 `noindex,nofollow` 正确。该临时 API readiness 因隔离 MinIO bucket 未创建返回 503，未影响本次只读路由验证。
 - 新增 `reader/public/http_integration_test.go` 后，完整五包真实集成套件再次通过；该测试直接注册 Gin Reader public 路由，验证匿名分页书库、Bearer Reader 章节目录和 MinIO 正文响应，Long ID 为字符串。

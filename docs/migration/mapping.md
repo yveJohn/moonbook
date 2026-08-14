@@ -12,12 +12,12 @@
 | 章节元数据 | 当前 `novel_chapter`；更早 `book_index` 待 M6 盘点决定是否仍有有效独有数据 | `novel_chapters` | 当前章节 ID 原值写入 bigint；新序列推进到迁移最大值之后 | 章节序号、书籍关联、状态、字数、价格、Long ID | M2 当前章节切片已实现；更早历史表待 M6 完整性盘点 |
 | 章节正文 | 当前 `novel_chapter_content`；更早 `book_content0..9` 和 TXT 文件待 M5/M6 接入 | MinIO `chapters/{bookId}/{chapterId}/v{version}.txt` + `novel_objects` / `novel_object_references` | book/chapter ID 原值进入对象键和 bigint 关联 | UTF-8、16 MiB 上限、Stat 字节数与 SHA-256、活动引用、重跑对象数 | M2 当前章节正文迁移已实现；更早正文来源待 M5/M6 |
 | 封面和附件 | `novel_book.cover_url`、`sys_file/sys_oss`、导入原文件 | 封面使用 MinIO `covers/{bookId}/v{version}.{ext}`；其他文件后续按独立命名空间接入同一对象注册模式 | 书籍 ID 原值进入对象键；URL 仅保存 SHA-256 来源指纹 | SSRF 防护、超时、10 MiB 上限、魔数、大小、哈希、活动引用、显式错误 | M2 当前书籍封面迁移已实现；其他附件待 M5/M6 |
-| 读者账号 | `reader_user`、历史 `user` | PostgreSQL 读者域 | 原值保留 | 用户名唯一、状态、密码摘要 | 待 M3 设计 |
-| 书架/历史/偏好/点赞 | `reader_bookshelf`、`reader_reading_history`、`reader_reading_preference`、`reader_book_like`、历史对应表 | PostgreSQL 读者域 | 原值保留 | 外键、去重、进度、Long ID | 待 M3 设计 |
-| 反馈 | `reader_feedback`、历史 `user_feedback` | PostgreSQL 读者域 | 原值保留 | 状态、回复和时间 | 待 M3 设计 |
+| 读者账号 | 当前 `reader_user`；仅当该表不存在时回退历史 `user` | `reader_accounts` | 原值保留；密码只保存摘要并标记 `bcrypt`/`md5` | 用户名唯一、状态、坏摘要错误清单；旧 `token_version` 和 Token 不迁移，新会话重新登录签发 | M3 映射和真实 MySQL→PostgreSQL 测试已实现 |
+| 书架/历史/偏好/点赞 | `reader_bookshelf`、`reader_reading_history`、`reader_reading_preference`、`reader_book_like`、历史对应表 | `reader_bookshelf_entries`、`reader_reading_history`、`reader_reading_preferences`、`reader_book_likes` | ID、书籍/章节/读者关联原值保留；identity 序列推进 | 去重、章节序号、位置类型/值、阅读百分比、字号、行高、主题和 Long ID | M3 映射和真实 MySQL→PostgreSQL 测试已实现 |
+| 反馈 | 当前 `reader_feedback`、历史 `user_feedback` | `reader_feedback` | ID 原值保留；`reply_content/reply_time` 映射为 `reply/replied_at` | 状态、回复、回复时间、创建/更新时间；identity 序列推进 | M3 映射和真实 MySQL→PostgreSQL 测试已实现 |
 | 钱包与流水 | `reader_wallet`、`reader_wallet_ledger`、奖励桶和调整表 | PostgreSQL 交易域 | 原值保留 | 余额=流水汇总、方向、币种 | 待 M4 设计 |
-| 商品与订单 | `reader_product`、`reader_order`、历史购买记录 | PostgreSQL 交易域 | 原值保留 | 金额快照、幂等键、权益 | 待 M4 设计 |
-| 会员和权益 | `reader_entitlement`、`reader_membership_grant` | PostgreSQL 交易域 | 原值保留 | 有效期、永久标志、来源订单 | 待 M4 设计 |
+| 商品与订单 | `reader_product`、`reader_order`、历史购买记录 | `commerce_products`；订单迁移目标按 M4 财务阶段 | 商品 ID 和目标 ID 原值保留 | 商品类型、金额、销售状态、来源引用；订单金额快照和幂等键仍待全量核对 | 商品映射已真实验证；订单仍待 M4/M6 全量核对 |
+| 会员和权益 | `reader_entitlement`、`reader_membership_grant` | `commerce_entitlements`、`commerce_membership_grants` | ID、读者和目标 ID 原值保留 | 有效期、永久标志、来源订单；非法类型/状态/目标写错误清单 | M3/M4 映射和真实 MySQL→PostgreSQL 测试已实现 |
 | 签到与邀请 | `reader_checkin_record`、奖励规则、邀请关系/奖励/邀请码 | PostgreSQL 运营域 | 原值保留 | 连续天数、唯一日期、奖励汇总 | 待 M4 设计 |
 | 充值与支付 | `reader_recharge_*`、`reader_payment_*`、历史 `order_pay` | PostgreSQL 支付域 | 原值保留 | 金额、状态、回调幂等、凭据不明文迁移 | 待 M4 设计 |
 | 采集 | `novel_crawl_*`、历史 `crawl_*` | PostgreSQL 内容生产域 | 原值保留 | 来源、游标、候选、任务与日志关联 | 待 M5 设计 |
