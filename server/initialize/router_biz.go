@@ -2,6 +2,7 @@ package initialize
 
 import (
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/books"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
@@ -9,6 +10,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
+	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/gin-gonic/gin"
 )
@@ -32,6 +34,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	readerService := readerauth.NewService(readerauth.SQLRepository{DB: db}, readerauth.RedisRateLimiter{Client: global.GVA_REDIS, Prefix: "moonbook:reader:rate:"}, readerauth.TokenConfig{Secret: []byte(global.GVA_CONFIG.JWT.SigningKey)})
 	registration := readerinvite.NewService(readerinvite.SQLRepository{DB: db}, readerService)
 	readerauth.RegisterRoutes(publicGroup, readerauth.NewHandler(readerService, registration))
+	commerce := catalog.NewService(catalog.SQLRepository{DB: db})
 	minio := global.GVA_CONFIG.Minio
 	blobs, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: minio.Endpoint, AccessKey: minio.AccessKeyId, SecretKey: minio.AccessKeySecret, Bucket: minio.BucketName, UseSSL: minio.UseSSL})
 	if err != nil {
@@ -41,5 +44,6 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	books.RegisterRoutes(privateGroup, db, objects)
 	chapters.RegisterRoutes(privateGroup, db, objects)
 	readerseo.RegisterRoutes(privateGroup, db)
+	readerpublic.RegisterRoutes(publicGroup, db, objects, readerService, commerce)
 
 }
