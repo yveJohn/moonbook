@@ -9,7 +9,7 @@
 | M0 冻结、基线与盘点 | 已完成 | GVA 与旧仓库基线已锁定；reader-ui 原样迁入并通过 536 个基线测试；功能、API、数据和容量盘点范围已建立 |
 | M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
-| M3 读者域与零修改兼容 | 实施中 | Reader/Commerce 实现、迁移 stage、真实依赖集成、SSR 和 Playwright 浏览器关键旅程已通过；逐接口契约快照/边界矩阵和 8GB 副本演练仍待完成 |
+| M3 读者域与零修改兼容 | 已完成 | 冻结 Reader 树、全部调用面契约、真实 PostgreSQL/Redis/MinIO、SSR 异常、生产构建和 Playwright 关键旅程均通过统一验收；8GB 副本容量演练归属 M6 |
 | M4 交易、支付与运营 | 实施中 | 钱包、充值、签到、购买、支付回调、财务核对、充值档位/自定义充值设置/支付渠道/渠道连通性检查/签到规则/钱包人工调账/充值订单人工补单/主动同步/邀请奖励/会员发放已实现；迁移演练和综合退出审计仍待完成 |
 | M5 内容生产与长任务 | 实施中 | 论坛来源、板块、候选、多页导入、逐页日志、TXT 闭环、书籍合并、AI 配置/模型、章节清洗/摘要和书籍画像已完成，迁移版本 `00053`；全量重启恢复演练仍待完成 |
 | M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；新增 `moonbook-legacy-migrate all` 全量编排入口，真实 8GB 副本演练和完整差异报告仍待完成 |
@@ -128,7 +128,7 @@ M2 第四条“读者 SEO 管理与旧配置迁移”纵向切片已完成：
 
 M2 已满足退出条件：小说管理闭环、对象存储完整性、管理页面、权限、审计、旧数据迁移和整体回归均通过。公开 SEO、robots、sitemap 以及读者分类、书目、章节兼容接口按批准边界进入 M3。
 
-## M3 当前进度
+## M3 已完成
 
 - 已确认 M3 方案 A 的模块所有权、Reader-only Token、邀请码原子消费和 Commerce 正式权益表边界。
 - 已固化五个认证路由的请求/响应、错误、Token 隔离和字符串 ID 契约：`docs/contracts/reader-auth-api.md`。
@@ -155,13 +155,12 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Commerce HTTP 契约第一批补齐钱包、流水、充值商品/报价/订单 6 条正常响应，覆盖最大 `int64` 字符串 ID、所有余额/币值/USDT 字符串、分页归一化和订单 `null`。
 - Commerce 剩余签到、邀请、权益、会员产品和三类购买 8 条正常 HTTP 快照已补齐；购买订单恢复旧 DTO 的备注、操作人和三个时间字段，真实 PostgreSQL 验证首次写入与幂等重取均返回完整时间。冻结 Reader 调用面的 Commerce 正常、错误与购买并发矩阵现已闭合。
 - Reader 兼容 DTO 的日期已集中统一为旧 Java `yyyy-MM-dd HH:mm:ss`，覆盖个人数据、作品/章节、钱包流水、充值/购买订单和会员商品；Go 默认 RFC3339 不再进入这些读者响应，空时间仍为 `null`。单元快照与真实 PostgreSQL/Redis/MinIO 回归通过。
-- 隔离 Compose 浏览器环境已验证注册后 `/me` 所需的 `GET /reader/me/entitlements`、`GET /reader/products/membership`、`POST /reader/me/invite/code` 均经 Reader 网关返回 HTTP 200；邀请码首次生成使用 PostgreSQL 事务和 advisory lock 并保证重复请求复用同一邀请码。Reader Origin 已加入严格 CORS 白名单，注册请求从 `127.0.0.1` 页面返回 200。浏览器关键旅程已于 2026-08-15 补齐，8GB 副本演练仍待完成。
+- 隔离 Compose 浏览器环境已验证注册后 `/me` 所需的 `GET /reader/me/entitlements`、`GET /reader/products/membership`、`POST /reader/me/invite/code` 均经 Reader 网关返回 HTTP 200；邀请码首次生成使用 PostgreSQL 事务和 advisory lock 并保证重复请求复用同一邀请码。Reader Origin 已加入严格 CORS 白名单，注册请求从 `127.0.0.1` 页面返回 200。浏览器关键旅程已于 2026-08-15 补齐；8GB 副本的容量与耗时演练明确归属 M6。
+- 新增 `make verify-m3` 可重复退出验收：先锁定 Reader Git 树，再执行全部 Reader/Commerce 单元与契约测试；真实依赖阶段强制要求 PostgreSQL、Redis 和 MinIO 环境变量并覆盖所有 Reader/Commerce 包，最后运行冻结 Reader 44 个测试文件/536 个用例、树外 6 个 SSR/SEO 异常契约及生产构建。2026-08-15 在隔离 `moonbook_browser` 栈完整执行通过且无 Skip。
 
-下一步：
+## M3 退出结论
 
-1. 完成 `docs/contracts/reader-api.md` 剩余兼容矩阵并执行 M3 退出审计。
-2. 复核 Reader/Commerce 错误与并发契约的剩余条目及真实依赖证据。
-3. 使用受控 8GB MySQL 副本完成全量演练、行数/主键/关联/对象核对；该容量演练同时作为 M6 退出证据。
+M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结调用面具备正常、错误、鉴权、空值、分页、Long ID、日期和存储故障契约；旧密码摘要首次登录升级、旧 Token/过期/撤销/封禁语义、真实 SSR 与浏览器关键旅程均有自动化或运行时证据。约 8GB 副本只用于 M6 全量迁移容量、耗时和全业务差异验收，不再阻塞 M3。
 
 ## M4 当前进度
 

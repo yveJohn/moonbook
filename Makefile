@@ -17,12 +17,15 @@ REPOSITORY          = registry.cn-hangzhou.aliyuncs.com/${IMAGE_NAME}
 TAGS_OPT           ?= latest
 PLUGIN             ?= email
 
-.PHONY: verify verify-m1 scan-secrets test-reader-integration
+.PHONY: verify verify-m1 verify-m3 scan-secrets test-reader-integration
 
 verify: verify-m1
 
 verify-m1:
 	./scripts/verify-m1.sh
+
+verify-m3:
+	./scripts/verify-m3.sh
 
 scan-secrets:
 	./scripts/scan-secrets.sh

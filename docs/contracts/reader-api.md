@@ -90,11 +90,11 @@
 - 报价变化业务码：`46106`。
 - 偏好枚举：主题 `cream/night/green`，阅读模式 `scroll/page`。
 
-## M3 待固化证据
+## M3 已固化证据
 
 认证 HTTP 包装和 Long ID 边界已有可执行证据：`server/internal/modules/reader/auth/http_contract_test.go`，并与 `service_test.go`、真实 PostgreSQL/Redis 集成测试共同覆盖登录、未登录和会话语义。
 
-2026-08-15 的隔离 Compose + Playwright 关键旅程已覆盖匿名目录/详情、匿名章节 `46101`、邀请码注册、登录免费 MinIO 正文、书架、两章切换、第二章历史恢复、退出及旧 Token `401`。`server/internal/modules/reader/public` 的单元和真实依赖测试固化完整作品商品状态、登录态详情聚合、Long ID 字符串与前后章 ID；详细运行证据见 `docs/migration/m3-reader-commerce.md`。以下清单仍按逐接口矩阵继续收敛，不能因关键旅程通过而整体勾选。
+2026-08-15 的隔离 Compose + Playwright 关键旅程已覆盖匿名目录/详情、匿名章节 `46101`、邀请码注册、登录免费 MinIO 正文、书架、两章切换、第二章历史恢复、退出及旧 Token `401`。`server/internal/modules/reader/public` 的单元和真实依赖测试固化完整作品商品状态、登录态详情聚合、Long ID 字符串与前后章 ID；详细运行证据见 `docs/migration/m3-reader-commerce.md`。下列逐接口矩阵已全部闭合，并由 `make verify-m3` 统一复验。
 
 ### 可执行覆盖矩阵
 
@@ -117,3 +117,5 @@ Reader 线协议日期统一由 `server/internal/modules/reader/wire` 输出 UTC
 - [x] MinIO 缺失、哈希不一致和超时的外部错误映射
 - [x] SSR 超时、上游非 JSON 和 SEO Content-Type
 - [x] CORS、反向代理前缀与生产 `/prod-api` 路由
+
+`make verify-m3` 会拒绝缺失真实依赖环境变量，校验冻结 Reader Git 树，运行全部 Reader/Commerce 单元、契约及 PostgreSQL/Redis/MinIO 集成测试，再执行 536 个冻结 Reader 用例、6 个树外 SSR/SEO 异常用例和 SSR 生产构建。

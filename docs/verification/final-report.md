@@ -7,7 +7,7 @@
 - 新仓库 commit：待最终验收记录
 - Gin-Vue-Admin 基线：见 `docs/baselines/gin-vue-admin.md`
 - 旧仓库冻结基线：见 `docs/baselines/legacy-moonbook.md`
-- Reader 源/目标差异：待最终验收记录
+- Reader 源/目标差异：Git tree `ffbe7bb4c56792e94e160de86cc71bce0a6e0e5e`，`make verify-m3` 自动校验工作树无差异
 
 ## 证据索引
 
@@ -16,7 +16,7 @@
 | M0 基线与功能矩阵 | `docs/baselines/`、`docs/inventory/admin-feature-matrix.md` | 待最终审计 |
 | M1 Compose/迁移/健康检查/CI | `scripts/verify-m1.sh`、CI 运行记录 | 待最终审计 |
 | M2 小说与 MinIO | `docs/progress/refactor-status.md`、对象集成测试 | 待最终审计 |
-| M3 Reader 契约、SSR、浏览器 | `docs/contracts/reader-api.md`、`docs/migration/m3-reader-commerce.md`、Reader 真实依赖测试 | 部分通过：SSR 与浏览器关键旅程通过，逐接口矩阵和 8GB 副本演练待完成 |
+| M3 Reader 契约、SSR、浏览器 | `make verify-m3`、`docs/contracts/reader-api.md`、`docs/migration/m3-reader-commerce.md` | 通过：逐接口矩阵、真实依赖、536 个冻结用例、6 个树外 SSR/SEO 用例、生产构建和浏览器关键旅程均有证据；8GB 副本演练归属 M6 |
 | M4 财务核对与支付 | `moonbook-finance-reconcile`、隔离支付报告 | 未完成 |
 | M5 长任务恢复与第三方替身 | 导入 Worker、TXT/AI/采集测试 | 未完成 |
 | M6 全量迁移演练 | `docs/migration/`、副本演练报告 | 未完成 |

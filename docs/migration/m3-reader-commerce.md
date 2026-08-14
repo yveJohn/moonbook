@@ -89,16 +89,16 @@ export MOONBOOK_READER_TEST_REDIS_PASSWORD=''
 export MOONBOOK_READER_TEST_MINIO_ENDPOINT='127.0.0.1:9000'
 export MOONBOOK_READER_TEST_MINIO_ACCESS_KEY='minioadmin'
 export MOONBOOK_READER_TEST_MINIO_SECRET_KEY='minioadmin'
-make test-reader-integration
+make verify-m3
 ```
 
-测试仅使用上述连接指向的本地项目资源；每次运行创建随机 MinIO bucket，并在清理阶段删除 bucket、对象及带测试 ID 的数据库行。缺少任一依赖变量时测试会 `Skip`，不能将该结果作为真实集成验收证据。
+测试仅使用上述连接指向的本地项目资源；每次运行创建随机 MinIO bucket，并在清理阶段删除 bucket、对象及带测试 ID 的数据库行。`make verify-m3` 会在执行 Go 测试前拒绝缺失的 PostgreSQL、Redis 或 MinIO 环境变量，避免将 Skip 误记为真实集成验收通过。
 
-- M3 Reader/Commerce 代码、真实迁移 stage 和五路由契约测试已完成；本次补充的真实依赖测试覆盖上列四个模块及注册事务。
+- M3 Reader/Commerce 代码、真实迁移 stage 和全部冻结调用面契约已完成；统一真实依赖测试覆盖 Reader、Commerce 全部包及注册事务。
 - 2026-08-14 在隔离 Compose 项目 `moonbook_m3_verify` 上完成真实验证：Flyway `current=0 target=12 pending=true`，执行后 `applied=12`，复查 `current=12 target=12 pending=false`；使用 PostgreSQL `127.0.0.1:25432`、Redis `127.0.0.1:26379`、MinIO `127.0.0.1:29000`，命令以 `CGO_ENABLED=0 -tags=integration -count=1 -v` 运行，`reader/auth`、`reader/invite`、`reader/me`、`reader/public`、`commerce/catalog` 全部 PASS。
 - 本次验证同时覆盖章节正文实际 MinIO 写入/读取和不同 reader 的批量权益隔离；测试完成后仅清理随机测试数据及 bucket，未触碰默认 `moonbook` 资源。
 - 2026-08-15 新增 `reader_migration_mysql.sql` 和真实迁移集成测试：隔离 MySQL 8.4 启用 `read_only=ON`、只读账号及 `utf8mb4` 连接，目标使用隔离 Compose PostgreSQL；以批量大小 2 完成 `reader-identity`/`reader-commerce` 并幂等重跑。验证两个大于 JavaScript 安全整数的账号、BCrypt/MD5、坏摘要脱敏错误、邀请码关联、商品、会员、两类权益、点赞、书架、完整阅读位置/进度、行高和反馈回复；检查点为 identity `3/1`、commerce `13/2`，6 个 identity 序列均推进，源 `reader_user` 行数和 `token_version` 总和保持不变。该小夹具证明映射正确性，不替代约 8GB 副本的容量与耗时演练。
-- 冻结 `reader-ui` 使用本地缓存离线执行 `npm run test -- --run`，44 个测试文件、536 个用例全部通过；`npm run build` 的 SSR 生产构建通过。临时 mock API SSR 验证首页、登录页、robots 均返回预期结果，但书库页面因 mock 未提供完整数据响应返回 503，真实 API 书库/书籍/章节 SSR 和浏览器旅程仍是 M3 未关闭项。
+- 冻结 `reader-ui` 使用本地缓存离线执行 `npm test`，44 个测试文件、536 个用例全部通过；`npm run build` 的 SSR 生产构建通过。真实 API 书库/书籍/章节 SSR 与浏览器旅程已由后续隔离 Compose 验收补齐。
 - 2026-08-14 在隔离 Go API `127.0.0.1:4188` + Reader SSR `127.0.0.1:4189` 上完成真实上游验证：`/reader/seo/config`、精选/随机/分页书库、分类、robots、sitemap 均返回预期 200；SSR `/`、`/books`、`/auth/login`、`/robots.txt`、`/sitemap.xml` 均返回 200，书库空状态、SEO title/canonical/JSON-LD 和登录页 `noindex,nofollow` 正确。该临时 API readiness 因隔离 MinIO bucket 未创建返回 503，未影响本次只读路由验证。
 - 新增 `reader/public/http_integration_test.go` 后，完整五包真实集成套件再次通过；该测试直接注册 Gin Reader public 路由，验证匿名分页书库、Bearer Reader 章节目录和 MinIO 正文响应，Long ID 为字符串。
 - 使用可清理的真实 fixture 完成带内容验证：API 书籍详情和章节目录返回 `SSR 集成作品`、`SSR 第一章` 及字符串 ID；匿名正文请求返回冻结 `46101/请先登录后阅读`；Reader SSR `/books/{bookId}` 返回实际书名、作者、章节、canonical 和 Book JSON-LD。fixture 与正文对象已在验证结束后删除。
@@ -119,6 +119,6 @@ make test-reader-integration
 - 整书购买新增 8 路并发真实 PostgreSQL 验证：旧报价在事务前置路径返回 `ErrQuoteChanged` 且不产生扣款；同一 Reader、作品和报价的并发请求由 advisory lock 串行并复用唯一订单，最终只生成 1 个订单、1 个整书权益和 2 条币种流水，奖励币/充值币余额合计只扣减一次。
 - 新增安全门控命令 `moonbook-browser-fixture`，仅在显式确认值且 PostgreSQL/MinIO 均为回环地址时允许 `seed/cleanup`。本次 fixture 使用独立 `moonbook_browser` 数据库和 `moonbook-content` Bucket，正文通过 `UploadVerified/Activate` 写入；验收后清理 2 个 MinIO 对象，并核对测试书籍、章节、对象、读者和邀请码计数均为 0。
 - 浏览器栈重建后 readiness 检出数据库从迁移 41 落后到 53，已通过 Compose `migrate` 服务前向应用 12 个版本；随后 `/health/ready` 的 migrations、MinIO、PostgreSQL、Redis 全部恢复 `ok`。该动作只作用于隔离 `moonbook_browser` 卷。
-- `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。
+- `scripts/test-reader-integration.sh` 已扩展为 `./internal/modules/reader/...` 与 `./internal/modules/commerce/...` 的完整真实依赖套件，并在进入 Go 测试前强制检查 PostgreSQL、Redis、MinIO 配置；单包直接执行仍可能 Skip，但统一 M3 验收入口不会将其误记为通过。
 - 当前仓库已知本机 macOS ARM cgo 会在上游 `go-m1cpu` 初始化时崩溃；计划中的后端回归应使用 `CGO_ENABLED=0` 可重复路径，race 需在官方 Linux Go 容器执行。该限制不能被记录为 M3 通过证据。
-- 计划命令 `go test ./internal/... ./initialize/... ./cmd/moonbook-legacy-migrate/...` 和 Docker 集成测试须在实现后运行并保存原始输出摘要。
+- 2026-08-15 在隔离 `moonbook_browser` PostgreSQL、Redis 与 MinIO 上执行 `make verify-m3` 全部通过：Reader/Commerce 所有包的单元与契约测试通过，真实依赖集成测试无 Skip，冻结 Reader Git 树为 `ffbe7bb4c56792e94e160de86cc71bce0a6e0e5e`，44 个测试文件/536 个用例、树外 6 个 SSR/SEO 异常用例及生产构建全部通过。
