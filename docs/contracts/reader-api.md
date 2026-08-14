@@ -104,7 +104,8 @@
 | `/reader/books*`、`/reader/chapters/*` 8 条 | `public/http_integration_test.go` 与 Playwright 覆盖分页书库、详情、目录、正文；精选、随机、分类仍待逐条快照 | 匿名正文 `46101` 已覆盖；计费模式错误矩阵待补 | 作品、章节、前后章 ID 字符串已覆盖；空目录与分页边界待补 | 部分完成 |
 | `/reader/seo/*` 4 条 | SSR、curl 和真实依赖 HTTP 测试已有正常证据 | 超时、非 JSON 和非法 sitemap page 待补 | Content-Type 已在运行证据核对，仍需可执行测试 | 部分完成 |
 | `/reader/me/bookshelf|likes|feedbacks|history|preference` 13 条 | `me/http_contract_test.go` 对全部路由执行 JSON 快照 | 共享 Reader 中间件的无 Token/失效 Token `401` 已由认证契约覆盖；服务测试覆盖非法 ID、进度和偏好 | 显式 `data:null`、空数组、空分页、分页归一化及两个 Long ID 边界已覆盖 | 正常响应矩阵完成 |
-| 钱包、充值、签到、邀请、权益、会员产品、购买 15 条 | 真实 PostgreSQL 服务/仓储集成已覆盖业务闭环 | 报价变化、余额不足、重复请求等服务语义已有测试 | HTTP JSON、金额字符串、空分页仍待逐条快照 | 待补 HTTP 契约 |
+| 钱包、流水、充值商品/报价/订单 6 条 | `wallet/http_contract_test.go`、`recharge/http_contract_test.go` 已逐条执行 JSON 快照 | 共享 Reader 鉴权已覆盖；充值参数和仓储错误仍待 HTTP 错误快照 | 余额、流水、钻石、USDT 金额、ID 均为字符串；分页归一化和订单 `null` 已覆盖 | 正常响应矩阵完成 |
+| 签到、邀请、权益、会员产品、购买 8 条 | 真实 PostgreSQL 服务/仓储集成已覆盖业务闭环 | 报价变化、余额不足、重复请求等服务语义已有测试 | HTTP JSON、金额字符串仍待逐条快照 | 待补 HTTP 契约 |
 
 - [ ] 每个接口的正常请求与响应 JSON 快照
 - [ ] 未登录、Token 过期、封禁和权限不足响应
