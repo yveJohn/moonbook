@@ -20,6 +20,7 @@ const (
 )
 
 type purchaseContractRepo struct {
+	err                error
 	membershipReaderID int64
 	membershipProduct  string
 	membershipRequest  string
@@ -33,11 +34,17 @@ type purchaseContractRepo struct {
 }
 
 func (r *purchaseContractRepo) BuyMembership(_ context.Context, readerID int64, product, request string) (Order, error) {
+	if r.err != nil {
+		return Order{}, r.err
+	}
 	r.membershipReaderID, r.membershipProduct, r.membershipRequest = readerID, product, request
 	return contractOrder("membership", product, "", ""), nil
 }
 
 func (r *purchaseContractRepo) BuyChapter(_ context.Context, readerID int64, chapter, expected, request string) (ChapterResult, error) {
+	if r.err != nil {
+		return ChapterResult{}, r.err
+	}
 	r.chapterReaderID, r.chapterID, r.chapterPrice, r.chapterRequest = readerID, chapter, expected, request
 	order := contractOrder("chapter", "", chapter, "9007199254740994")
 	return ChapterResult{
@@ -48,6 +55,9 @@ func (r *purchaseContractRepo) BuyChapter(_ context.Context, readerID int64, cha
 }
 
 func (r *purchaseContractRepo) BuyBook(_ context.Context, readerID int64, book, expected string) (Order, error) {
+	if r.err != nil {
+		return Order{}, r.err
+	}
 	r.bookReaderID, r.bookID, r.bookPrice = readerID, book, expected
 	return contractOrder("book", "9007199254740995", book, book), nil
 }
@@ -124,5 +134,47 @@ func TestPurchaseHTTPContractKeepsOrderFieldsAndLongValues(t *testing.T) {
 	}
 	if repo.bookReaderID != purchaseMaxID || repo.bookID != "9007199254740993" || repo.bookPrice != "9223372036854775807" {
 		t.Fatalf("book reader=%d id=%s price=%s", repo.bookReaderID, repo.bookID, repo.bookPrice)
+	}
+}
+
+func TestPurchaseHTTPErrorContracts(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		name, body, want string
+		err              error
+	}{
+		{name: "quote changed", body: `{"bookId":"9007199254740993","expectedPrice":"1"}`, err: ErrQuoteChanged, want: `{"code":46106,"msg":"作品报价已变化，请确认新价格","data":null}`},
+		{name: "insufficient balance", body: `{"bookId":"9007199254740993","expectedPrice":"1"}`, err: ErrInsufficientBalance, want: `{"code":500,"msg":"余额不足","data":null}`},
+		{name: "product unavailable", body: `{"bookId":"9007199254740993","expectedPrice":"1"}`, err: ErrProductUnavailable, want: `{"code":200,"msg":"购买商品不可用","data":null}`},
+		{name: "invalid price", body: `{"bookId":"9007199254740993","expectedPrice":null}`, want: `{"code":200,"msg":"购买参数无效","data":null}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := &purchaseContractRepo{err: test.err}
+			handler := &Handler{service: NewService(repo)}
+			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Set("reader.identity", readerauth.Identity{ReaderID: purchaseMaxID, SessionID: purchaseSafeID})
+				c.Next()
+			})
+			router.POST("/reader/me/orders/book", handler.book)
+			req := httptest.NewRequest(http.MethodPost, "/reader/me/orders/book", bytes.NewBufferString(test.body))
+			req.Header.Set("Content-Type", "application/json")
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, req)
+			if resp.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", resp.Code, resp.Body.String())
+			}
+			var want, got any
+			if err := json.Unmarshal([]byte(test.want), &want); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(resp.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(want, got) {
+				t.Fatalf("response mismatch\nwant: %s\n got: %s", test.want, resp.Body.String())
+			}
+		})
 	}
 }

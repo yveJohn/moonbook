@@ -109,6 +109,7 @@ make test-reader-integration
 - 新增集中 Reader 线协议日期格式化，个人数据、公开作品/章节、钱包流水、充值订单、购买订单和会员商品不再泄漏 Go 默认 RFC3339，统一返回旧 Java 的 `yyyy-MM-dd HH:mm:ss`；时间零值和空指针继续返回 `null`。相关单元快照及真实依赖回归通过。
 - `server/internal/modules/reader/public/http_integration_test.go` 已扩展到全部 8 条公开作品路由和 4 条 SEO 路由：真实 PostgreSQL 夹具包含推荐作品、主/子分类和末章元数据，正文通过随机 MinIO bucket 上传激活；测试固定精选/随机命中、空分页、登录态真实商品状态、匿名正文 `46101`、Reader 日期格式、SEO 字符串 ID、robots/XML Content-Type，以及 sitemap 非法页和小数据集分页 404。2026-08-15 在 `moonbook_browser` 隔离栈以 `CGO_ENABLED=0 -tags=integration -count=1 -v` 运行，HTTP 契约与既有 public 服务集成测试全部 PASS，夹具由测试清理。
 - Reader 认证五路由的正常 HTTP 响应已全部固定：注册/登录保持冻结 UI 使用的 `accessToken/expireIn/reader` 嵌套结构，资料返回字符串 `readerId`，退出和修改密码显式返回 `data:null`。契约测试同时执行 BCrypt 改密和退出后的会话校验；`moonbook_browser` 的真实 PostgreSQL/Redis 认证集成套件再次全部 PASS。
+- 购买 HTTP 错误适配已恢复冻结行为：整本报价变化返回 `46106/作品报价已变化，请确认新价格`，余额不足返回 `500/余额不足`，并为无效购买参数和不可用商品提供稳定公开文案，所有错误显式 `data:null`。完整 Reader/Commerce 单元回归通过，`moonbook_browser` 真实 PostgreSQL 的会员/整本购买原子性与幂等集成测试再次 PASS。
 - 新增安全门控命令 `moonbook-browser-fixture`，仅在显式确认值且 PostgreSQL/MinIO 均为回环地址时允许 `seed/cleanup`。本次 fixture 使用独立 `moonbook_browser` 数据库和 `moonbook-content` Bucket，正文通过 `UploadVerified/Activate` 写入；验收后清理 2 个 MinIO 对象，并核对测试书籍、章节、对象、读者和邀请码计数均为 0。
 - 浏览器栈重建后 readiness 检出数据库从迁移 41 落后到 53，已通过 Compose `migrate` 服务前向应用 12 个版本；随后 `/health/ready` 的 migrations、MinIO、PostgreSQL、Redis 全部恢复 `ok`。该动作只作用于隔离 `moonbook_browser` 卷。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。

@@ -2,6 +2,7 @@ package purchase
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -14,7 +15,7 @@ import (
 type response struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
-	Data any    `json:"data,omitempty"`
+	Data any    `json:"data"`
 }
 type Handler struct{ service *Service }
 
@@ -33,6 +34,18 @@ func purchaseReaderID(c *gin.Context) (int64, error) {
 	return x.ReaderID, nil
 }
 func purchaseFail(c *gin.Context, e error) {
+	switch {
+	case errors.Is(e, ErrQuoteChanged):
+		c.JSON(http.StatusOK, response{Code: 46106, Msg: "作品报价已变化，请确认新价格"})
+		return
+	case errors.Is(e, ErrInsufficientBalance):
+		c.JSON(http.StatusOK, response{Code: 500, Msg: "余额不足"})
+		return
+	case errors.Is(e, ErrInvalidRequest):
+		e = apperror.New(apperror.CodeInvalidArgument, 200, "购买参数无效")
+	case errors.Is(e, ErrProductUnavailable):
+		e = apperror.New(apperror.CodeNotFound, 200, "购买商品不可用")
+	}
 	p := apperror.Expose(e)
 	code := 500
 	if p.Code == apperror.CodeUnauthenticated {
