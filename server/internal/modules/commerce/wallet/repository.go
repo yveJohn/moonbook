@@ -50,9 +50,24 @@ func (r SQLRepository) Mutate(ctx context.Context, m Mutation) (Ledger, error) {
 		return Ledger{}, err
 	}
 	defer tx.Rollback()
+	v, err := MutateTx(ctx, tx, m)
+	if err != nil {
+		return Ledger{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Ledger{}, err
+	}
+	return v, nil
+}
+
+// MutateTx applies a wallet mutation inside an existing transaction.
+func MutateTx(ctx context.Context, tx *sql.Tx, m Mutation) (Ledger, error) {
+	if m.Amount <= 0 || (m.Direction != "income" && m.Direction != "expense") || (m.CoinType != "recharge" && m.CoinType != "bonus") {
+		return Ledger{}, errors.New("invalid wallet mutation")
+	}
 	if m.IdempotencyKey != nil {
 		var v Ledger
-		err = scanLedger(tx.QueryRowContext(ctx, `SELECT id,reader_id,ledger_no,biz_type,biz_id,order_no,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key,created_at FROM reader_wallet_ledgers WHERE reader_id=$1 AND idempotency_key=$2`, m.ReaderID, *m.IdempotencyKey), &v)
+		err := scanLedger(tx.QueryRowContext(ctx, `SELECT id,reader_id,ledger_no,biz_type,biz_id,order_no,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key,created_at FROM reader_wallet_ledgers WHERE reader_id=$1 AND idempotency_key=$2`, m.ReaderID, *m.IdempotencyKey), &v)
 		if err == nil {
 			return v, nil
 		}
@@ -60,7 +75,7 @@ func (r SQLRepository) Mutate(ctx context.Context, m Mutation) (Ledger, error) {
 			return Ledger{}, err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, m.ReaderID); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, m.ReaderID); err != nil {
 		return Ledger{}, err
 	}
 	var before int64
@@ -68,7 +83,7 @@ func (r SQLRepository) Mutate(ctx context.Context, m Mutation) (Ledger, error) {
 	if m.CoinType == "bonus" {
 		col = "bonus_coin_balance"
 	}
-	if err = tx.QueryRowContext(ctx, `SELECT `+col+` FROM reader_wallets WHERE reader_id=$1 FOR UPDATE`, m.ReaderID).Scan(&before); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT `+col+` FROM reader_wallets WHERE reader_id=$1 FOR UPDATE`, m.ReaderID).Scan(&before); err != nil {
 		return Ledger{}, err
 	}
 	after := before + m.Amount
@@ -78,15 +93,13 @@ func (r SQLRepository) Mutate(ctx context.Context, m Mutation) (Ledger, error) {
 			return Ledger{}, ErrInsufficientBalance
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE reader_wallets SET `+col+`=$1, updated_at=now(), `+map[string]string{"recharge": "total_recharge_coin_", "bonus": "total_bonus_coin_"}[m.CoinType]+map[string]string{"income": "income", "expense": "expense"}[m.Direction]+`= `+map[string]string{"recharge": "total_recharge_coin_", "bonus": "total_bonus_coin_"}[m.CoinType]+map[string]string{"income": "income", "expense": "expense"}[m.Direction]+` + $2 WHERE reader_id=$3`, after, m.Amount, m.ReaderID); err != nil {
+	totalColumn := map[string]string{"recharge": "total_recharge_coin_", "bonus": "total_bonus_coin_"}[m.CoinType] + map[string]string{"income": "income", "expense": "expense"}[m.Direction]
+	if _, err := tx.ExecContext(ctx, `UPDATE reader_wallets SET `+col+`=$1, updated_at=now(), `+totalColumn+`=`+totalColumn+` + $2 WHERE reader_id=$3`, after, m.Amount, m.ReaderID); err != nil {
 		return Ledger{}, err
 	}
 	var v Ledger
-	err = scanLedger(tx.QueryRowContext(ctx, `INSERT INTO reader_wallet_ledgers(reader_id,ledger_no,biz_type,biz_id,order_no,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id,reader_id,ledger_no,biz_type,biz_id,order_no,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key,created_at`, m.ReaderID, m.LedgerNo, m.BizType, m.BizID, m.OrderNo, m.Direction, m.CoinType, m.Amount, before, after, m.Remark, m.IdempotencyKey), &v)
+	err := scanLedger(tx.QueryRowContext(ctx, `INSERT INTO reader_wallet_ledgers(reader_id,ledger_no,biz_type,biz_id,order_no,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id,reader_id,ledger_no,biz_type,biz_id,order_no,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key,created_at`, m.ReaderID, m.LedgerNo, m.BizType, m.BizID, m.OrderNo, m.Direction, m.CoinType, m.Amount, before, after, m.Remark, m.IdempotencyKey), &v)
 	if err != nil {
-		return Ledger{}, err
-	}
-	if err = tx.Commit(); err != nil {
 		return Ledger{}, err
 	}
 	return v, nil

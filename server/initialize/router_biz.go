@@ -3,6 +3,7 @@ package initialize
 import (
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/checkin"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/recharge"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/books"
@@ -40,6 +41,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	readerme.RegisterRoutes(publicGroup, readerme.NewService(readerme.SQLRepository{DB: db}), readerService)
 	wallet.RegisterRoutes(publicGroup, wallet.NewService(wallet.SQLRepository{DB: db}), readerService)
 	recharge.RegisterRoutes(publicGroup, recharge.NewService(recharge.SQLRepository{DB: db}), readerService)
+	checkin.RegisterRoutes(publicGroup, checkin.NewService(checkin.SQLRepository{DB: db}), readerService)
 	commerce := catalog.NewService(catalog.SQLRepository{DB: db})
 	minio := global.GVA_CONFIG.Minio
 	blobs, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: minio.Endpoint, AccessKey: minio.AccessKeyId, SecretKey: minio.AccessKeySecret, Bucket: minio.BucketName, UseSSL: minio.UseSSL})
