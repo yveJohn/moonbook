@@ -17,6 +17,7 @@ type Repository interface {
 	List(context.Context, string, string, int, int) ([]Order, int64, error)
 	Get(context.Context, int64) (Order, error)
 	ManualPay(context.Context, int64, ManualPayInput) (Order, error)
+	Sync(context.Context, int64) (Order, error)
 }
 
 type ManualPayInput struct {

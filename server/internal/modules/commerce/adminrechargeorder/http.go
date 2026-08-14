@@ -18,6 +18,7 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	r.GET("orders", h.list)
 	r.GET("orders/:id", h.get)
 	w.POST("orders/:id/manualPay", h.manualPay)
+	w.POST("orders/:id/sync", h.sync)
 	r.GET("callbackLogs", h.callbackList)
 	r.GET("callbackLogs/:id", h.callbackGet)
 }
@@ -39,6 +40,20 @@ func (h *Handler) manualPay(c *gin.Context) {
 		return
 	}
 	managementresponse.OK(c, render(o), "人工补单成功")
+}
+
+func (h *Handler) sync(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串"))
+		return
+	}
+	o, err := h.service.Sync(c, id)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, render(o), "同步完成")
 }
 
 func renderCallback(v CallbackLog) map[string]any {
