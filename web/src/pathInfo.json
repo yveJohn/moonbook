@@ -57,6 +57,7 @@
   "/src/view/novel/readerSeo/index.vue": "NovelReaderSeo",
   "/src/view/person/person.vue": "Person",
   "/src/view/reader/payment/channels/index.vue": "ReaderPaymentChannels",
+  "/src/view/reader/payment/orders/index.vue": "ReaderRechargeOrders",
   "/src/view/reader/payment/rechargeProducts/index.vue": "ReaderRechargeProducts",
   "/src/view/routerHolder.vue": "RouterHolder",
   "/src/view/superAdmin/api/api.vue": "Api",
