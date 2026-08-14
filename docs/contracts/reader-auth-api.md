@@ -77,7 +77,7 @@
 | --- | --- | --- |
 | 五路由成功响应、字段和空值 | 与本文及冻结类型一致 | `http_contract_test.go` 已逐条覆盖，空成功固定 `data:null` |
 | 无效 Reader Token | HTTP 200，`code=401` 固定消息 | `http_contract_test.go` 已覆盖缺失、过期、撤销和禁用账号 |
-| 管理员 Token 访问 Reader 私有路由 | 不获得 Reader 身份 | 待实现后隔离测试 |
+| 管理员 Token 访问 Reader 私有路由 | 不获得 Reader 身份 | `http_contract_test.go` 使用独立签名和管理员 claims 验证固定 `401` |
 | BCrypt、历史 MD5 升级、未知摘要 | 仅成功 MD5 登录升级 BCrypt | `service_test.go` 与真实 PostgreSQL 集成测试已覆盖 |
 | Redis 不可用的认证限流 | 注册/登录失败关闭 | `service_test.go` 与真实 Redis 集成测试已覆盖 |
 | 最大 bigint ID 和字符串 JSON | 无精度损失 | `9007199254740993`、`9223372036854775807` HTTP 契约已覆盖 |

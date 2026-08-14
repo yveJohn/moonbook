@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -231,5 +232,67 @@ func TestProtectedHTTPContractRejectsExpiredRevokedAndDisabledSessions(t *testin
 				t.Fatalf("status=%d body=%s", resp.Code, resp.Body.String())
 			}
 		})
+	}
+}
+
+func TestAuthHTTPContractRejectsInvalidParametersAndAdminToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := &memoryRepository{account: ReaderAccount{
+		ID: 9007199254740993, Username: "reader", PasswordHash: string(hashBytes),
+		PasswordAlgorithm: PasswordAlgorithmBcrypt, Status: AccountStatusEnabled,
+	}}
+	service := newServiceForTest(repo, &fixedLimiter{allowed: true})
+	readerToken, err := service.Login(context.Background(), "reader", "old-password", "203.0.113.8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id": 1, "username": "admin", "authority_id": 888, "exp": time.Now().Add(time.Hour).Unix(),
+	}).SignedString([]byte("independent-admin-signing-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	RegisterRoutes(router.Group("/"), NewHandler(service, contractRegistration{}))
+	cases := []struct {
+		name, method, path, payload, token string
+	}{
+		{name: "malformed register", method: http.MethodPost, path: "/reader/auth/register", payload: `{"username":`},
+		{name: "empty login", method: http.MethodPost, path: "/reader/auth/login", payload: `{}`},
+		{name: "password confirmation mismatch", method: http.MethodPut, path: "/reader/auth/password", payload: `{"currentPassword":"old-password","newPassword":"new-password","confirmPassword":"different-password"}`, token: readerToken.AccessToken},
+		{name: "admin token", method: http.MethodGet, path: "/reader/auth/profile", token: adminToken},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(test.method, test.path, bytes.NewBufferString(test.payload))
+			if test.payload != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			if test.token != "" {
+				req.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, req)
+			var body map[string]any
+			if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if resp.Code != http.StatusOK || body["code"] != float64(401) || body["data"] != nil {
+				t.Fatalf("status=%d body=%s", resp.Code, resp.Body.String())
+			}
+			if test.name == "admin token" && body["msg"] != invalidTokenMessage {
+				t.Fatalf("admin token body=%s", resp.Body.String())
+			}
+		})
+	}
+	if bcrypt.CompareHashAndPassword([]byte(repo.account.PasswordHash), []byte("old-password")) != nil {
+		t.Fatal("invalid requests changed the password")
+	}
+	if _, err := service.ValidateToken(context.Background(), readerToken.AccessToken); err != nil {
+		t.Fatalf("invalid requests revoked the reader session: %v", err)
 	}
 }
