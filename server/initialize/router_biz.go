@@ -19,6 +19,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/aiconfig"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/bookmerge"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/bookprofile"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/books"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/candidate"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapterclean"
@@ -94,6 +95,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	aiconfig.RegisterRoutes(privateGroup, aiConfigs)
 	chapterclean.RegisterRoutes(privateGroup, chapterclean.NewService(db, objects))
 	chaptersummary.RegisterRoutes(privateGroup, chaptersummary.NewService(db))
+	bookprofile.RegisterRoutes(privateGroup, bookprofile.NewService(db, objects))
 	books.RegisterRoutes(privateGroup, db, objects)
 	bookmerge.RegisterRoutes(privateGroup, bookmerge.NewService(db, objects))
 	chapters.RegisterRoutes(privateGroup, db, objects)

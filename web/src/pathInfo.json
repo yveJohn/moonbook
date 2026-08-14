@@ -53,6 +53,7 @@
   "/src/view/novel/aiConfigs/index.vue": "NovelAiConfigs",
   "/src/view/novel/authors/index.vue": "NovelAuthors",
   "/src/view/novel/bookMerges/index.vue": "NovelBookMerges",
+  "/src/view/novel/bookProfile/index.vue": "NovelBookProfile",
   "/src/view/novel/books/index.vue": "NovelBooks",
   "/src/view/novel/chapterClean/index.vue": "NovelChapterClean",
   "/src/view/novel/chapters/index.vue": "NovelChapters",

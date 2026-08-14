@@ -29,7 +29,7 @@
 | 小说分类 | 书籍领域、现行字典及历史分类表 | 一级/二级分类 CRUD、排序、启停、迁移 | `novel_categories`、`/novel/categories`、`view/novel/metadata`、`novel_book_sub_categories` | M2 元数据及书籍关联已实现 |
 | 作者信息 | 书籍领域及旧数据表 | 作者 CRUD、状态、作品方向、历史 ID 与迁移 | `novel_authors`、`/novel/authors`、`view/novel/authors`、`novel_books.author_id` | M2 元数据及书籍关联已实现 |
 | SEO 配置 | `novel/readerSeo` / `NovelReaderSeoController` | SEO 开关、站点信息、robots、sitemap | `novel_reader_seo_config`、`/novel/readerSeo/config`、`view/novel/readerSeo`、`moonbook-legacy-migrate novel-reader-seo` | M2 管理配置、权限、审计和迁移已完成；公开 SEO、robots、sitemap 接口在 M3 接入冻结 Reader 契约 |
-| 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | AI 建议、采用、失败重试 | M5 补齐 | 基线已盘点 |
+| 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | AI 建议、采用、失败重试 | `novel_book_profile_*`、`/novel/bookProfile`、`view/novel/bookProfile` | M5 配置、不可变建议、审核采用、失败重试和快照并发保护已实现 |
 
 ## 读者运营与交易（M3/M4）
 
@@ -64,7 +64,7 @@
 | AI 配置与模型 | `novel/aiConfig` / `NovelAiConfigController` | OpenAI 兼容地址、有序模型、启停、失败切换、秘密保护 | `novel_ai_config*`、`/novel/aiConfigs`、`view/novel/aiConfigs` | 配置 CRUD、启用选项、流式模式、有序模型、连续失败循环切换、状态版本和人工重置已实现（迁移 `00048`）；API Key 改为环境变量 Secret 引用，连通性随 AI 执行器切片验证 |
 | 章节清洗 | `novel/chapterClean` / `NovelChapterCleanController` | 配置、任务、结果、采用、失败重试 | `novel_chapter_clean_*`、`/novel/chapterClean`、`view/novel/chapterClean` | 配置、OpenAI 兼容流式/非流式传输、持久化任务、模型失败切换、自动采用、人工采用/丢弃、停止/续跑和失败重洗已实现（迁移 `00049`）；`00051` 前向修复清洗稿对象类型约束 |
 | 章节摘要 | `NovelChapterSummaryController` | 配置、批量回填、失败重试 | `novel_chapter_summary_*`、`/novel/chapterSummary`、`view/novel/chapterClean` 简介补全页签 | 单例配置、状态/任务分页及详情、手动与自动批处理、停止/续跑、租约恢复、MinIO 清洗稿读取、JSON/SSE、拒答备用 AI、模型轮换和 7 天诊断清理已实现（迁移 `00050`、`00052`） |
-| 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | 配置、建议、采用、自动应用、重试 | 待补 | 基线已盘点 |
+| 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | 配置、建议、采用、自动应用、重试 | `novel_book_profile_*`、`/novel/bookProfile`、`view/novel/bookProfile` | 单例配置、正文/简介输入降级、持久化 Worker、JSON/SSE、拒答备用 AI、人工审核、自动应用、批量重试和陈旧快照保护已实现（迁移 `00053`） |
 
 ## 当前有效集成候选
 
