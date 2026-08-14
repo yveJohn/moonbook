@@ -68,6 +68,7 @@ docker compose --env-file .env start
 - `.env.example` 只含本地开发占位值，不能用于生产。
 - `.env` 和生成的 `server/config.moonbook.local.yaml` 不提交。
 - GVA 通过 `GVA_CONFIG` 选择生成配置文件；数据库、Redis、MinIO 和 JWT 密钥均由 `.env` 注入模板。
+- AI 配置表只保存形如 `MOONBOOK_AI_*_API_KEY` 的环境变量引用。Compose 示例透传 `MOONBOOK_AI_EXAMPLE_API_KEY`；新增供应商时必须在部署清单中显式透传对应 Secret，管理 API 只显示是否已注入，禁止把密钥值填入 PostgreSQL。
 - 生产部署必须使用 Secret 管理，不得复制本地 `.env`。
 
 ## 验证

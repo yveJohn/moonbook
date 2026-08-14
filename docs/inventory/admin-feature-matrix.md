@@ -61,7 +61,7 @@
 | 抓取日志 | `crawl/fetchLog` / `CrawlFetchLogController` | 检索、错误详情、重试线索 | M5 | 抓取日志表、阶段/结果约束、任务/状态筛选、详情管理页面已实现；worker 实际网络抓取和日志写入接入待执行器切片 |
 | TXT 导入 | `novel/txtImport` / `TxtImportController` | 上传、解析、预览、导入、失败文件修复 | `novel_txt_import_task`、`/novel/txtImports`、`view/novel/txtImports` | 上传、MinIO 校验、持久化队列、章节导入、受限预览和失败任务文件替换已实现 |
 | 书籍合并 | `novel/bookMerge` / `NovelBookMergeController` | 候选、章节映射、执行、审计 | `novel_book_merge_*`、`/novel/bookMerges`、`view/novel/bookMerges` | 论坛导入来源筛选、时间排序、重复标记、人工排除、MinIO 正文复制、事务执行、源书下架和血缘审计已实现（迁移至 `00047`）；active AI 清洗结果优先策略待 AI 切片接入 |
-| AI 配置与模型 | `novel/aiConfig` / `NovelAiConfigController` | 服务商、模型、启停、测试、秘密保护 | 待补 | 基线已盘点 |
+| AI 配置与模型 | `novel/aiConfig` / `NovelAiConfigController` | OpenAI 兼容地址、有序模型、启停、失败切换、秘密保护 | `novel_ai_config*`、`/novel/aiConfigs`、`view/novel/aiConfigs` | 配置 CRUD、启用选项、流式模式、有序模型、连续失败循环切换、状态版本和人工重置已实现（迁移 `00048`）；API Key 改为环境变量 Secret 引用，连通性随 AI 执行器切片验证 |
 | 章节清洗 | `novel/chapterClean` / `NovelChapterCleanController` | 配置、任务、结果、采用、失败重试 | 待补 | 基线已盘点 |
 | 章节摘要 | `NovelChapterSummaryController` | 配置、批量回填、失败重试 | 待补 | 基线已盘点 |
 | 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | 配置、建议、采用、自动应用、重试 | 待补 | 基线已盘点 |

@@ -23,7 +23,7 @@
 | 采集 | `novel_crawl_*`、历史 `crawl_*` | PostgreSQL 内容生产域 | 原值保留 | 来源、游标、候选、任务与日志关联 | 待 M5 设计 |
 | TXT 导入 | `novel_txt_import_task`、原文件和失败修复记录 | PostgreSQL + MinIO | 原值保留 | 文件哈希、任务状态、章节结果 | `00042` 建立任务事实；上传和失败文件替换都先完成大小/SHA-256 校验，再写任务和 `txt_import` 队列；预览只读已校验对象并限制返回量 |
 | 书籍合并 | `novel_book_merge_*` | PostgreSQL + MinIO | 原值保留 | 源/目标书、章节映射、源/目标对象、执行结果 | `00046` 建立任务、来源快照和章节血缘，`00047` 补齐目标外键；新目标章节对象先完成大小/SHA-256 校验，再与目标书、章节、对象引用及源书下架在同一事务提交 |
-| AI 配置和模型 | `novel_ai_config*` | PostgreSQL 配置域 | 原值保留 | 非秘密参数；密钥改由 Secret 注入 | 待 M5 设计 |
+| AI 配置和模型 | `novel_ai_config`、`novel_ai_config_model` | `novel_ai_config`、`novel_ai_config_model` | 配置和模型 ID 原值保留 | 非秘密参数、有序模型、当前模型、失败阈值/计数、状态版本；密钥改由 Secret 注入 | `00048` 建立目标结构和管理闭环；旧 `api_key` 值禁止写入 PostgreSQL、日志或报告，仅按旧配置 ID 生成 `MOONBOOK_AI_LEGACY_<ID>_API_KEY` 引用并列入迁移后的待注入 Secret 清单，旧单 `model` 在缺少模型子表时作为顺序 1 模型迁移 |
 | AI 清洗/摘要/画像 | clean、summary、profile 配置/任务/结果表 | PostgreSQL 内容生产域 | 原值保留 | 任务结果、采用状态、失败重试 | 待 M5 设计 |
 | 读者 SEO | `novel_reader_seo_config` | `novel_reader_seo_config` 单例 | 固定配置 `id=1` 原值保留；额外 ID 不迁移 | 开关、站点字段、模板、时间、单例、错误清单和幂等 | M2 管理配置与迁移已实现；M3 接入公开 SEO、robots、sitemap 契约 |
 | 每日活动统计 | `reader_daily_activity` | PostgreSQL 分析事实 | 复合键保留 | 日期时区、读者关联、去重 | 待 M4 设计 |

@@ -50,6 +50,7 @@
   "/src/view/media/chunkUpload.vue": "ChunkUpload",
   "/src/view/media/scanUpload.vue": "scanUpload",
   "/src/view/media/upload.vue": "Upload",
+  "/src/view/novel/aiConfigs/index.vue": "NovelAiConfigs",
   "/src/view/novel/authors/index.vue": "NovelAuthors",
   "/src/view/novel/bookMerges/index.vue": "NovelBookMerges",
   "/src/view/novel/books/index.vue": "NovelBooks",
