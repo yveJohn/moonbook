@@ -151,6 +151,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 前向迁移 `00013_reader_wallet_foundation.sql` 建立 `reader_wallets` 钱包汇总表和 `reader_wallet_ledgers` 不可变流水表；余额、收入/支出累计值均使用 PostgreSQL `bigint`，流水支持业务幂等键和分页查询。
 - 钱包流水通过数据库触发器禁止更新和删除；余额变更设计为锁定钱包行、写入前后余额并在同一事务提交，Redis 不承载余额事实。
 - 已新增 `commerce/wallet` 仓储合同并接入 Reader HTTP 的 `/reader/me/wallet`、`/reader/me/wallet/ledgers`；余额和金额字段以字符串输出，充值、订单、签到及支付回调将在后续 M4 纵向切片实现。
-- 前向迁移 `00014_reader_recharge_foundation.sql` 建立充值产品、充值规则、支付渠道、充值订单和支付回调日志事实表；新增充值目录、精确报价、创建订单和查询订单兼容接口。订单创建要求启用本地/外部支付渠道，暂未接入真实 EPUSDT 回调验签和钱包入账。
+- 前向迁移 `00014_reader_recharge_foundation.sql` 建立充值产品、充值规则、支付渠道、充值订单和支付回调日志事实表；新增充值目录、精确报价、创建订单和查询订单兼容接口。订单创建要求启用本地/外部支付渠道；回调验签和钱包入账已在支付模块完成，真实网关创建适配仍待接入。
 - 前向迁移 `00015_reader_checkin_foundation.sql` 建立签到奖励规则和每日签到记录；签到使用 PostgreSQL advisory lock、幂等键，并在同一事务写入奖励记录和 bonus 钱包流水；已接入 `/reader/me/checkin/status` 与 `/reader/me/checkin`。
 - 前向迁移 `00016_reader_purchase_orders.sql` 建立读者购买订单事实和权益 ID 序列；新增会员、章节、整书购买服务，订单、钱包扣款和会员/作品权益在同一事务内提交，并接入 `/reader/me/orders/membership`、`/reader/me/orders/chapter`、`/reader/me/orders/book`。支付充值回调仍待实现。
+- 支付模块接入 `/reader/payment/epusdt/notify`，使用环境变量注入 PID/密钥，采用排序规范化字段和 HMAC-SHA256 验签；校验金额、USDT、状态、交易哈希唯一性后，在同一事务写入充值钱包流水、订单状态和回调日志，重复成功回调幂等返回。
