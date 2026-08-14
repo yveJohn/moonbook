@@ -18,6 +18,13 @@ type Result struct {
 	TotalChapterCount, ImportedChapterCount, EmptyChapterCount, DuplicateChapterCount int
 	QualityStatus, QualitySummary                                                     string
 	Chapters                                                                          []ParsedChapter
+	Fetches                                                                           []PageFetch
+}
+type PageFetch struct {
+	URL                               string
+	PageNo, HTTPStatus, ResponseBytes int
+	Elapsed                           time.Duration
+	Status, Message                   string
 }
 type Executor interface {
 	Execute(context.Context, Task) (Result, error)
@@ -96,8 +103,17 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	_ = w.Logs.Append(ctx, fetchlog.Entry{TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName, BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL, Stage: "import", Status: "started", Message: "任务开始执行"})
 	result, execErr := w.Executor.Execute(ctx, task)
+	w.appendFetchLogs(ctx, task, result.Fetches)
 	if execErr != nil {
 		return true, w.finishFailureTask(ctx, job, task, execErr)
+	}
+	var taskStatus string
+	if err = w.DB.QueryRowContext(ctx, `SELECT status FROM novel_crawl_import_task WHERE id=$1`, task.ID).Scan(&taskStatus); err != nil {
+		return true, w.finishFailureTask(ctx, job, task, err)
+	}
+	if taskStatus == "cancelled" {
+		_ = w.Logs.Append(ctx, fetchlog.Entry{TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName, BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL, Stage: "import", Status: "skipped", Message: "任务已取消，跳过章节写入"})
+		return true, nil
 	}
 	if w.Writer != nil && len(result.Chapters) > 0 {
 		imported, writeErr := w.Writer.Import(ctx, task, result.Chapters)
@@ -109,7 +125,7 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if _, err = w.DB.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status='succeeded',quality_status=$2,quality_summary=$3,total_chapter_count=$4,imported_chapter_count=$5,empty_chapter_count=$6,duplicate_chapter_count=$7,end_time=now(),updated_at=now() WHERE id=$1`, taskID, result.QualityStatus, result.QualitySummary, result.TotalChapterCount, result.ImportedChapterCount, result.EmptyChapterCount, result.DuplicateChapterCount); err != nil {
 		return true, w.finishFailureTask(ctx, job, task, err)
 	}
-	_, err = w.DB.ExecContext(ctx, `UPDATE novel_crawl_thread_candidate SET status='imported',updated_at=now() WHERE id=$1`, task.CandidateID)
+	_, err = w.DB.ExecContext(ctx, `UPDATE novel_crawl_thread_candidate SET status='imported',last_import_page_no=$2,last_follow_time=now(),follow_count=follow_count+CASE WHEN $3='incremental' THEN 1 ELSE 0 END,follow_fail_reason='',updated_at=now() WHERE id=$1`, task.CandidateID, len(result.Fetches), task.ImportMode)
 	if err != nil {
 		return true, w.finishFailureTask(ctx, job, task, err)
 	}
@@ -165,15 +181,37 @@ func (w *Worker) Run(ctx context.Context) error {
 func (w *Worker) loadTask(ctx context.Context, id int64) (Task, error) {
 	var v Task
 	err := scan(w.DB.QueryRowContext(ctx, `SELECT `+returningCols+` FROM novel_crawl_import_task WHERE id=$1`, id), &v)
+	if err != nil {
+		return Task{}, err
+	}
+	var intervalMS int
+	err = w.DB.QueryRowContext(ctx, `SELECT request_interval_ms,COALESCE(user_agent,''),COALESCE(cookie_text,'') FROM novel_crawl_forum_source WHERE id=$1::bigint`, v.SourceID).Scan(&intervalMS, &v.sourceUserAgent, &v.sourceCookie)
+	v.requestInterval = time.Duration(intervalMS) * time.Millisecond
 	return v, err
 }
-func (w *Worker) finishFailure(ctx context.Context, job jobs.Job, err error, retryable bool) error {
-	if retryable {
-		_ = w.Jobs.Fail(ctx, job.ID, w.WorkerID, jobs.Failure{Code: "WORKER_ERROR", Message: err.Error(), Retryable: true})
-	} else {
-		_ = w.Jobs.Fail(ctx, job.ID, w.WorkerID, jobs.Failure{Code: "INVALID_TASK", Message: err.Error(), Retryable: false})
+
+func (w *Worker) appendFetchLogs(ctx context.Context, task Task, fetches []PageFetch) {
+	for _, page := range fetches {
+		_ = w.Logs.Append(ctx, fetchlog.Entry{
+			TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName,
+			BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL,
+			RequestURL: page.URL, Stage: "thread", Status: page.Status,
+			HTTPStatus: page.HTTPStatus, ResponseBytes: page.ResponseBytes,
+			ElapsedMs: int(page.Elapsed.Milliseconds()), Message: page.Message,
+		})
 	}
-	return err
+}
+func (w *Worker) finishFailure(ctx context.Context, job jobs.Job, err error, retryable bool) error {
+	var persistErr error
+	if retryable {
+		persistErr = w.Jobs.Fail(ctx, job.ID, w.WorkerID, jobs.Failure{Code: "WORKER_ERROR", Message: err.Error(), Retryable: true})
+	} else {
+		persistErr = w.Jobs.Fail(ctx, job.ID, w.WorkerID, jobs.Failure{Code: "INVALID_TASK", Message: err.Error(), Retryable: false})
+	}
+	if persistErr != nil {
+		return fmt.Errorf("persist import job failure: %w", persistErr)
+	}
+	return nil
 }
 func (w *Worker) finishFailureTask(ctx context.Context, job jobs.Job, task Task, err error) error {
 	retryable := false
@@ -181,11 +219,17 @@ func (w *Worker) finishFailureTask(ctx context.Context, job jobs.Job, task Task,
 	if errors.As(err, &re) {
 		retryable = true
 	}
+	terminal := !retryable || job.AttemptCount >= job.MaxAttempts
 	status := "failed"
-	if retryable {
+	if !terminal {
 		status = "pending"
 	}
-	_, _ = w.DB.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status=$2,fail_reason=$3,end_time=CASE WHEN $2='failed' THEN now() ELSE NULL END,updated_at=now() WHERE id=$1`, task.ID, status, err.Error())
+	if _, updateErr := w.DB.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status=$2::varchar,fail_reason=$3,end_time=CASE WHEN $2::varchar='failed' THEN now() ELSE NULL END,updated_at=now() WHERE id=$1`, task.ID, status, err.Error()); updateErr != nil {
+		return updateErr
+	}
+	if _, updateErr := w.DB.ExecContext(ctx, `UPDATE novel_crawl_thread_candidate SET status=CASE WHEN $3 THEN 'failed' ELSE status END,follow_fail_reason=$2,last_follow_time=now(),updated_at=now() WHERE id=$1`, task.CandidateID, err.Error(), terminal); updateErr != nil {
+		return updateErr
+	}
 	_ = w.Logs.Append(ctx, fetchlog.Entry{TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName, BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL, Stage: "import", Status: "failed", Message: err.Error()})
 	return w.finishFailure(ctx, job, err, retryable)
 }

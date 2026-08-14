@@ -87,21 +87,64 @@ func (r SQLRepository) Create(ctx context.Context, in CreateInput) (Task, error)
 	return task, nil
 }
 func (r SQLRepository) Retry(ctx context.Context, id int64, in CreateInput) (Task, error) {
-	var v Task
-	err := r.DB.QueryRowContext(ctx, `UPDATE novel_crawl_import_task SET status='pending',fail_reason='',end_time=NULL,updated_at=now() WHERE id=$1 AND status IN ('failed','cancelled') RETURNING `+returningCols, id).Scan(&v.ID, &v.CandidateID, &v.SourceID, &v.SourceName, &v.BoardID, &v.BoardName, &v.ForumThreadID, &v.ThreadTitle, &v.DisplayTitle, &v.ThreadURL, &v.TargetBookID, &v.ImportMode, &v.MergeStrategy, &v.Status, &v.QualityStatus, &v.TotalChapterCount, &v.ImportedChapterCount, &v.EmptyChapterCount, &v.DuplicateChapterCount, &v.AttemptCount, &v.MaxAttempts, &v.QualitySummary, &v.FailReason, &v.OperatorName, &v.StartTime, &v.EndTime, &v.CreatedAt, &v.UpdatedAt)
+	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
+		return Task{}, err
+	}
+	defer tx.Rollback()
+	var jobID, candidateID int64
+	var status string
+	if err = tx.QueryRowContext(ctx, `SELECT platform_job_id,candidate_id,status FROM novel_crawl_import_task WHERE id=$1 FOR UPDATE`, id).Scan(&jobID, &candidateID, &status); err != nil {
+		return Task{}, err
+	}
+	if status != "failed" && status != "cancelled" {
+		return Task{}, errors.New("import task cannot be retried")
+	}
+	jobResult, err := tx.ExecContext(ctx, `UPDATE platform_jobs SET status='pending',max_attempts=GREATEST(max_attempts,attempt_count+3),available_at=now(),lease_owner=NULL,lease_expires_at=NULL,last_error_code=NULL,last_error_message=NULL,finished_at=NULL,updated_at=now() WHERE id=$1 AND status IN ('failed','cancelled')`, jobID)
+	if err != nil {
+		return Task{}, err
+	}
+	if changed, _ := jobResult.RowsAffected(); changed != 1 {
+		return Task{}, errors.New("platform import job cannot be retried")
+	}
+	var v Task
+	err = scan(tx.QueryRowContext(ctx, `UPDATE novel_crawl_import_task SET status='pending',max_attempts=GREATEST(max_attempts,attempt_count+3),fail_reason='',end_time=NULL,updated_at=now() WHERE id=$1 RETURNING `+returningCols, id), &v)
+	if err != nil {
+		return Task{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE novel_crawl_thread_candidate SET status='importing',import_task_id=$1,follow_fail_reason='',updated_at=now() WHERE id=$2`, id, candidateID); err != nil {
+		return Task{}, err
+	}
+	if err = tx.Commit(); err != nil {
 		return Task{}, err
 	}
 	return v, nil
 }
 func (r SQLRepository) Cancel(ctx context.Context, id int64) error {
-	res, err := r.DB.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status='cancelled',end_time=now(),updated_at=now() WHERE id=$1 AND status IN ('pending','running')`, id)
+	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	defer tx.Rollback()
+	var jobID, candidateID int64
+	var status string
+	if err = tx.QueryRowContext(ctx, `SELECT platform_job_id,candidate_id,status FROM novel_crawl_import_task WHERE id=$1 FOR UPDATE`, id).Scan(&jobID, &candidateID, &status); err != nil {
+		return err
+	}
+	if status != "pending" && status != "running" {
 		return errors.New("import task cannot be cancelled")
 	}
-	return nil
+	if _, err = tx.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status='cancelled',end_time=now(),updated_at=now() WHERE id=$1`, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE platform_jobs SET status='cancelled',lease_owner=NULL,lease_expires_at=NULL,finished_at=now(),updated_at=now() WHERE id=$1 AND status IN ('pending','running')`, jobID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE platform_job_attempts SET finished_at=now(),outcome='cancelled' WHERE job_id=$1 AND finished_at IS NULL`, jobID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE novel_crawl_thread_candidate SET status='pending',updated_at=now() WHERE id=$1`, candidateID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

@@ -45,10 +45,27 @@ func TestImportTaskQueueAndRetryLifecycle(t *testing.T) {
 	if err := r.Cancel(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Get(ctx, id); err != nil {
+	var taskStatus, jobStatus string
+	if err := db.QueryRowContext(ctx, `SELECT t.status,j.status FROM novel_crawl_import_task t JOIN platform_jobs j ON j.id=t.platform_job_id WHERE t.id=$1`, id).Scan(&taskStatus, &jobStatus); err != nil {
 		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT status FROM novel_crawl_thread_candidate WHERE id=$1`, candidateID).Scan(&candidateStatus); err != nil {
+		t.Fatal(err)
+	}
+	if taskStatus != "cancelled" || jobStatus != "cancelled" || candidateStatus != "pending" {
+		t.Fatalf("cancel task=%s job=%s candidate=%s", taskStatus, jobStatus, candidateStatus)
 	}
 	if _, err := r.Retry(ctx, id, CreateInput{}); err != nil {
 		t.Fatal(err)
+	}
+	var attemptCount, maxAttempts int
+	if err := db.QueryRowContext(ctx, `SELECT t.status,j.status,j.attempt_count,j.max_attempts FROM novel_crawl_import_task t JOIN platform_jobs j ON j.id=t.platform_job_id WHERE t.id=$1`, id).Scan(&taskStatus, &jobStatus, &attemptCount, &maxAttempts); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT status FROM novel_crawl_thread_candidate WHERE id=$1`, candidateID).Scan(&candidateStatus); err != nil {
+		t.Fatal(err)
+	}
+	if taskStatus != "pending" || jobStatus != "pending" || candidateStatus != "importing" || maxAttempts < attemptCount+3 {
+		t.Fatalf("retry task=%s job=%s candidate=%s attempts=%d/%d", taskStatus, jobStatus, candidateStatus, attemptCount, maxAttempts)
 	}
 }

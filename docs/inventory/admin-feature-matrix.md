@@ -56,9 +56,9 @@
 | 论坛来源 | `crawl/forumSource` / `CrawlForumSourceController` | CRUD、启停、连接与规则配置 | M5 | 来源 CRUD、URL/节流校验、Cookie 脱敏、权限和真实 PostgreSQL 测试已实现；连接检查待补 |
 | 论坛板块 | `crawl/forumBoard` / `CrawlForumBoardController` | CRUD、增量游标、抓取策略 | M5 | 板块 CRUD、来源关联、同来源名称唯一、URL 域名和跟进策略校验已实现；导入任务引用保护待任务模块补齐 |
 | 线程候选 | `crawl/threadCandidate` / `CrawlThreadCandidateController` | 筛选、状态、加入导入 | M5 | 候选列表/详情、来源板块筛选、跳过/恢复/删除状态管理已实现；新增受控板块发现 API，按来源与外部帖子 ID 幂等写入候选 |
-| 导入任务 | `crawl/importTask` / `CrawlImportTaskController` | 创建、执行、暂停/恢复、重试、日志 | M5 | 导入任务创建、队列入库、状态/质量字段、取消和失败重试管理已实现；实际抓取执行器与日志待后续切片 |
+| 导入任务 | `crawl/importTask` / `CrawlImportTaskController` | 创建、执行、暂停/恢复、重试、日志 | M5 | 导入任务创建、队列入库、同源多页抓取、状态/质量字段、取消、有限重试和人工恢复已实现；真实 PostgreSQL + MinIO 集成测试覆盖成功及重试耗尽终态 |
 | 运行任务 | `CrawlRuntimeTaskController` | 调度、租约、恢复、取消 | 待补 | 基线已盘点 |
-| 抓取日志 | `crawl/fetchLog` / `CrawlFetchLogController` | 检索、错误详情、重试线索 | M5 | 抓取日志表、阶段/结果约束、任务/状态筛选、详情管理页面已实现；worker 实际网络抓取和日志写入接入待执行器切片 |
+| 抓取日志 | `crawl/fetchLog` / `CrawlFetchLogController` | 检索、错误详情、重试线索 | M5 | 抓取日志表、阶段/结果约束、任务/状态筛选和详情管理页面已实现；Worker 逐页记录 URL、状态码、字节数、耗时与失败线索，后页失败保留已成功页面证据 |
 | TXT 导入 | `novel/txtImport` / `TxtImportController` | 上传、解析、预览、导入、失败文件修复 | `novel_txt_import_task`、`/novel/txtImports`、`view/novel/txtImports` | 上传、MinIO 校验、持久化队列、章节导入、受限预览和失败任务文件替换已实现 |
 | 书籍合并 | `novel/bookMerge` / `NovelBookMergeController` | 候选、章节映射、执行、审计 | `novel_book_merge_*`、`/novel/bookMerges`、`view/novel/bookMerges` | 论坛导入来源筛选、时间排序、重复标记、人工排除、MinIO 正文复制、事务执行、源书下架和血缘审计已实现（迁移至 `00047`）；active AI 清洗结果优先策略待 AI 切片接入 |
 | AI 配置与模型 | `novel/aiConfig` / `NovelAiConfigController` | OpenAI 兼容地址、有序模型、启停、失败切换、秘密保护 | `novel_ai_config*`、`/novel/aiConfigs`、`view/novel/aiConfigs` | 配置 CRUD、启用选项、流式模式、有序模型、连续失败循环切换、状态版本和人工重置已实现（迁移 `00048`）；API Key 改为环境变量 Secret 引用，连通性随 AI 执行器切片验证 |

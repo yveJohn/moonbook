@@ -1,6 +1,9 @@
 package importtask
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Task struct {
 	ID, CandidateID, SourceID, SourceName, BoardID, BoardName                                                    string
@@ -8,6 +11,8 @@ type Task struct {
 	ImportMode, MergeStrategy, Status, QualityStatus                                                             string
 	TotalChapterCount, ImportedChapterCount, EmptyChapterCount, DuplicateChapterCount, AttemptCount, MaxAttempts string
 	QualitySummary, FailReason, OperatorName, StartTime, EndTime, CreatedAt, UpdatedAt                           string
+	requestInterval                                                                                              time.Duration
+	sourceUserAgent, sourceCookie                                                                                string
 }
 type CreateInput struct {
 	CandidateID    string `json:"candidateId"`
