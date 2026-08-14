@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | M0 冻结、基线与盘点 | 已完成 | GVA 与旧仓库基线已锁定；reader-ui 原样迁入并通过 536 个基线测试；功能、API、数据和容量盘点范围已建立 |
 | M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
-| M2 小说核心与对象存储 | 进行中 | 分类、作者和书籍纵向切片及 PostgreSQL+MinIO 版本化对象服务已实现；真实 HTTP、双库迁移、旧封面迁移、对象引用切换/完整性/回收及 Long ID 边界验证通过，章节闭环待完成 |
+| M2 小说核心与对象存储 | 进行中 | 分类、作者、书籍和章节纵向切片及 PostgreSQL+MinIO 版本化对象服务已实现；真实 HTTP、双库迁移、正文/封面迁移、对象引用切换/完整性/持久化回收及 Long ID 边界验证通过，正在执行 M2 整体退出审计 |
 | M3 读者域与零修改兼容 | 未开始 | - |
 | M4 交易、支付与运营 | 未开始 | - |
 | M5 内容生产与长任务 | 未开始 | - |
@@ -98,8 +98,20 @@ M2 第二条“书籍、标签、发布状态与封面”纵向切片已完成�
 - 小说模块通过平台管理响应适配器保持 GVA 成功响应合同，不再直接依赖 GVA `model` 实现；模块依赖规则、响应合同、Go race/vet、管理端 ESLint、`pnpm test:moonbook` 和生产构建通过。构建仍只有固定上游 `arcdash` BigInt 目标警告。
 - 固定 Gitleaks 8.28.0 扫描约 27.88 MB，结果 `no leaks found`；Reader 从冻结 commit 重新归档比较，138 个源文件零差异。本轮隔离 API、PostgreSQL/MySQL 容器、测试卷/网络及临时秘密均已清理，默认 Moonbook PostgreSQL、Redis、MinIO 保持健康运行。
 
+M2 第三条“章节、正文迁移与持久化对象回收”纵向切片已完成：
+
+- 前向迁移 `00010` 建立 `novel_chapters`、目录索引以及 GVA 菜单、6 个 API 元数据和超级管理员 Casbin 策略；真实隔离 PostgreSQL 首次执行到版本 10，重跑 `applied=0`。该迁移已经执行，后续修复只能新增更高版本。
+- 管理 API 和页面完成章节分页/书籍/关键词/状态筛选、详情、正文读取、创建、编辑和软删除。正文必须是 UTF-8 且小于 16 MiB，字数按 Unicode code point 排除空白统计；章节变更同步维护书籍总字数和末章信息，禁止直接跨书移动。
+- 章节正文使用 `chapters/{bookId}/{chapterId}/v{version}.txt`。MinIO 大小/SHA-256 校验、章节元数据写入、活动引用切换和书籍统计更新形成原子闭环；软删除同时解除引用，所有正文版本进入宽限期 orphan 状态。
+- 对象服务新增带业务事务的激活/停用能力。激活事务失败时已验证对象安全转为无引用 orphan，版本号保持不可变；持久化 `object_gc` worker 使用平台 Job 的租约、续租、有限重试和小时幂等键，每批最多 500 个对象，默认宽限期 24 小时，并接入启动、配置热重载和优雅停止。
+- `moonbook-legacy-migrate novel-chapters` 按章节 ID 联表迁移当前 `novel_chapter` 与 `novel_chapter_content`，保留 bigint ID/价格，正文校验后原子写元数据和引用。来源指纹保证 checkpoint 丢失式重跑不增加对象；目标非 legacy 同 ID 记录不会被覆盖。
+- 真实 HTTP E2E 覆盖 readiness、未授权 401、首次强制改密、重新登录、章节创建/两版正文读取/更新/复合筛选/非法分页/软删除、最大 bigint 价格、JavaScript ID 字符串、Casbin 和操作审计。删除后书籍统计清零、两版正文均 orphan、活动引用为零。
+- 真实 MySQL 8.4 -> PostgreSQL 17 + MinIO 测试覆盖两条成功章节、2 条字数重算、坏状态、缺书、缺正文、最大 bigint、幂等重跑、对象不重复和 identity 序列推进。源库在验证前后均为 `read_only=1`、`super_read_only=1`。
+- 真实 PostgreSQL 17 + MinIO 测试覆盖章节生命周期、对象激活事务回滚、不可变版本、读后哈希、并发激活、软删除停用、宽限期回收、Job 成功结果和同小时幂等。管理端 ESLint、Long ID 测试和生产构建通过；Go race/vet 和受影响包回归通过。
+- Reader 从冻结 commit 重新归档，排除本地 `node_modules`/`build` 后 138 个 Git 跟踪源文件零差异。临时 API 已优雅停止；章节隔离 PostgreSQL/MySQL 容器待提交完成后清理，默认 Moonbook PostgreSQL、Redis、MinIO 保持运行。
+
 下一步：
 
-1. 完成章节元数据、正文上传/读取和旧正文迁移闭环，接入对象回收持久化任务。
-2. 章节闭环后执行 M2 小说核心整体回归和里程碑退出审计。
+1. 执行 M2 小说核心整体回归和里程碑退出审计，核对所有交付物及矩阵缺口。
+2. 若 M2 退出条件全部满足，将里程碑标记完成并提交审计证据。
 3. 接入 M3 读者分类、书目和章节兼容接口。

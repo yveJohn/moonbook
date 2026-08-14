@@ -35,4 +35,17 @@ go run ./cmd/moonbook-legacy-migrate novel-books
 
 封面 URL 仅以 SHA-256 指纹写入对象元数据，避免带签名参数的 URL 泄漏；实际 URL 仍只保留在 `novel_books.legacy_cover_url` 供错误排查。下载、格式、上传或激活失败会写入 `migration_errors`，不会覆盖已有活动封面。MinIO 写入经大小和 SHA-256 校验后才激活 PostgreSQL 引用；同一书籍和 URL 指纹重跑不会新建重复版本。
 
+M2 章节与正文迁移：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-chapters
+```
+
+`novel-chapters` 包含 `novel-books` 的全部前置阶段，随后按 `novel_chapter.id` 游标联表读取当前 `novel_chapter` 与 `novel_chapter_content`。它需要与书籍迁移相同的 PostgreSQL、MySQL 和 MinIO 环境变量；源 MySQL 只读和 `utf8mb4` 检查仍是所有 stage 的硬门槛。
+
+每章正文限制为有效 UTF-8 且不超过 `(16 MiB)-1`，按 Unicode code point 排除空白重算字数。对象写入 MinIO 并以 `StatObject` 校验大小和 SHA-256 后，章节元数据、对象引用和书籍统计才在同一 PostgreSQL 事务提交。缺书、缺正文、非法状态、非法字段、上传失败和激活失败均写入 `migration_errors`；字数修正使用非重试错误码 `WORD_COUNT_RECALCULATED` 留下可核对证据。
+
+章节来源指纹不依赖 migration name。已完成 checkpoint 会正常跳过；即使检查点丢失并使用新的 migration name 重跑，已有 legacy 正文对象也会被复用，不会生成重复版本。目标中同 ID 的人工或其他非 legacy 章节只记录 `CHAPTER_ID_CONFLICT`，不会覆盖。
+
 整个命令默认最多运行 12 小时，可用 `MOONBOOK_MIGRATION_TIMEOUT` 在 `1m` 至 `24h` 间调整，例如 `6h`。超时只会中断当前批次；已提交批次的 checkpoint 保留，重新执行同一命令会从游标继续。正式演练必须根据容量和耗时报告设置小于停机窗口且留有核对、冒烟和回退余量的值。
