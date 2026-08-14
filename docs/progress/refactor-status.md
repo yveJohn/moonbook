@@ -150,4 +150,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 
 - 前向迁移 `00013_reader_wallet_foundation.sql` 建立 `reader_wallets` 钱包汇总表和 `reader_wallet_ledgers` 不可变流水表；余额、收入/支出累计值均使用 PostgreSQL `bigint`，流水支持业务幂等键和分页查询。
 - 钱包流水通过数据库触发器禁止更新和删除；余额变更设计为锁定钱包行、写入前后余额并在同一事务提交，Redis 不承载余额事实。
-- 已新增 `commerce/wallet` 仓储合同，提供钱包读取、流水分页和收入/支出原子变更基础能力；尚未接入 Reader HTTP 路由，充值、订单、签到及支付回调将在后续 M4 纵向切片实现。
+- 已新增 `commerce/wallet` 仓储合同并接入 Reader HTTP 的 `/reader/me/wallet`、`/reader/me/wallet/ledgers`；余额和金额字段以字符串输出，充值、订单、签到及支付回调将在后续 M4 纵向切片实现。
