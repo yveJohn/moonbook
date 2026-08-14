@@ -119,6 +119,68 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 	}
 	assertNoReference(t, ctx, db, rejected.ID)
 
+	batchTargets := []Target{
+		{Kind: KindChapterContent, BookID: suffix + 3, OwnerID: suffix + 30},
+		{Kind: KindChapterContent, BookID: suffix + 3, OwnerID: suffix + 31},
+	}
+	batchObjects := make([]Object, 0, len(batchTargets))
+	for index, batchTarget := range batchTargets {
+		object, uploadErr := service.UploadVerified(ctx, batchTarget, []byte(fmt.Sprintf("批量正文%d", index+1)), "text/plain; charset=utf-8")
+		if uploadErr != nil {
+			t.Fatal(uploadErr)
+		}
+		batchObjects = append(batchObjects, object)
+	}
+	callbackApplied := false
+	if err := service.ActivateManyWithTx(ctx, []int64{batchObjects[1].ID, batchObjects[0].ID}, func(_ *sql.Tx, targets []Target) error {
+		callbackApplied = len(targets) == 2
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !callbackApplied {
+		t.Fatal("batch activation callback was not applied")
+	}
+	for index, batchTarget := range batchTargets {
+		data, activeObject, readErr := service.ReadActive(ctx, batchTarget)
+		if readErr != nil || string(data) != fmt.Sprintf("批量正文%d", index+1) || activeObject.State != StateActive {
+			t.Fatalf("batch target=%+v object=%+v data=%q err=%v", batchTarget, activeObject, data, readErr)
+		}
+	}
+
+	rejectedBatch := make([]Object, 0, 2)
+	for index := range 2 {
+		object, uploadErr := service.UploadVerified(ctx, Target{Kind: KindChapterContent, BookID: suffix + 3, OwnerID: suffix + 32 + int64(index)}, []byte("拒绝批量正文"), "text/plain; charset=utf-8")
+		if uploadErr != nil {
+			t.Fatal(uploadErr)
+		}
+		rejectedBatch = append(rejectedBatch, object)
+	}
+	if err := service.ActivateManyWithTx(ctx, []int64{rejectedBatch[0].ID, rejectedBatch[1].ID}, func(*sql.Tx, []Target) error {
+		return errors.New("reject batch business transaction")
+	}); err == nil {
+		t.Fatal("batch activation callback failure should be returned")
+	}
+	for _, object := range rejectedBatch {
+		var state string
+		if err := db.QueryRowContext(ctx, `SELECT state FROM novel_objects WHERE id=$1`, object.ID).Scan(&state); err != nil || state != StateOrphaned {
+			t.Fatalf("rejected batch object state=%q err=%v", state, err)
+		}
+		assertNoReference(t, ctx, db, object.ID)
+	}
+	abandoned, err := service.UploadVerified(ctx, Target{Kind: KindChapterContent, BookID: suffix + 3, OwnerID: suffix + 34}, []byte("预激活失败正文"), "text/plain; charset=utf-8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.AbandonVerified(ctx, []int64{abandoned.ID}); err != nil {
+		t.Fatal(err)
+	}
+	var abandonedState string
+	if err := db.QueryRowContext(ctx, `SELECT state FROM novel_objects WHERE id=$1`, abandoned.ID).Scan(&abandonedState); err != nil || abandonedState != StateOrphaned {
+		t.Fatalf("abandoned object state=%q err=%v", abandonedState, err)
+	}
+	assertNoReference(t, ctx, db, abandoned.ID)
+
 	first, err := service.UploadVerified(ctx, target, []byte("第一版正文\n"), "text/plain; charset=utf-8")
 	if err != nil {
 		t.Fatal(err)

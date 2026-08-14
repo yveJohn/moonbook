@@ -17,6 +17,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/purchase"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/recharge"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/bookmerge"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/books"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/candidate"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
@@ -87,6 +88,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	}
 	objects := objectstore.NewService(db, blobs)
 	books.RegisterRoutes(privateGroup, db, objects)
+	bookmerge.RegisterRoutes(privateGroup, bookmerge.NewService(db, objects))
 	chapters.RegisterRoutes(privateGroup, db, objects)
 	crawlsource.RegisterRoutes(privateGroup, crawlsource.NewService(crawlsource.SQLRepository{DB: db}))
 	crawlboard.RegisterRoutes(privateGroup, crawlboard.NewService(crawlboard.SQLRepository{DB: db}))

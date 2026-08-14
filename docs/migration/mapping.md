@@ -22,7 +22,7 @@
 | 充值与支付 | `reader_recharge_*`、`reader_payment_*`、历史 `order_pay` | PostgreSQL 支付域 | 原值保留 | 金额、状态、回调幂等、凭据不明文迁移 | 待 M4 设计 |
 | 采集 | `novel_crawl_*`、历史 `crawl_*` | PostgreSQL 内容生产域 | 原值保留 | 来源、游标、候选、任务与日志关联 | 待 M5 设计 |
 | TXT 导入 | `novel_txt_import_task`、原文件和失败修复记录 | PostgreSQL + MinIO | 原值保留 | 文件哈希、任务状态、章节结果 | `00042` 建立任务事实；上传和失败文件替换都先完成大小/SHA-256 校验，再写任务和 `txt_import` 队列；预览只读已校验对象并限制返回量 |
-| 书籍合并 | `novel_book_merge_*` | PostgreSQL 内容生产域 | 原值保留 | 源/目标书、章节映射、执行结果 | 待 M5 设计 |
+| 书籍合并 | `novel_book_merge_*` | PostgreSQL + MinIO | 原值保留 | 源/目标书、章节映射、源/目标对象、执行结果 | `00046` 建立任务、来源快照和章节血缘，`00047` 补齐目标外键；新目标章节对象先完成大小/SHA-256 校验，再与目标书、章节、对象引用及源书下架在同一事务提交 |
 | AI 配置和模型 | `novel_ai_config*` | PostgreSQL 配置域 | 原值保留 | 非秘密参数；密钥改由 Secret 注入 | 待 M5 设计 |
 | AI 清洗/摘要/画像 | clean、summary、profile 配置/任务/结果表 | PostgreSQL 内容生产域 | 原值保留 | 任务结果、采用状态、失败重试 | 待 M5 设计 |
 | 读者 SEO | `novel_reader_seo_config` | `novel_reader_seo_config` 单例 | 固定配置 `id=1` 原值保留；额外 ID 不迁移 | 开关、站点字段、模板、时间、单例、错误清单和幂等 | M2 管理配置与迁移已实现；M3 接入公开 SEO、robots、sitemap 契约 |

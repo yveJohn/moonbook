@@ -11,6 +11,7 @@ import (
 	"io"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -235,6 +236,116 @@ func (service *Service) ActivateWithTx(ctx context.Context, id int64, apply func
 		return errors.Join(err, abandonErr)
 	}
 	return err
+}
+
+// ActivateManyWithTx activates multiple verified objects and applies one
+// owning business change atomically. It is used by workflows that create a
+// complete set of related objects, such as a merged book and its chapters.
+func (service *Service) ActivateManyWithTx(ctx context.Context, ids []int64, apply func(*sql.Tx, []Target) error) error {
+	if len(ids) == 0 {
+		return errors.New("at least one object is required")
+	}
+	ordered := append([]int64(nil), ids...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i] < ordered[j] })
+	for index, id := range ordered {
+		if id <= 0 || (index > 0 && id == ordered[index-1]) {
+			return errors.New("object IDs must be unique and positive")
+		}
+	}
+	_, err := service.activateManyWithTx(ctx, ordered, apply)
+	if err == nil {
+		return nil
+	}
+	for _, id := range ordered {
+		if abandonErr := service.abandonVerified(ctx, id); abandonErr != nil {
+			err = errors.Join(err, abandonErr)
+		}
+	}
+	return err
+}
+
+// AbandonVerified marks verified, unreferenced objects as orphaned so the GC
+// worker can remove uploads that a multi-step business operation cannot use.
+func (service *Service) AbandonVerified(ctx context.Context, ids []int64) error {
+	var result error
+	for _, id := range ids {
+		if id <= 0 {
+			result = errors.Join(result, errors.New("object ID must be positive"))
+			continue
+		}
+		if err := service.abandonVerified(ctx, id); err != nil {
+			result = errors.Join(result, err)
+		}
+	}
+	return result
+}
+
+func (service *Service) activateManyWithTx(ctx context.Context, ids []int64, apply func(*sql.Tx, []Target) error) ([]Target, error) {
+	tx, err := service.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	targets := make([]Target, 0, len(ids))
+	seenTargets := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		var target Target
+		var state string
+		if err := tx.QueryRowContext(ctx, `SELECT object_kind,book_id,owner_id,state FROM novel_objects WHERE id=$1 FOR UPDATE`, id).
+			Scan(&target.Kind, &target.BookID, &target.OwnerID, &state); err != nil {
+			return targets, fmt.Errorf("load object for batch activation: %w", err)
+		}
+		if state != StateVerified {
+			return targets, errors.New("only verified objects can be batch activated")
+		}
+		key := fmt.Sprintf("%s:%d:%d", target.Kind, target.BookID, target.OwnerID)
+		if _, exists := seenTargets[key]; exists {
+			return targets, errors.New("batch activation contains duplicate targets")
+		}
+		seenTargets[key] = struct{}{}
+		targets = append(targets, target)
+	}
+	for index, target := range targets {
+		lockKey := fmt.Sprintf("%s:%d:%d", target.Kind, target.BookID, target.OwnerID)
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+			return targets, fmt.Errorf("lock batch object target: %w", err)
+		}
+		var oldID sql.NullInt64
+		if err := tx.QueryRowContext(ctx, `SELECT object_id FROM novel_object_references
+			WHERE object_kind=$1 AND book_id=$2 AND owner_id=$3 FOR UPDATE`, target.Kind, target.BookID, target.OwnerID).Scan(&oldID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return targets, fmt.Errorf("lock batch object reference: %w", err)
+		}
+		id := ids[index]
+		if _, err := tx.ExecContext(ctx, `INSERT INTO novel_object_references (object_kind,book_id,owner_id,object_id)
+			VALUES ($1,$2,$3,$4) ON CONFLICT (object_kind,book_id,owner_id)
+			DO UPDATE SET object_id=EXCLUDED.object_id,updated_at=now()`, target.Kind, target.BookID, target.OwnerID, id); err != nil {
+			return targets, fmt.Errorf("switch batch object reference: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE novel_objects SET state='active',activated_at=now() WHERE id=$1`, id); err != nil {
+			return targets, fmt.Errorf("activate batch object: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO novel_object_events (object_id,event_type) VALUES ($1,'activated')`, id); err != nil {
+			return targets, fmt.Errorf("record batch object activation: %w", err)
+		}
+		if oldID.Valid && oldID.Int64 != id {
+			if _, err := tx.ExecContext(ctx, `UPDATE novel_objects SET state='orphaned',orphaned_at=now()
+				WHERE id=$1 AND state='active'`, oldID.Int64); err != nil {
+				return targets, fmt.Errorf("orphan previous batch object: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO novel_object_events (object_id,event_type) VALUES ($1,'orphaned')`, oldID.Int64); err != nil {
+				return targets, fmt.Errorf("record previous batch object orphan: %w", err)
+			}
+		}
+	}
+	if apply != nil {
+		if err := apply(tx, targets); err != nil {
+			return targets, fmt.Errorf("apply batch object activation business change: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return targets, fmt.Errorf("commit batch object activation: %w", err)
+	}
+	return targets, nil
 }
 
 func (service *Service) activateWithTx(ctx context.Context, id int64, apply func(*sql.Tx, Target) error) error {
