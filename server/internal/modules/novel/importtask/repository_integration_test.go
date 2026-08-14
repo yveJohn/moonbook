@@ -25,6 +25,7 @@ func TestImportTaskQueueAndRetryLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM platform_job_attempts WHERE job_id IN (SELECT id FROM platform_jobs WHERE module='novel' AND job_type='forum_import' AND payload->>'candidateId'=$1)`, candidateID)
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM platform_jobs WHERE module='novel' AND job_type='forum_import' AND payload->>'candidateId'=$1`, candidateID)
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM novel_crawl_import_task WHERE candidate_id=$1`, candidateID)
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM novel_crawl_thread_candidate WHERE id=$1`, candidateID)
