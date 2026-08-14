@@ -11,6 +11,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/fetchlog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/importtask"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/txtimport"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobs"
 	"go.uber.org/zap"
 )
@@ -49,6 +50,15 @@ func StartImportWorker() error {
 		Lease:        10 * time.Minute,
 		PollInterval: time.Second,
 	}
+	txtWorker := &txtimport.Worker{
+		DB:           db,
+		Jobs:         jobs.NewRepository(db),
+		Store:        txtimport.MinIOFileStore{Blobs: blobs},
+		Writer:       importtask.ChaptersWriter{Service: chapters.NewService(db, objectstore.NewService(db, blobs))},
+		WorkerID:     "novel-txt-import-" + global.GVA_CONFIG.App.Node,
+		Lease:        10 * time.Minute,
+		PollInterval: time.Second,
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	importWorker.Lock()
@@ -56,9 +66,21 @@ func StartImportWorker() error {
 	importWorker.Unlock()
 	go func() {
 		defer close(done)
-		if err := worker.Run(ctx); err != nil {
-			zap.L().Error("小说导入任务停止", zap.Error(err))
-		}
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if err := worker.Run(ctx); err != nil {
+				zap.L().Error("论坛导入任务停止", zap.Error(err))
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if err := txtWorker.Run(ctx); err != nil {
+				zap.L().Error("TXT导入任务停止", zap.Error(err))
+			}
+		}()
+		wg.Wait()
 	}()
 	return nil
 }

@@ -18,6 +18,10 @@ func (w ChaptersWriter) Import(ctx context.Context, task Task, parsed []ParsedCh
 		return 0, errors.New("target book is required for chapter import")
 	}
 	imported := 0
+	sourceType := "forum_crawl"
+	if task.ImportMode == "txt" {
+		sourceType = "txt_import"
+	}
 	for i, item := range parsed {
 		title := item.Title
 		if title == "" {
@@ -35,7 +39,7 @@ func (w ChaptersWriter) Import(ctx context.Context, task Task, parsed []ParsedCh
 		if exists {
 			continue
 		}
-		if _, err = w.Service.Create(ctx, chapters.Input{BookID: bookID, ChapterNo: &no, ChapterName: title, ChapterStatus: "enabled", AICleanStatus: "pending", SourceType: "forum_crawl", Content: &content}); err != nil {
+		if _, err = w.Service.Create(ctx, chapters.Input{BookID: bookID, ChapterNo: &no, ChapterName: title, ChapterStatus: "enabled", AICleanStatus: "pending", SourceType: sourceType, Content: &content}); err != nil {
 			return imported, err
 		}
 		imported++

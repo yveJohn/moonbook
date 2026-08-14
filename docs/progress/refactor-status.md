@@ -11,7 +11,7 @@
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
 | M3 读者域与零修改兼容 | 实施中 | Reader/Commerce 实现、迁移 stage 和隔离 PostgreSQL/Redis/MinIO 真实集成测试已完成；冻结接口契约快照、SSR/浏览器旅程和 8GB 副本演练仍待完成 |
 | M4 交易、支付与运营 | 实施中 | 钱包、充值、签到、购买、支付回调、财务核对、充值档位/自定义充值设置/支付渠道/渠道连通性检查/签到规则/钱包人工调账/充值订单人工补单/主动同步/邀请奖励/会员发放已实现；迁移演练和综合退出审计仍待完成 |
-| M5 内容生产与长任务 | 实施中 | 论坛来源、板块、候选、导入任务和抓取日志已完成，迁移版本 `00041`；Worker 长循环已接入，TXT、AI、分页抓取和全量恢复演练仍待完成 |
+| M5 内容生产与长任务 | 实施中 | 论坛来源、板块、候选、导入任务、抓取日志和 TXT 上传/导入队列已完成，迁移版本 `00042`；预览/失败文件修复、AI、分页抓取和全量恢复演练仍待完成 |
 | M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；新增 `moonbook-legacy-migrate all` 全量编排入口，真实 8GB 副本演练和完整差异报告仍待完成 |
 | M7 生产切换就绪验收 | 未开始 | - |
 
@@ -185,3 +185,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 新增论坛导入任务管理 API 和页面（`GET/POST /novel/crawl/importTasks`、`GET /novel/crawl/importTasks/:id`、`POST /novel/crawl/importTasks/:id/retry`、`POST /novel/crawl/importTasks/:id/cancel`），迁移 `00039` 建立任务快照、质量统计、状态/尝试次数约束及 `platform_jobs` 队列关联；创建任务会锁定候选并写入持久化队列，支持取消和失败/取消后重试，真实 PostgreSQL 集成测试覆盖队列入库与状态联动。实际抓取执行器、租约消费和抓取日志页面仍待后续切片。
 - 新增抓取日志查询 API 和页面（`GET /novel/crawl/fetchLogs`、`GET /novel/crawl/fetchLogs/:id`），迁移 `00040` 建立请求/解析/导入阶段日志事实表、状态约束和任务索引；导入 worker 核心支持通过 `platform_jobs` claim/lease 执行、成功/失败任务状态联动及日志写入。新增受控 `HTTPExecutor`，限制 HTTP/HTTPS URL、超时、User-Agent、响应体大小和可重试状态码；新增论坛章节标题/正文解析器和 `ChaptersWriter`，复用章节服务的 MinIO 校验上传、对象激活和 PostgreSQL 写入，并在写入前按书籍/章节序号跳过已存在章节以支持幂等重跑。HTTP/解析本地 `httptest` 替身和真实 PostgreSQL + MinIO writer 集成测试已通过，覆盖首次写入、对象激活和重复执行不新增章节；完整 worker 长循环和论坛分页抓取仍待执行器接入测试环境。
 - 导入 Worker 已接入应用生命周期：启动时构造受控 HTTP 执行器、MinIO 章节写入器和持久化 Job Repository，持续 claim `forum_import` 任务；执行期间按租约续期，轮询前恢复过期租约，优雅停止和配置重载均会等待 Worker 退出。真实隔离 PostgreSQL 集成测试已验证持久化任务从 pending 到 succeeded、候选同步为 imported、Job 状态联动和执行器重复安全；章节解析器现支持 UTF-8 BOM、常见中英文 TXT 章节标题、段落和无标题单章回退，完整 TXT 文件上传/任务入口、论坛多页抓取、AI 任务和全量重启演练仍待完成。
+- 新增 `novel_txt_import_task`（迁移 `00042`）、`/novel/txtImports` 管理 API/页面和独立 `txt_import` 持久化 Worker；上传先写入 MinIO 并校验字节数/SHA-256，再建立 PostgreSQL 任务和平台队列，Worker 重启可从租约恢复并使用 `txt_import` 章节来源写入目标书籍。模块单元测试和迁移嵌入清单测试通过；TXT 预览、失败文件修复、AI 任务、论坛多页抓取和全量重启演练仍待完成。
