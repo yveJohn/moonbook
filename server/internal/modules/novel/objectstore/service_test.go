@@ -13,6 +13,10 @@ func TestNormalizeTargetAndObjectKey(t *testing.T) {
 	if chapter.Extension != "txt" || objectKey(chapter, 7) != "chapters/42/42/v7.txt" {
 		t.Fatalf("chapter target = %+v key=%s", chapter, objectKey(chapter, 7))
 	}
+	clean, err := normalizeTarget(Target{Kind: KindChapterClean, BookID: 42, OwnerID: 99})
+	if err != nil || clean.Extension != "txt" || objectKey(clean, 2) != "chapter-clean/42/99/v2.txt" {
+		t.Fatalf("clean target = %+v key=%s err=%v", clean, objectKey(clean, 2), err)
+	}
 	cover, err := normalizeTarget(Target{Kind: KindBookCover, BookID: 42, OwnerID: 42, Extension: ".WEBP"})
 	if err != nil {
 		t.Fatal(err)

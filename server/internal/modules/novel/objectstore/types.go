@@ -10,6 +10,7 @@ var ErrActiveObjectNotFound = errors.New("active object not found")
 
 const (
 	KindChapterContent = "chapter_content"
+	KindChapterClean   = "chapter_clean"
 	KindBookCover      = "book_cover"
 
 	StateUploading = "uploading"

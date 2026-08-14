@@ -54,6 +54,7 @@
   "/src/view/novel/authors/index.vue": "NovelAuthors",
   "/src/view/novel/bookMerges/index.vue": "NovelBookMerges",
   "/src/view/novel/books/index.vue": "NovelBooks",
+  "/src/view/novel/chapterClean/index.vue": "NovelChapterClean",
   "/src/view/novel/chapters/index.vue": "NovelChapters",
   "/src/view/novel/crawlBoards/index.vue": "NovelCrawlBoards",
   "/src/view/novel/crawlCandidates/index.vue": "NovelCrawlCandidates",

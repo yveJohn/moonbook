@@ -3,10 +3,13 @@ package initialize
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/aiconfig"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapterclean"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/fetchlog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/importtask"
@@ -59,6 +62,11 @@ func StartImportWorker() error {
 		Lease:        10 * time.Minute,
 		PollInterval: time.Second,
 	}
+	cleanWorker := &chapterclean.Worker{
+		DB: db, Jobs: jobs.NewRepository(db), AI: aiconfig.NewService(db, os.LookupEnv),
+		Objects: objectstore.NewService(db, blobs), WorkerID: "novel-chapter-clean-" + global.GVA_CONFIG.App.Node,
+		Lease: 10 * time.Minute, PollInterval: time.Second,
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	importWorker.Lock()
@@ -67,11 +75,17 @@ func StartImportWorker() error {
 	go func() {
 		defer close(done)
 		var wg sync.WaitGroup
-		wg.Add(2)
+		wg.Add(3)
 		go func() {
 			defer wg.Done()
 			if err := worker.Run(ctx); err != nil {
 				zap.L().Error("论坛导入任务停止", zap.Error(err))
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if err := cleanWorker.Run(ctx); err != nil {
+				zap.L().Error("章节清洗任务停止", zap.Error(err))
 			}
 		}()
 		go func() {

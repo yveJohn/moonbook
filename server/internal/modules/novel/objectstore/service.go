@@ -35,7 +35,7 @@ func normalizeTarget(target Target) (Target, error) {
 		return Target{}, errors.New("book and owner IDs must be positive")
 	}
 	switch target.Kind {
-	case KindChapterContent:
+	case KindChapterContent, KindChapterClean:
 		target.Extension = "txt"
 	case KindBookCover:
 		if target.OwnerID != target.BookID {
@@ -54,6 +54,9 @@ func normalizeTarget(target Target) (Target, error) {
 func objectKey(target Target, version int) string {
 	if target.Kind == KindChapterContent {
 		return fmt.Sprintf("chapters/%d/%d/v%d.txt", target.BookID, target.OwnerID, version)
+	}
+	if target.Kind == KindChapterClean {
+		return fmt.Sprintf("chapter-clean/%d/%d/v%d.txt", target.BookID, target.OwnerID, version)
 	}
 	return fmt.Sprintf("covers/%d/v%d.%s", target.BookID, version, target.Extension)
 }
@@ -497,6 +500,29 @@ func (service *Service) ReadActive(ctx context.Context, target Target) ([]byte, 
 	digest := sha256.Sum256(data)
 	if int64(len(data)) != object.ByteSize || hex.EncodeToString(digest[:]) != object.SHA256 {
 		return nil, Object{}, errors.New("active object integrity check failed")
+	}
+	return data, object, nil
+}
+
+// ReadStored reads an immutable review artifact without switching the live
+// object reference.
+func (service *Service) ReadStored(ctx context.Context, id int64) ([]byte, Object, error) {
+	var object Object
+	err := service.db.QueryRowContext(ctx, `SELECT id,object_kind,book_id,owner_id,version,object_key,sha256,byte_size,content_type,state,created_at
+		FROM novel_objects WHERE id=$1 AND state IN ('verified','active')`, id).Scan(&object.ID, &object.Target.Kind, &object.Target.BookID,
+		&object.Target.OwnerID, &object.Version, &object.Key, &object.SHA256, &object.ByteSize, &object.ContentType, &object.State, &object.CreatedAt)
+	if err != nil {
+		return nil, Object{}, err
+	}
+	body, err := service.blobs.Get(ctx, object.Key)
+	if err != nil {
+		return nil, Object{}, err
+	}
+	defer body.Close()
+	data, err := io.ReadAll(io.LimitReader(body, object.ByteSize+1))
+	digest := sha256.Sum256(data)
+	if err != nil || int64(len(data)) != object.ByteSize || hex.EncodeToString(digest[:]) != object.SHA256 {
+		return nil, Object{}, errors.New("stored object integrity check failed")
 	}
 	return data, object, nil
 }
