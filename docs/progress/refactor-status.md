@@ -133,10 +133,15 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 已确认 M3 方案 A 的模块所有权、Reader-only Token、邀请码原子消费和 Commerce 正式权益表边界。
 - 已固化五个认证路由的请求/响应、错误、Token 隔离和字符串 ID 契约：`docs/contracts/reader-auth-api.md`。
 - 已固化旧 MySQL 到 PostgreSQL 的字段映射、stage/checkpoint、核对 SQL 和 8GB 副本演练参数：`docs/migration/m3-reader-commerce.md`。
-- Reader/Commerce 代码、迁移 stage、契约测试和真实 PostgreSQL/Redis/MinIO 验收尚未完成；当前文档不构成通过证据。
+- Reader 认证已实现：BCrypt/历史 32 位 MD5 登录升级、会话摘要撤销、Redis IP+账号限流失败关闭、邀请码原子注册和邀请关系。
+- Reader 公开内容已实现：书目精选/分页/随机、分类、书籍详情、章节目录、章节正文、SEO JSON、robots 和 sitemap；公开查询过滤已发布且未软删除数据，正文读取通过 MinIO 活动对象并校验大小/SHA-256/UTF-8。
+- Commerce 访问合同已实现批量商品、定价、会员和权益读取；章节目录与正文访问使用统一访问判定和 46101-46105 兼容错误。
+- Reader 个人数据已实现：书架、点赞、阅读历史、偏好和反馈；写操作按 reader_id 隔离，点赞在 PostgreSQL 事务内锁书并重算汇总，历史写入校验书籍/章节归属和可见状态。
+- 当前代码证据提交为 `b908041`、`163664b`、`86fd095`、`b983227`、`4af0f25`、`daa3654`、`f5cd1bd`、`4976066`、`ce7de9d`、`97ba7fe`、`b195dae`。
+- Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收、全部冻结接口契约快照、SSR/浏览器关键旅程仍未完成；现有个人/公开测试主要是 Go 单元和编译验证，不能作为 M3 退出证据。
 
 下一步：
 
-1. 从冻结 `reader-ui` 和旧后端提取 M3 读者公开接口的精确请求、响应、错误与 SSR 契约。
-2. 优先接入读者分类、书目、章节和 SEO 公开接口，并保持 `reader-ui` 业务代码零修改。
-3. 再按纵向切片实现读者账号、书架、历史、偏好、点赞和反馈及其旧库迁移。
+1. 用本地专用 PostgreSQL、Redis、MinIO 启动真实 Reader API，执行 00012 迁移并补齐 SQL repository/MinIO/Redis 集成测试。
+2. 对冻结 `reader-ui` 运行全部 Reader API 契约、SSR 请求和浏览器关键旅程，逐项修正响应字段、错误和缓存语义。
+3. 完成 M3 迁移 stage 的真实 MySQL 副本演练、行数/主键/关联核对和 M3 退出审计，再进入 M4 钱包、订单和支付写流程。
