@@ -141,6 +141,25 @@ func (s *Service) Retry(ctx context.Context, id int64) (Task, error) {
 	return s.Repo.Retry(ctx, id)
 }
 
+func (s *Service) ReplaceFile(ctx context.Context, store FileStore, id int64, filename string, data []byte) (Task, error) {
+	if id <= 0 {
+		return Task{}, errors.New("invalid TXT import task id")
+	}
+	filename = strings.TrimSpace(filename)
+	if err := validateFile(filename, data); err != nil {
+		return Task{}, err
+	}
+	if store == nil {
+		return Task{}, errors.New("TXT file store is not configured")
+	}
+	hash := sha256Hex(data)
+	meta, err := store.Put(ctx, "imports/txt/"+hash+".txt", data, "text/plain; charset=utf-8")
+	if err != nil {
+		return Task{}, err
+	}
+	return s.Repo.ReplaceFile(ctx, id, filename, meta)
+}
+
 func (s *Service) Cancel(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return errors.New("invalid TXT import task id")

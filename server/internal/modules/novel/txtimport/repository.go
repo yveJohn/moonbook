@@ -70,12 +70,44 @@ func (r SQLRepository) Create(ctx context.Context, in CreateInput) (Task, error)
 }
 
 func (r SQLRepository) Retry(ctx context.Context, id int64) (Task, error) {
-	var item Task
-	err := scan(r.DB.QueryRowContext(ctx, `UPDATE novel_txt_import_task SET status='pending',quality_status='pending',quality_summary='',fail_reason='',end_time=NULL,updated_at=now() WHERE id=$1 AND status IN ('failed','cancelled') RETURNING `+returningColumns, id), &item)
+	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return Task{}, err
 	}
-	if _, err = r.DB.ExecContext(ctx, `UPDATE platform_jobs SET status='pending',available_at=now(),lease_owner=NULL,lease_expires_at=NULL,finished_at=NULL,updated_at=now() WHERE module='novel' AND job_type='txt_import' AND payload->>'txtImportTaskId'=$1`, item.ID); err != nil {
+	defer tx.Rollback()
+	var item Task
+	err = scan(tx.QueryRowContext(ctx, `UPDATE novel_txt_import_task SET status='pending',quality_status='pending',quality_summary='',fail_reason='',attempt_count=0,start_time=NULL,end_time=NULL,updated_at=now() WHERE id=$1 AND status IN ('failed','cancelled') RETURNING `+returningColumns, id), &item)
+	if err != nil {
+		return Task{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE platform_jobs SET status='pending',attempt_count=0,available_at=now(),lease_owner=NULL,lease_expires_at=NULL,finished_at=NULL,last_error_code=NULL,last_error_message=NULL,updated_at=now() WHERE module='novel' AND job_type='txt_import' AND payload->>'txtImportTaskId'=$1`, item.ID); err != nil {
+		return Task{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Task{}, err
+	}
+	return item, nil
+}
+
+func (r SQLRepository) ReplaceFile(ctx context.Context, id int64, filename string, meta ObjectMeta) (Task, error) {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Task{}, err
+	}
+	defer tx.Rollback()
+	var item Task
+	err = scan(tx.QueryRowContext(ctx, `UPDATE novel_txt_import_task SET original_filename=$2,object_key=$3,object_sha256=$4,object_byte_size=$5,status='pending',quality_status='pending',quality_summary='',total_chapter_count=0,imported_chapter_count=0,empty_chapter_count=0,duplicate_chapter_count=0,fail_reason='',attempt_count=0,start_time=NULL,end_time=NULL,updated_at=now() WHERE id=$1 AND status IN ('failed','cancelled') RETURNING `+returningColumns, id, filename, meta.Key, meta.SHA256, meta.ByteSize), &item)
+	if err != nil {
+		return Task{}, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE platform_jobs SET status='pending',attempt_count=0,available_at=now(),lease_owner=NULL,lease_expires_at=NULL,finished_at=NULL,last_error_code=NULL,last_error_message=NULL,updated_at=now() WHERE module='novel' AND job_type='txt_import' AND payload->>'txtImportTaskId'=$1`, item.ID)
+	if err != nil {
+		return Task{}, err
+	}
+	if changed, _ := result.RowsAffected(); changed != 1 {
+		return Task{}, errors.New("TXT import platform job not found")
+	}
+	if err = tx.Commit(); err != nil {
 		return Task{}, err
 	}
 	return item, nil

@@ -25,6 +25,7 @@ type Repository interface {
 	List(context.Context, string, string, int, int) ([]Task, int64, error)
 	Get(context.Context, int64) (Task, error)
 	Create(context.Context, CreateInput) (Task, error)
+	ReplaceFile(context.Context, int64, string, ObjectMeta) (Task, error)
 	Retry(context.Context, int64) (Task, error)
 	Cancel(context.Context, int64) error
 }

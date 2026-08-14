@@ -25,6 +25,7 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service, store FileStore)
 	read.GET("/:id/preview", h.preview)
 	read.GET("/:id", h.get)
 	write.POST("", h.upload)
+	write.POST("/:id/file", h.replaceFile)
 	write.POST("/:id/retry", h.retry)
 	write.POST("/:id/cancel", h.cancel)
 }
@@ -89,32 +90,55 @@ func (h *Handler) upload(c *gin.Context) {
 	}
 	bookID := c.PostForm("targetBookId")
 	operator := c.PostForm("operatorName")
-	file, err := c.FormFile("file")
-	if err != nil {
-		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "TXT 文件不能为空"))
-		return
-	}
-	if file.Size <= 0 || file.Size > MaxFileBytes {
-		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "TXT 文件大小必须在 1 字节到 16 MiB 之间"))
-		return
-	}
-	opened, err := file.Open()
+	filename, data, err := readUpload(c)
 	if err != nil {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	defer opened.Close()
-	data, err := io.ReadAll(io.LimitReader(opened, MaxFileBytes+1))
-	if err != nil || int64(len(data)) > MaxFileBytes {
-		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "TXT 文件读取失败或超过大小限制"))
-		return
-	}
-	item, err := h.service.Upload(c, h.store, bookID, file.Filename, operator, data)
+	item, err := h.service.Upload(c, h.store, bookID, filename, operator, data)
 	if err != nil {
 		apperror.WriteManagement(c, err)
 		return
 	}
 	managementresponse.OK(c, render(item), "上传成功，已排队")
+}
+
+func readUpload(c *gin.Context) (string, []byte, error) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		return "", nil, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "TXT 文件不能为空")
+	}
+	if file.Size <= 0 || file.Size > MaxFileBytes {
+		return "", nil, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "TXT 文件大小必须在 1 字节到 16 MiB 之间")
+	}
+	opened, err := file.Open()
+	if err != nil {
+		return "", nil, err
+	}
+	defer opened.Close()
+	data, err := io.ReadAll(io.LimitReader(opened, MaxFileBytes+1))
+	if err != nil || int64(len(data)) > MaxFileBytes {
+		return "", nil, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "TXT 文件读取失败或超过大小限制")
+	}
+	return file.Filename, data, nil
+}
+
+func (h *Handler) replaceFile(c *gin.Context) {
+	id, err := parseID(c.Param("id"))
+	var filename string
+	var data []byte
+	if err == nil {
+		filename, data, err = readUpload(c)
+	}
+	if err == nil {
+		item, replaceErr := h.service.ReplaceFile(c, h.store, id, filename, data)
+		if replaceErr == nil {
+			managementresponse.OK(c, render(item), "文件已替换并重新排队")
+			return
+		}
+		err = replaceErr
+	}
+	apperror.WriteManagement(c, err)
 }
 
 func (h *Handler) retry(c *gin.Context) {

@@ -17,13 +17,40 @@ type memoryBlobStore struct {
 
 type previewRepository struct{ task Task }
 
+type replacingRepository struct {
+	id       int64
+	filename string
+	meta     ObjectMeta
+}
+
 func (r previewRepository) List(context.Context, string, string, int, int) ([]Task, int64, error) {
 	return nil, 0, nil
 }
 func (r previewRepository) Get(context.Context, int64) (Task, error)          { return r.task, nil }
 func (r previewRepository) Create(context.Context, CreateInput) (Task, error) { return Task{}, nil }
-func (r previewRepository) Retry(context.Context, int64) (Task, error)        { return Task{}, nil }
-func (r previewRepository) Cancel(context.Context, int64) error               { return nil }
+func (r previewRepository) ReplaceFile(context.Context, int64, string, ObjectMeta) (Task, error) {
+	return Task{}, nil
+}
+func (r previewRepository) Retry(context.Context, int64) (Task, error) { return Task{}, nil }
+func (r previewRepository) Cancel(context.Context, int64) error        { return nil }
+
+func (r *replacingRepository) List(context.Context, string, string, int, int) ([]Task, int64, error) {
+	return nil, 0, nil
+}
+func (r *replacingRepository) Get(context.Context, int64) (Task, error) {
+	return Task{}, nil
+}
+func (r *replacingRepository) Create(context.Context, CreateInput) (Task, error) {
+	return Task{}, nil
+}
+func (r *replacingRepository) ReplaceFile(_ context.Context, id int64, filename string, meta ObjectMeta) (Task, error) {
+	r.id, r.filename, r.meta = id, filename, meta
+	return Task{ID: strconv.FormatInt(id, 10), OriginalFilename: filename, Status: "pending"}, nil
+}
+func (r *replacingRepository) Retry(context.Context, int64) (Task, error) {
+	return Task{}, nil
+}
+func (r *replacingRepository) Cancel(context.Context, int64) error { return nil }
 
 func (m *memoryBlobStore) Put(_ context.Context, key string, body io.Reader, size int64, _ string, hash string) error {
 	data, err := io.ReadAll(body)
@@ -97,5 +124,22 @@ func TestPreviewLimitsChaptersAndContent(t *testing.T) {
 	}
 	if preview.TotalChapterCount != 2 || len(preview.Chapters) != 2 || !preview.Chapters[0].Truncated || len([]rune(preview.Chapters[0].Content)) != maxPreviewRunes {
 		t.Fatalf("preview=%+v", preview)
+	}
+}
+
+func TestReplaceFileUploadsVerifiedObjectBeforeRepositoryUpdate(t *testing.T) {
+	backend := &memoryBlobStore{}
+	store := MinIOFileStore{Blobs: backend}
+	repo := &replacingRepository{}
+	service := NewService(repo)
+	item, err := service.ReplaceFile(context.Background(), store, 27, "fixed.txt", []byte("第1章\n修复正文"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.ID != "27" || item.Status != "pending" || repo.id != 27 || repo.filename != "fixed.txt" {
+		t.Fatalf("item=%+v repo=%+v", item, repo)
+	}
+	if repo.meta.Key == "" || repo.meta.SHA256 == "" || repo.meta.ByteSize == 0 || backend.key != repo.meta.Key {
+		t.Fatalf("meta=%+v backend=%+v", repo.meta, backend)
 	}
 }

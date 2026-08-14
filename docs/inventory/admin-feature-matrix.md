@@ -59,7 +59,7 @@
 | 导入任务 | `crawl/importTask` / `CrawlImportTaskController` | 创建、执行、暂停/恢复、重试、日志 | M5 | 导入任务创建、队列入库、状态/质量字段、取消和失败重试管理已实现；实际抓取执行器与日志待后续切片 |
 | 运行任务 | `CrawlRuntimeTaskController` | 调度、租约、恢复、取消 | 待补 | 基线已盘点 |
 | 抓取日志 | `crawl/fetchLog` / `CrawlFetchLogController` | 检索、错误详情、重试线索 | M5 | 抓取日志表、阶段/结果约束、任务/状态筛选、详情管理页面已实现；worker 实际网络抓取和日志写入接入待执行器切片 |
-| TXT 导入 | `novel/txtImport` / `TxtImportController` | 上传、解析、预览、导入、失败文件修复 | `novel_txt_import_task`、`/novel/txtImports`、`view/novel/txtImports` | 上传、MinIO 校验、持久化队列、章节导入和受限预览已实现；失败文件修复仍待补 |
+| TXT 导入 | `novel/txtImport` / `TxtImportController` | 上传、解析、预览、导入、失败文件修复 | `novel_txt_import_task`、`/novel/txtImports`、`view/novel/txtImports` | 上传、MinIO 校验、持久化队列、章节导入、受限预览和失败任务文件替换已实现 |
 | 书籍合并 | `novel/bookMerge` / `NovelBookMergeController` | 候选、章节映射、执行、审计 | 待补 | 基线已盘点 |
 | AI 配置与模型 | `novel/aiConfig` / `NovelAiConfigController` | 服务商、模型、启停、测试、秘密保护 | 待补 | 基线已盘点 |
 | 章节清洗 | `novel/chapterClean` / `NovelChapterCleanController` | 配置、任务、结果、采用、失败重试 | 待补 | 基线已盘点 |
