@@ -1,8 +1,18 @@
 package purchase
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
-type Order struct{ ID, ReaderID, OrderNo, OrderType, ProductID, ProductType, TargetID, BookIDSnapshot, ProductName, PriceCoin, ChapterWordCount, PricingWordUnit, PricingCoinUnit, RechargeCoinAmount, BonusCoinAmount, Status, IdempotencyKey string }
+type Order struct {
+	ID, ReaderID, OrderNo, OrderType, ProductID, ProductType, TargetID, BookIDSnapshot string
+	ProductName, PriceCoin, ChapterWordCount, PricingWordUnit, PricingCoinUnit         string
+	RechargeCoinAmount, BonusCoinAmount, Status, IdempotencyKey, OperatorID            string
+	Remark                                                                             *string
+	PaidTime                                                                           *time.Time
+	CreateTime, UpdateTime                                                             time.Time
+}
 type ChapterQuote struct {
 	ChapterID, BookID   string
 	WordCount, WordUnit int

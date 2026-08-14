@@ -42,7 +42,7 @@ func TestMembershipAndBookPurchaseAreAtomicAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Status != "paid" {
+	if m.Status != "paid" || m.PaidTime == nil || m.CreateTime.IsZero() || m.UpdateTime.IsZero() {
 		t.Fatalf("membership=%+v", m)
 	}
 	b, err := r.BuyBook(ctx, readerID, fmtID(bookID), "7")
@@ -53,7 +53,7 @@ func TestMembershipAndBookPurchaseAreAtomicAndIdempotent(t *testing.T) {
 		t.Fatalf("book debit=%+v", b)
 	}
 	repeat, err := r.BuyBook(ctx, readerID, fmtID(bookID), "7")
-	if err != nil || repeat.ID != b.ID {
+	if err != nil || repeat.ID != b.ID || repeat.PaidTime == nil || repeat.CreateTime.IsZero() || repeat.UpdateTime.IsZero() {
 		t.Fatalf("repeat=%+v err=%v", repeat, err)
 	}
 	var balance int64

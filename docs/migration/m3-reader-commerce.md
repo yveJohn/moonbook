@@ -105,6 +105,7 @@ make test-reader-integration
 - 浏览器旅程发现并修复 Reader 详情聚合兼容缺陷：`productStatus` 不再为空对象，登录免费作品恢复“登录免费”和“开始阅读”；登录态详情返回真实 `liked/inBookshelf/readingHistory`；章节列表返回同一作品商品状态；章节正文返回字符串 `prevChapterId/nextChapterId`。真实 PostgreSQL + MinIO 集成测试覆盖上述状态和两章导航。
 - `server/internal/modules/reader/me/http_contract_test.go` 已逐条覆盖书架、点赞、反馈、历史和偏好共 13 条路由的正常 JSON，固定显式 `data:null`、空数组、空分页、分页归一化，以及 `9007199254740993`/`9223372036854775807` 字符串 ID。认证 HTTP 契约同时覆盖无 Token、过期、撤销和封禁账号均返回冻结前端可识别的 HTTP 200 + 业务 `401`。
 - 钱包、流水、充值商品、报价、创建订单和查询订单共 6 条 HTTP 正常响应已完成逐字段快照；最大 `int64` ID、余额、流水金额、钻石数量和 USDT 小数金额均保持字符串，流水分页参数归一化与充值订单可空字段保持 `null`。充值真实 PostgreSQL 集成回归同步通过。
+- 签到状态/执行、邀请面板、权益、会员商品及会员/章节/整本购买共 8 条 HTTP 正常响应已完成逐字段快照，奖励、报价、扣减金额和所有业务 ID 均保持字符串。购买订单补齐旧 `ReaderOrderVo` 的 `remark/operatorId/paidTime/createTime/updateTime` 字段，日期按 `yyyy-MM-dd HH:mm:ss` 输出；真实 PostgreSQL 原子性与幂等重取路径验证时间字段完整。
 - 新增安全门控命令 `moonbook-browser-fixture`，仅在显式确认值且 PostgreSQL/MinIO 均为回环地址时允许 `seed/cleanup`。本次 fixture 使用独立 `moonbook_browser` 数据库和 `moonbook-content` Bucket，正文通过 `UploadVerified/Activate` 写入；验收后清理 2 个 MinIO 对象，并核对测试书籍、章节、对象、读者和邀请码计数均为 0。
 - 浏览器栈重建后 readiness 检出数据库从迁移 41 落后到 53，已通过 Compose `migrate` 服务前向应用 12 个版本；随后 `/health/ready` 的 migrations、MinIO、PostgreSQL、Redis 全部恢复 `ok`。该动作只作用于隔离 `moonbook_browser` 卷。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。
