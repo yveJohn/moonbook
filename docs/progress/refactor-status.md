@@ -153,3 +153,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 已新增 `commerce/wallet` 仓储合同并接入 Reader HTTP 的 `/reader/me/wallet`、`/reader/me/wallet/ledgers`；余额和金额字段以字符串输出，充值、订单、签到及支付回调将在后续 M4 纵向切片实现。
 - 前向迁移 `00014_reader_recharge_foundation.sql` 建立充值产品、充值规则、支付渠道、充值订单和支付回调日志事实表；新增充值目录、精确报价、创建订单和查询订单兼容接口。订单创建要求启用本地/外部支付渠道，暂未接入真实 EPUSDT 回调验签和钱包入账。
 - 前向迁移 `00015_reader_checkin_foundation.sql` 建立签到奖励规则和每日签到记录；签到使用 PostgreSQL advisory lock、幂等键，并在同一事务写入奖励记录和 bonus 钱包流水；已接入 `/reader/me/checkin/status` 与 `/reader/me/checkin`。
+- 前向迁移 `00016_reader_purchase_orders.sql` 建立读者购买订单事实和权益 ID 序列；新增会员、章节、整书购买服务，订单、钱包扣款和会员/作品权益在同一事务内提交，并接入 `/reader/me/orders/membership`、`/reader/me/orders/chapter`、`/reader/me/orders/book`。支付充值回调仍待实现。
