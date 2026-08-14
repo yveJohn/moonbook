@@ -20,7 +20,7 @@
         <el-table-column label="收费模式" width="130"><template #default="scope">{{ labelOf(chargeOptions, scope.row.chargeMode) }}</template></el-table-column>
         <el-table-column label="字数" prop="wordCount" width="100" align="right" />
         <el-table-column label="更新时间" min-width="180"><template #default="scope">{{ formatTime(scope.row.updatedAt) }}</template></el-table-column>
-        <el-table-column label="操作" width="150" fixed="right"><template #default="scope"><el-tooltip content="编辑"><el-button link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(scope.row.id)" /></el-tooltip><el-tooltip content="删除"><el-button link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(scope.row)" /></el-tooltip></template></el-table-column>
+        <el-table-column label="操作" width="190" fixed="right"><template #default="scope"><el-tooltip content="章节"><el-button link type="primary" :icon="Document" aria-label="章节" @click="openChapters(scope.row.id)" /></el-tooltip><el-tooltip content="编辑"><el-button link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(scope.row.id)" /></el-tooltip><el-tooltip content="删除"><el-button link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(scope.row)" /></el-tooltip></template></el-table-column>
       </el-table>
       <div class="gva-pagination"><el-pagination v-model:current-page="query.page" v-model:page-size="query.pageSize" :page-sizes="[10,30,50,100]" :total="total" layout="total, sizes, prev, pager, next, jumper" @current-change="loadData" @size-change="resetAndLoad" /></div>
     </div>
@@ -62,11 +62,13 @@
 
 <script setup>
   import { onBeforeUnmount, reactive, ref } from 'vue'
-  import { Delete, Edit, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
+  import { useRouter } from 'vue-router'
+  import { Delete, Document, Edit, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { createNovelBook, deleteNovelBook, getNovelBook, getNovelBookCover, listNovelBooks, updateNovelBook, uploadNovelBookCover } from '@/api/novel/books'
   import { listNovelAuthors, listNovelCategories } from '@/api/novel/metadata'
   defineOptions({ name: 'NovelBooks' })
+  const router=useRouter()
   const bookStatusOptions=[{label:'连载中',value:'serializing'},{label:'已完结',value:'completed'}]
   const publishOptions=[{label:'入库',value:'draft'},{label:'上架',value:'published'},{label:'弃用',value:'deprecated'}]
   const sourceOptions=[{label:'手工创建',value:'manual'},{label:'历史迁移',value:'legacy'},{label:'TXT 导入',value:'txt_import'},{label:'论坛采集',value:'forum_crawl'}]
@@ -89,6 +91,7 @@
   const clearCover=()=>{coverFile.value=null;releaseCoverPreview()}
   const submit=async()=>{const valid=await formRef.value?.validate().catch(()=>false);if(!valid)return;submitting.value=true;try{const payload={...form,workDirection:form.workDirection||null,fixedPriceCoin:form.chargeMode==='fixed_price'?form.fixedPriceCoin:null};const res=editingId.value?await updateNovelBook(editingId.value,payload):await createNovelBook(payload);if(res.code!==0)return;const bookId=res.data.id;if(coverFile.value){const coverRes=await uploadNovelBookCover(bookId,coverFile.value);if(coverRes.code!==0){ElMessage.warning('书籍已保存，封面上传失败，可重新编辑后重试');return}}ElMessage.success(editingId.value?'书籍已更新':'书籍已创建');drawerVisible.value=false;loadData()}finally{submitting.value=false}}
   const removeRow=async(row)=>{await ElMessageBox.confirm(`确定删除书籍“${row.bookName}”吗？`,'删除书籍',{type:'warning'});const res=await deleteNovelBook(row.id);if(res.code===0){ElMessage.success('书籍已删除');loadData()}}
+  const openChapters=(bookId)=>router.push({name:'NovelChapters',query:{bookId}})
   const labelOf=(options,value)=>options.find(i=>i.value===value)?.label||value;const publishType=(value)=>({draft:'info',published:'success',deprecated:'warning'})[value]||'info';const formatTime=(value)=>value?new Date(value).toLocaleString():'-'
   loadData()
   onBeforeUnmount(releaseCoverPreview)

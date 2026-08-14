@@ -3,6 +3,7 @@ package objectstore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -56,6 +57,7 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 	}
 	service := NewService(db, store)
 	suffix := time.Now().UnixNano()
+	gcJobKey := ""
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -92,14 +94,36 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 				t.Errorf("clean test object rows: %v", err)
 			}
 		}
+		if gcJobKey != "" {
+			_, _ = db.ExecContext(cleanupCtx, `DELETE FROM platform_job_attempts WHERE job_id IN (SELECT id FROM platform_jobs WHERE module=$1 AND job_type=$2 AND idempotency_key=$3)`, GCJobModule, GCJobType, gcJobKey)
+			_, _ = db.ExecContext(cleanupCtx, `DELETE FROM platform_jobs WHERE module=$1 AND job_type=$2 AND idempotency_key=$3`, GCJobModule, GCJobType, gcJobKey)
+		}
 	}()
 	target := Target{Kind: KindChapterContent, BookID: suffix, OwnerID: suffix}
+
+	rejected, err := service.UploadVerified(ctx, target, []byte("激活事务拒绝的正文"), "text/plain; charset=utf-8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Version != 1 || rejected.Key != fmt.Sprintf("chapters/%d/%d/v1.txt", suffix, suffix) {
+		t.Fatalf("rejected object = %+v", rejected)
+	}
+	if err := service.ActivateWithTx(ctx, rejected.ID, func(*sql.Tx, Target) error {
+		return errors.New("reject business transaction")
+	}); err == nil {
+		t.Fatal("activation callback failure should be returned")
+	}
+	var rejectedState string
+	if err := db.QueryRowContext(ctx, `SELECT state FROM novel_objects WHERE id=$1`, rejected.ID).Scan(&rejectedState); err != nil || rejectedState != StateOrphaned {
+		t.Fatalf("rejected object state=%q err=%v", rejectedState, err)
+	}
+	assertNoReference(t, ctx, db, rejected.ID)
 
 	first, err := service.UploadVerified(ctx, target, []byte("第一版正文\n"), "text/plain; charset=utf-8")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Version != 1 || first.State != StateVerified || first.Key != fmt.Sprintf("chapters/%d/%d/v1.txt", suffix, suffix) {
+	if first.Version != 2 || first.State != StateVerified || first.Key != fmt.Sprintf("chapters/%d/%d/v2.txt", suffix, suffix) {
 		t.Fatalf("first object = %+v", first)
 	}
 	assertNoReference(t, ctx, db, first.ID)
@@ -115,7 +139,7 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Version != 2 || second.Key == first.Key {
+	if second.Version != 3 || second.Key != fmt.Sprintf("chapters/%d/%d/v3.txt", suffix, suffix) {
 		t.Fatalf("second object = %+v", second)
 	}
 	data, active, err = service.ReadActive(ctx, target)
@@ -232,26 +256,39 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT state FROM novel_objects WHERE id=$1`, coverOne.ID).Scan(&firstState); err != nil || firstState != StateOrphaned {
 		t.Fatalf("previous cover state=%q err=%v", firstState, err)
 	}
+	deactivated := false
+	if err := service.DeactivateWithTx(ctx, coverTarget, func(*sql.Tx, Target) error {
+		deactivated = true
+		return nil
+	}); err != nil || !deactivated {
+		t.Fatalf("deactivate callback=%v err=%v", deactivated, err)
+	}
+	if _, _, err := service.ReadActive(ctx, coverTarget); !errors.Is(err, ErrActiveObjectNotFound) {
+		t.Fatalf("deactivated cover is still readable: %v", err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT state FROM novel_objects WHERE id=$1`, coverTwo.ID).Scan(&firstState); err != nil || firstState != StateOrphaned {
+		t.Fatalf("deactivated cover state=%q err=%v", firstState, err)
+	}
 
 	fingerprintTarget := Target{Kind: KindBookCover, BookID: suffix + 3, OwnerID: suffix + 3, Extension: "png"}
 	fingerprint := strings.Repeat("a", 64)
 	start := make(chan struct{})
 	results := make(chan Object, 2)
-	errors := make(chan error, 2)
+	concurrentErrors := make(chan error, 2)
 	for range 2 {
 		go func() {
 			<-start
 			object, err := service.UploadVerifiedWithOptions(ctx, fingerprintTarget, []byte("legacy-concurrent-cover"), "image/png", UploadOptions{Source: "legacy", SourceFingerprint: fingerprint})
 			results <- object
-			errors <- err
+			concurrentErrors <- err
 		}()
 	}
 	close(start)
 	firstConcurrent, secondConcurrent := <-results, <-results
-	if err := <-errors; err != nil {
+	if err := <-concurrentErrors; err != nil {
 		t.Fatal(err)
 	}
-	if err := <-errors; err != nil {
+	if err := <-concurrentErrors; err != nil {
 		t.Fatal(err)
 	}
 	if firstConcurrent.ID != secondConcurrent.ID {
@@ -260,6 +297,39 @@ func TestVersionedObjectsWithPostgresAndMinIO(t *testing.T) {
 	var fingerprintCount int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM novel_objects WHERE book_id=$1 AND source_fingerprint=$2`, fingerprintTarget.BookID, fingerprint).Scan(&fingerprintCount); err != nil || fingerprintCount != 1 {
 		t.Fatalf("fingerprint object count=%d err=%v", fingerprintCount, err)
+	}
+
+	gcTarget := Target{Kind: KindBookCover, BookID: suffix + 3, OwnerID: suffix + 3, Extension: "png"}
+	gcObject, err := service.UploadVerified(ctx, gcTarget, []byte("garbage-collect-me"), "image/png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ActivateWithTx(ctx, gcObject.ID, func(*sql.Tx, Target) error { return errors.New("force orphan") }); err == nil {
+		t.Fatal("forced orphan activation should fail")
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE novel_objects SET orphaned_at=now()-interval '48 hours' WHERE id=$1`, gcObject.ID); err != nil {
+		t.Fatal(err)
+	}
+	worker, err := NewGCWorker(db, service, GCWorkerConfig{WorkerID: fmt.Sprintf("gc-%d", suffix), Interval: time.Hour, Lease: time.Minute, GracePeriod: 24 * time.Hour, BatchSize: 500, PollInterval: time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixedNow := time.Now().UTC().Add(time.Duration(suffix%31_536_000) * time.Second).Truncate(time.Hour).Add(15 * time.Minute)
+	gcJobKey = fixedNow.Truncate(time.Hour).Format(time.RFC3339)
+	worker.now = func() time.Time { return fixedNow }
+	if err := worker.runCycle(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.runCycle(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var gcState, jobStatus string
+	var jobCount int
+	if err := db.QueryRowContext(ctx, `SELECT state FROM novel_objects WHERE id=$1`, gcObject.ID).Scan(&gcState); err != nil || gcState != StateDeleted {
+		t.Fatalf("GC object state=%q err=%v", gcState, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*),max(status) FROM platform_jobs WHERE module=$1 AND job_type=$2 AND idempotency_key=$3`, GCJobModule, GCJobType, gcJobKey).Scan(&jobCount, &jobStatus); err != nil || jobCount != 1 || jobStatus != "succeeded" {
+		t.Fatalf("GC job count=%d status=%q err=%v", jobCount, jobStatus, err)
 	}
 }
 

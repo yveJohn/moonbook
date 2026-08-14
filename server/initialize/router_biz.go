@@ -3,6 +3,7 @@ package initialize
 import (
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/books"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
@@ -30,6 +31,8 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	if err != nil {
 		panic("initialize novel object store: " + err.Error())
 	}
-	books.RegisterRoutes(privateGroup, db, objectstore.NewService(db, blobs))
+	objects := objectstore.NewService(db, blobs)
+	books.RegisterRoutes(privateGroup, db, objects)
+	chapters.RegisterRoutes(privateGroup, db, objects)
 
 }

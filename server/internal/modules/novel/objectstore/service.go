@@ -181,7 +181,7 @@ func (service *Service) findSourceObject(ctx context.Context, target Target, fin
 	var object Object
 	err := service.db.QueryRowContext(ctx, `SELECT id,version,object_key,sha256,byte_size,content_type,state,created_at
 		FROM novel_objects WHERE object_kind=$1 AND book_id=$2 AND owner_id=$3 AND source_fingerprint=$4
-		AND state IN ('verified','active','orphaned')`, target.Kind, target.BookID, target.OwnerID, fingerprint).
+		AND (state IN ('verified','active') OR (state='orphaned' AND error_code IS DISTINCT FROM 'ACTIVATION_FAILED'))`, target.Kind, target.BookID, target.OwnerID, fingerprint).
 		Scan(&object.ID, &object.Version, &object.Key, &object.SHA256, &object.ByteSize, &object.ContentType, &object.State, &object.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Object{}, false, nil
@@ -221,6 +221,23 @@ func (service *Service) markFailed(ctx context.Context, id int64, code string) e
 }
 
 func (service *Service) Activate(ctx context.Context, id int64) error {
+	return service.ActivateWithTx(ctx, id, nil)
+}
+
+// ActivateWithTx switches the object reference and applies the owning business
+// change in the same PostgreSQL transaction.
+func (service *Service) ActivateWithTx(ctx context.Context, id int64, apply func(*sql.Tx, Target) error) error {
+	err := service.activateWithTx(ctx, id, apply)
+	if err == nil {
+		return nil
+	}
+	if abandonErr := service.abandonVerified(ctx, id); abandonErr != nil {
+		return errors.Join(err, abandonErr)
+	}
+	return err
+}
+
+func (service *Service) activateWithTx(ctx context.Context, id int64, apply func(*sql.Tx, Target) error) error {
 	tx, err := service.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -264,8 +281,78 @@ func (service *Service) Activate(ctx context.Context, id int64) error {
 			return fmt.Errorf("record previous object orphan: %w", err)
 		}
 	}
+	if apply != nil {
+		if err := apply(tx, target); err != nil {
+			return fmt.Errorf("apply object activation business change: %w", err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit object activation: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) abandonVerified(ctx context.Context, id int64) error {
+	_, err := service.db.ExecContext(ctx, `WITH changed AS (
+		UPDATE novel_objects o SET state='orphaned',orphaned_at=now(),error_code='ACTIVATION_FAILED'
+		WHERE o.id=$1 AND o.state='verified'
+		AND NOT EXISTS (SELECT 1 FROM novel_object_references r WHERE r.object_id=o.id)
+		RETURNING o.id)
+		INSERT INTO novel_object_events (object_id,event_type,detail)
+		SELECT id,'orphaned',jsonb_build_object('reason','activation_failed') FROM changed`, id)
+	if err != nil {
+		return fmt.Errorf("abandon verified object after activation failure: %w", err)
+	}
+	return nil
+}
+
+// DeactivateWithTx removes the current reference, marks the object orphaned,
+// and applies the owning soft-delete change in one transaction.
+func (service *Service) DeactivateWithTx(ctx context.Context, target Target, apply func(*sql.Tx, Target) error) error {
+	clean, err := normalizeTarget(target)
+	if err != nil {
+		return err
+	}
+	tx, err := service.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	lockKey := fmt.Sprintf("%s:%d:%d", clean.Kind, clean.BookID, clean.OwnerID)
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return fmt.Errorf("lock object target for deactivation: %w", err)
+	}
+	var objectID sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT object_id FROM novel_object_references
+		WHERE object_kind=$1 AND book_id=$2 AND owner_id=$3 FOR UPDATE`, clean.Kind, clean.BookID, clean.OwnerID).Scan(&objectID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("lock object reference for deactivation: %w", err)
+	}
+	if objectID.Valid {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM novel_object_references
+			WHERE object_kind=$1 AND book_id=$2 AND owner_id=$3 AND object_id=$4`, clean.Kind, clean.BookID, clean.OwnerID, objectID.Int64); err != nil {
+			return fmt.Errorf("remove object reference: %w", err)
+		}
+		result, err := tx.ExecContext(ctx, `UPDATE novel_objects SET state='orphaned',orphaned_at=now()
+			WHERE id=$1 AND state='active'`, objectID.Int64)
+		if err != nil {
+			return fmt.Errorf("orphan deactivated object: %w", err)
+		}
+		count, _ := result.RowsAffected()
+		if count != 1 {
+			return errors.New("deactivated object is not active")
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO novel_object_events (object_id,event_type,detail)
+			VALUES ($1,'orphaned',jsonb_build_object('reason','business_deleted'))`, objectID.Int64); err != nil {
+			return fmt.Errorf("record deactivated object orphan: %w", err)
+		}
+	}
+	if apply != nil {
+		if err := apply(tx, clean); err != nil {
+			return fmt.Errorf("apply object deactivation business change: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit object deactivation: %w", err)
 	}
 	return nil
 }

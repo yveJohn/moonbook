@@ -13,6 +13,12 @@ import (
 )
 
 func RunServer() {
+	if global.GVA_DB != nil {
+		if err := initialize.StartObjectGC(); err != nil {
+			zap.L().Fatal("启动对象回收任务失败", zap.Error(err))
+		}
+		defer initialize.StopObjectGC()
+	}
 	if global.GVA_CONFIG.System.UseRedis {
 		initialize.Redis()
 		if global.GVA_CONFIG.System.UseMultipoint {

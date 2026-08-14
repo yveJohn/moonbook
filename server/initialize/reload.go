@@ -14,6 +14,7 @@ func Reload() error {
 		logger.Bg().Mod("system").Err(err).Error("重新读取配置文件失败!")
 		return err
 	}
+	StopObjectGC()
 
 	// 重新初始化数据库连接
 	if global.GVA_DB != nil {
@@ -43,6 +44,9 @@ func Reload() error {
 			return err
 		}
 		logger.Bg().Mod("jobs").Field("recovered", recovered).Info("持久化任务恢复完成")
+		if err := StartObjectGC(); err != nil {
+			return err
+		}
 	}
 
 	// 重新初始化定时任务
