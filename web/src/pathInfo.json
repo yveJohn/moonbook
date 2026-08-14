@@ -60,6 +60,7 @@
   "/src/view/reader/payment/channels/index.vue": "ReaderPaymentChannels",
   "/src/view/reader/payment/orders/index.vue": "ReaderRechargeOrders",
   "/src/view/reader/payment/rechargeProducts/index.vue": "ReaderRechargeProducts",
+  "/src/view/reader/users/index.vue": "ReaderUsers",
   "/src/view/reader/wallet/index.vue": "ReaderWallet",
   "/src/view/routerHolder.vue": "RouterHolder",
   "/src/view/superAdmin/api/api.vue": "Api",

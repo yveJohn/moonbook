@@ -17,6 +17,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/adminuser"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	readerme "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/me"
@@ -55,6 +56,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))
 	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db}))
 	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}))
+	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}))
 	commerce := catalog.NewService(catalog.SQLRepository{DB: db})
 	minio := global.GVA_CONFIG.Minio
 	blobs, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: minio.Endpoint, AccessKey: minio.AccessKeyId, SecretKey: minio.AccessKeySecret, Bucket: minio.BucketName, UseSSL: minio.UseSSL})

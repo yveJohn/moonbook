@@ -1,0 +1,67 @@
+package adminuser
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+)
+
+type SQLRepository struct{ DB *sql.DB }
+
+const userSelect = `SELECT id::text,username,nickname,status,password_algorithm,COALESCE(last_login_at::text,''),created_at::text,updated_at::text FROM reader_accounts`
+
+func scan(row interface{ Scan(...any) error }, u *User) error {
+	return row.Scan(&u.ID, &u.Username, &u.Nickname, &u.Status, &u.PasswordAlgorithm, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt)
+}
+func (r SQLRepository) List(ctx context.Context, k, status string, p, n int) ([]User, int64, error) {
+	where := ` WHERE ($1='' OR username ILIKE '%'||$1||'%' OR nickname ILIKE '%'||$1||'%') AND ($2='' OR status=$2)`
+	var total int64
+	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM reader_accounts`+where, k, status).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.DB.QueryContext(ctx, userSelect+where+` ORDER BY id DESC LIMIT $3 OFFSET $4`, k, status, n, (p-1)*n)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]User, 0)
+	for rows.Next() {
+		var u User
+		if err := scan(rows, &u); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, u)
+	}
+	return items, total, rows.Err()
+}
+func (r SQLRepository) Get(ctx context.Context, id int64) (User, error) {
+	var u User
+	err := scan(r.DB.QueryRowContext(ctx, userSelect+` WHERE id=$1`, id), &u)
+	return u, err
+}
+func (r SQLRepository) SetStatus(ctx context.Context, id int64, status string) (User, error) {
+	if status != "enabled" && status != "disabled" {
+		return User{}, errors.New("invalid reader status")
+	}
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, err
+	}
+	defer tx.Rollback()
+	var u User
+	if err = scan(tx.QueryRowContext(ctx, userSelect+` WHERE id=$1 FOR UPDATE`, id), &u); err != nil {
+		return User{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE reader_accounts SET status=$1,updated_at=now() WHERE id=$2`, status, id); err != nil {
+		return User{}, err
+	}
+	if status != "enabled" {
+		if _, err = tx.ExecContext(ctx, `UPDATE reader_sessions SET revoked_at=now() WHERE reader_id=$1 AND revoked_at IS NULL`, id); err != nil {
+			return User{}, err
+		}
+	}
+	if err = scan(tx.QueryRowContext(ctx, userSelect+` WHERE id=$1`, id), &u); err != nil {
+		return User{}, err
+	}
+	return u, tx.Commit()
+}
