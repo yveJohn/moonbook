@@ -9,7 +9,7 @@
 | M0 冻结、基线与盘点 | 已完成 | GVA 与旧仓库基线已锁定；reader-ui 原样迁入并通过 536 个基线测试；功能、API、数据和容量盘点范围已建立 |
 | M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
-| M3 读者域与零修改兼容 | 未开始 | - |
+| M3 读者域与零修改兼容 | 实施中 | Task 7 文档已固化；Reader/Commerce 实现与真实依赖验收待完成，见 `docs/contracts/reader-auth-api.md`、`docs/migration/m3-reader-commerce.md` |
 | M4 交易、支付与运营 | 未开始 | - |
 | M5 内容生产与长任务 | 未开始 | - |
 | M6 全量迁移与校验 | 未开始 | - |
@@ -127,6 +127,13 @@ M2 第四条“读者 SEO 管理与旧配置迁移”纵向切片已完成：
 - 隔离 API、Vite、浏览器、MySQL 容器、验证数据库和临时秘密均已清理；默认 Moonbook PostgreSQL、Redis、MinIO 保持健康运行。
 
 M2 已满足退出条件：小说管理闭环、对象存储完整性、管理页面、权限、审计、旧数据迁移和整体回归均通过。公开 SEO、robots、sitemap 以及读者分类、书目、章节兼容接口按批准边界进入 M3。
+
+## M3 当前进度
+
+- 已确认 M3 方案 A 的模块所有权、Reader-only Token、邀请码原子消费和 Commerce 正式权益表边界。
+- 已固化五个认证路由的请求/响应、错误、Token 隔离和字符串 ID 契约：`docs/contracts/reader-auth-api.md`。
+- 已固化旧 MySQL 到 PostgreSQL 的字段映射、stage/checkpoint、核对 SQL 和 8GB 副本演练参数：`docs/migration/m3-reader-commerce.md`。
+- Reader/Commerce 代码、迁移 stage、契约测试和真实 PostgreSQL/Redis/MinIO 验收尚未完成；当前文档不构成通过证据。
 
 下一步：
 
