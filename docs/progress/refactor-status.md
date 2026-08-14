@@ -177,4 +177,5 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 
 ## M5 当前进度
 
-- 新增论坛来源管理 API 和页面（`GET/POST/PUT/DELETE /novel/crawl/sources`），迁移 `00036` 同时建立来源/板块事实表和 GVA 菜单权限；来源 URL、响应编码、请求间隔和排序在服务端校验，Cookie 只返回是否配置，编辑留空不会清除既有 Cookie，真实 PostgreSQL 集成测试覆盖 CRUD、筛选和敏感字段脱敏。板块抓取、候选和导入任务将在后续切片实现。
+- 新增论坛来源管理 API 和页面（`GET/POST/PUT/DELETE /novel/crawl/sources`），迁移 `00036` 同时建立来源/板块事实表和 GVA 菜单权限；来源 URL、响应编码、请求间隔和排序在服务端校验，Cookie 只返回是否配置，编辑留空不会清除既有 Cookie，真实 PostgreSQL 集成测试覆盖 CRUD、筛选和敏感字段脱敏。
+- 新增论坛板块管理 API 和页面（`GET/POST/PUT/DELETE /novel/crawl/boards`），迁移 `00037` 注册菜单、API 和超级管理员权限；板块来源关联、来源启停约束、同来源名称唯一、URL 域名、分页模板和自动跟进参数在服务端校验，Long ID 全程字符串化。导入任务引用保护将在任务模块落地后补齐。
