@@ -210,11 +210,11 @@ func (s *Service) Chapter(ctx context.Context, id int64, readerID *int64) (Chapt
 }
 func accessError(reason string) error {
 	code := 46102
-	msg := "需要会员权限"
+	msg := "仅限会员阅读"
 	switch reason {
 	case "login_required":
 		code = 46101
-		msg = "请先登录"
+		msg = "请先登录后阅读"
 	case "book_purchase_required":
 		code = 46103
 		msg = "请先购买作品"
@@ -223,7 +223,7 @@ func accessError(reason string) error {
 		msg = "请先购买章节"
 	case "unsupported_mode":
 		code = 46105
-		msg = "暂不支持该收费模式"
+		msg = "作品收费模式不可用"
 	}
 	return apperror.New(apperror.CodeForbidden, code, msg)
 }
