@@ -17,3 +17,8 @@ type Repository interface {
 	List(context.Context, string, string, int, int) ([]Order, int64, error)
 	Get(context.Context, int64) (Order, error)
 }
+
+type CallbackRepository interface {
+	ListCallbacks(context.Context, string, string, int, int) ([]CallbackLog, int64, error)
+	GetCallback(context.Context, int64) (CallbackLog, error)
+}
