@@ -20,8 +20,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books|novel-chapters]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -64,7 +64,7 @@ func run() int {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stages := []legacymigrate.Stage{legacymigrate.PreflightStage{}}
-	if flag.Arg(0) == "novel-metadata" || flag.Arg(0) == "novel-books" {
+	if flag.Arg(0) == "novel-metadata" || flag.Arg(0) == "novel-books" || flag.Arg(0) == "novel-chapters" {
 		stages = append(stages,
 			legacymigrate.NovelCategoryDictionaryStage{},
 			legacymigrate.LegacyBookCategoryStage{},
@@ -73,13 +73,16 @@ func run() int {
 			legacymigrate.LegacyAuthorTableStage{Table: "author"},
 		)
 	}
-	if flag.Arg(0) == "novel-books" {
+	if flag.Arg(0) == "novel-books" || flag.Arg(0) == "novel-chapters" {
 		objects, downloader, err := coverDependencies(target)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
 		stages = append(stages, legacymigrate.NovelBooksStage{}, legacymigrate.NovelBookSubCategoriesStage{}, legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader})
+		if flag.Arg(0) == "novel-chapters" {
+			stages = append(stages, legacymigrate.NovelChaptersStage{Objects: objects})
+		}
 	}
 	if err := runner.Run(ctx, stages...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -106,7 +109,7 @@ func coverDependencies(target *sql.DB) (*objectstore.Service, *legacymigrate.Cov
 	secretKey := strings.TrimSpace(os.Getenv("MINIO_ROOT_PASSWORD"))
 	bucket := strings.TrimSpace(os.Getenv("MINIO_BUCKET"))
 	if endpoint == "" || accessKey == "" || secretKey == "" || bucket == "" {
-		return nil, nil, fmt.Errorf("novel-books requires MOONBOOK_MINIO_ENDPOINT, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD, and MINIO_BUCKET")
+		return nil, nil, fmt.Errorf("object migration requires MOONBOOK_MINIO_ENDPOINT, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD, and MINIO_BUCKET")
 	}
 	useSSL := false
 	if raw := strings.TrimSpace(os.Getenv("MOONBOOK_MINIO_USE_SSL")); raw != "" {
