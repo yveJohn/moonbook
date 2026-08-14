@@ -46,41 +46,24 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if err != nil || taskID <= 0 {
 		return true, w.fail(ctx, job, 0, errors.New("invalid chapter summary task ID"))
 	}
-	workCtx, cancel := context.WithCancel(ctx)
-	renewDone := make(chan error, 1)
-	go func() {
-		interval := w.Lease / 3
-		if interval < time.Second {
-			interval = time.Second
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-workCtx.Done():
-				renewDone <- nil
-				return
-			case <-ticker.C:
-				if renewErr := w.Jobs.Renew(workCtx, job.ID, w.WorkerID, w.Lease); renewErr != nil {
-					renewDone <- renewErr
-					cancel()
-					return
-				}
-			}
-		}
-	}()
-	err = w.execute(workCtx, taskID)
-	cancel()
-	if renewErr := <-renewDone; renewErr != nil {
-		err = renewErr
-	}
+	heartbeat, err := w.Jobs.KeepAlive(ctx, job.ID, w.WorkerID, w.Lease)
 	if err != nil {
+		return true, err
+	}
+	defer heartbeat.Stop()
+	err = w.execute(heartbeat.Context, taskID)
+	if err != nil {
+		if renewErr := heartbeat.Stop(); renewErr != nil {
+			return true, renewErr
+		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return true, err
 		}
 		return true, w.fail(ctx, job, taskID, err)
 	}
-	return true, w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`))
+	return true, heartbeat.Finalize(func() error {
+		return w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`))
+	})
 }
 
 func (w *Worker) execute(ctx context.Context, taskID int64) error {

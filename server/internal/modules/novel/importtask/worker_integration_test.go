@@ -66,27 +66,41 @@ func TestWorkerRunOnceCompletesPersistedImportJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE platform_jobs SET available_at='2000-01-01 00:00:00+00' WHERE module='novel' AND job_type='forum_import' AND payload->>'candidateId'=$1`, candidateID); err != nil {
+	if _, err := db.ExecContext(ctx, `UPDATE platform_jobs SET available_at='1900-01-01 00:00:00+00' WHERE module='novel' AND job_type='forum_import' AND payload->>'candidateId'=$1`, candidateID); err != nil {
 		t.Fatal(err)
 	}
 	seenTask := make(chan Task, 1)
 	worker := &Worker{DB: db, Jobs: jobs.NewRepository(db), Logs: fetchlog.SQLRepository{DB: db}, Executor: integrationExecutor{task: seenTask}, WorkerID: "worker-integration", Lease: time.Minute}
+	deadJob, err := worker.Jobs.Claim(ctx, jobs.ClaimOptions{WorkerID: "worker-integration-dead", Module: "novel", Types: []string{JobType}, LeaseDuration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET lease_expires_at=now()-interval '1 second' WHERE id=$1`, deadJob.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, recoverErr := worker.Jobs.RecoverExpired(ctx); recoverErr != nil {
+		t.Fatal(recoverErr)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET available_at='1900-01-01 00:00:00+00' WHERE id=$1`, deadJob.ID); err != nil {
+		t.Fatal(err)
+	}
 	worked, err := worker.RunOnce(ctx)
 	if err != nil || !worked {
 		t.Fatalf("worked=%v err=%v", worked, err)
 	}
 	var status, candidateStatus, jobStatus string
+	var jobAttempts int
 	if err := db.QueryRowContext(ctx, `SELECT status FROM novel_crawl_import_task WHERE id=$1`, task.ID).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT status FROM novel_crawl_thread_candidate WHERE id=$1`, candidateID).Scan(&candidateStatus); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT status FROM platform_jobs WHERE module='novel' AND job_type='forum_import' AND payload->>'candidateId'=$1`, candidateID).Scan(&jobStatus); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT status,attempt_count FROM platform_jobs WHERE module='novel' AND job_type='forum_import' AND payload->>'candidateId'=$1`, candidateID).Scan(&jobStatus, &jobAttempts); err != nil {
 		t.Fatal(err)
 	}
-	if status != "succeeded" || candidateStatus != "imported" || jobStatus != "succeeded" {
-		t.Fatalf("task=%s candidate=%s job=%s", status, candidateStatus, jobStatus)
+	if status != "succeeded" || candidateStatus != "imported" || jobStatus != "succeeded" || jobAttempts != 2 {
+		t.Fatalf("task=%s candidate=%s job=%s attempts=%d", status, candidateStatus, jobStatus, jobAttempts)
 	}
 	loaded := <-seenTask
 	if loaded.requestInterval != 1234*time.Millisecond || loaded.sourceUserAgent != "Worker-Fixture/1.0" || loaded.sourceCookie != "session=worker" {

@@ -49,7 +49,7 @@ func TestConcurrentClaimAndExpiredRecoveryWithPostgres(t *testing.T) {
 	module := "concurrency-" + suffix
 	jobType := "claim"
 	for i := 0; i < 2; i++ {
-		if _, created, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: jobType, IdempotencyKey: string(rune('a' + i)), MaxAttempts: 1}); err != nil || !created {
+		if _, created, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: jobType, IdempotencyKey: string(rune('a' + i)), MaxAttempts: 1, AvailableAt: time.Now().Add(-time.Second)}); err != nil || !created {
 			t.Fatalf("enqueue %d created=%t err=%v", i, created, err)
 		}
 	}
@@ -81,7 +81,7 @@ func TestConcurrentClaimAndExpiredRecoveryWithPostgres(t *testing.T) {
 	if len(ids) != 2 {
 		t.Fatalf("concurrent workers claimed %d unique jobs, want 2", len(ids))
 	}
-	retryJob, created, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: jobType, IdempotencyKey: "retryable", MaxAttempts: 2})
+	retryJob, created, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: jobType, IdempotencyKey: "retryable", MaxAttempts: 2, AvailableAt: time.Now().Add(-time.Second)})
 	if err != nil || !created {
 		t.Fatalf("enqueue retryable created=%t err=%v", created, err)
 	}
@@ -138,6 +138,19 @@ func TestEnqueueValidatesBeforeDatabaseAccess(t *testing.T) {
 	}
 }
 
+func TestLeaseDurationsRejectSubMillisecondValues(t *testing.T) {
+	repository := NewRepository(&sql.DB{})
+	if _, err := repository.Claim(context.Background(), ClaimOptions{WorkerID: "worker", Module: "module", Types: []string{"type"}, LeaseDuration: time.Nanosecond}); err == nil {
+		t.Fatal("Claim accepted a sub-millisecond lease")
+	}
+	if err := repository.Renew(context.Background(), 1, "worker", time.Nanosecond); err == nil {
+		t.Fatal("Renew accepted a sub-millisecond lease")
+	}
+	if _, err := repository.KeepAlive(context.Background(), 1, "worker", time.Nanosecond); err == nil {
+		t.Fatal("KeepAlive accepted a sub-millisecond lease")
+	}
+}
+
 func TestRepositoryLifecycleWithPostgres(t *testing.T) {
 	dsn := os.Getenv("MOONBOOK_JOBS_TEST_DSN")
 	if dsn == "" {
@@ -155,7 +168,7 @@ func TestRepositoryLifecycleWithPostgres(t *testing.T) {
 	module := "lifecycle-" + key
 	jobType := "run"
 
-	job, created, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: jobType, IdempotencyKey: key, Payload: json.RawMessage(`{"bookId":"9223372036854775807"}`), MaxAttempts: 2})
+	job, created, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: jobType, IdempotencyKey: key, Payload: json.RawMessage(`{"bookId":"9223372036854775807"}`), MaxAttempts: 2, AvailableAt: time.Now().Add(-time.Second)})
 	if err != nil || !created {
 		t.Fatalf("Enqueue created=%t err=%v", created, err)
 	}
@@ -196,5 +209,65 @@ func TestRepositoryLifecycleWithPostgres(t *testing.T) {
 	}
 	if status != "succeeded" || attempts != 2 {
 		t.Fatalf("status=%s attempts=%d", status, attempts)
+	}
+}
+
+func TestHeartbeatRenewsAndCancelsWhenLeaseIsLostWithPostgres(t *testing.T) {
+	dsn := os.Getenv("MOONBOOK_JOBS_TEST_DSN")
+	if dsn == "" {
+		t.Skip("MOONBOOK_JOBS_TEST_DSN is not configured")
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	repository := NewRepository(db)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	module := "heartbeat-" + time.Now().UTC().Format("150405.000000000")
+
+	kept, _, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: "run", IdempotencyKey: "kept", MaxAttempts: 1, AvailableAt: time.Now().Add(-time.Second)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, err = repository.Claim(ctx, ClaimOptions{WorkerID: "heartbeat-a", Module: module, Types: []string{"run"}, LeaseDuration: 300 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	heartbeat, err := repository.KeepAlive(ctx, kept.ID, "heartbeat-a", 300*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(650 * time.Millisecond)
+	if err = heartbeat.Stop(); err != nil {
+		t.Fatalf("stop renewed heartbeat: %v", err)
+	}
+	if err = repository.Complete(ctx, kept.ID, "heartbeat-a", json.RawMessage(`{"renewed":true}`)); err != nil {
+		t.Fatalf("complete renewed job: %v", err)
+	}
+
+	lost, _, err := repository.Enqueue(ctx, EnqueueOptions{Module: module, Type: "run", IdempotencyKey: "lost", MaxAttempts: 2, AvailableAt: time.Now().Add(-time.Second)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lost, err = repository.Claim(ctx, ClaimOptions{WorkerID: "heartbeat-b", Module: module, Types: []string{"run"}, LeaseDuration: 300 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	heartbeat, err = repository.KeepAlive(ctx, lost.ID, "heartbeat-b", 300*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET lease_expires_at=now()-interval '1 second' WHERE id=$1`, lost.ID); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-heartbeat.Context.Done():
+	case <-ctx.Done():
+		t.Fatal("heartbeat did not cancel after lease loss")
+	}
+	if err = heartbeat.Stop(); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("lost heartbeat error=%v", err)
 	}
 }

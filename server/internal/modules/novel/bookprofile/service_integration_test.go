@@ -10,16 +10,19 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/aiconfig"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobs"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-type fixtureGenerator struct{ input string }
+type fixtureGenerator struct {
+	input, categoryName, subCategoryName string
+}
 
 func (generator *fixtureGenerator) Generate(_ context.Context, _ aiconfig.RuntimeConfig, _ string, input string, _ float64, _ int, _ time.Duration) (SuggestedSnapshot, string, error) {
 	generator.input = input
-	return SuggestedSnapshot{BookName: "审核后的书名", BookDesc: "审核后的作品简介", CategoryName: "新主分类", SubCategories: []SnapshotCategory{{Name: "热血"}}, Confidence: .96, Reason: "fixture"}, `{"fixture":true}`, nil
+	return SuggestedSnapshot{BookName: "审核后的书名", BookDesc: "审核后的作品简介", CategoryName: generator.categoryName, SubCategories: []SnapshotCategory{{Name: generator.subCategoryName}}, Confidence: .96, Reason: "fixture"}, `{"fixture":true}`, nil
 }
 
 func TestWorkerApplyAndStaleSnapshotWithPostgreSQLAndMinIO(t *testing.T) {
@@ -63,19 +66,20 @@ func TestWorkerApplyAndStaleSnapshotWithPostgreSQLAndMinIO(t *testing.T) {
 	suffix := time.Now().UnixNano()
 	var oldCategoryID, newCategoryID, subCategoryID, authorID, bookID, chapterID, cleanTaskID, cleanResultID, aiConfigID, modelID int64
 	oldCode, newCode, subCode := fmt.Sprintf("profile-old-%d", suffix), fmt.Sprintf("profile-new-%d", suffix), fmt.Sprintf("profile-sub-%d", suffix)
-	if err = db.QueryRowContext(ctx, `INSERT INTO novel_categories(code,name,kind) VALUES($1,'旧主分类','primary') RETURNING id`, oldCode).Scan(&oldCategoryID); err != nil {
+	oldCategoryName, newCategoryName, subCategoryName := "旧主分类-"+fmt.Sprint(suffix), "新主分类-"+fmt.Sprint(suffix), "热血-"+fmt.Sprint(suffix)
+	if err = db.QueryRowContext(ctx, `INSERT INTO novel_categories(code,name,kind) VALUES($1,$2,'primary') RETURNING id`, oldCode, oldCategoryName).Scan(&oldCategoryID); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.QueryRowContext(ctx, `INSERT INTO novel_categories(code,name,kind) VALUES($1,'新主分类','primary') RETURNING id`, newCode).Scan(&newCategoryID); err != nil {
+	if err = db.QueryRowContext(ctx, `INSERT INTO novel_categories(code,name,kind) VALUES($1,$2,'primary') RETURNING id`, newCode, newCategoryName).Scan(&newCategoryID); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.QueryRowContext(ctx, `INSERT INTO novel_categories(code,name,kind) VALUES($1,'热血','sub') RETURNING id`, subCode).Scan(&subCategoryID); err != nil {
+	if err = db.QueryRowContext(ctx, `INSERT INTO novel_categories(code,name,kind) VALUES($1,$2,'sub') RETURNING id`, subCode, subCategoryName).Scan(&subCategoryID); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.QueryRowContext(ctx, `INSERT INTO novel_authors(pen_name,normalized_name) VALUES($1,$1) RETURNING id`, fmt.Sprintf("资料作者-%d", suffix)).Scan(&authorID); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.QueryRowContext(ctx, `INSERT INTO novel_books(primary_category_id,category_code,category_name,book_name,author_id,author_name,description) VALUES($1,$2,'旧主分类',$3,$4,$5,'旧简介') RETURNING id`, oldCategoryID, oldCode, fmt.Sprintf("资料书-%d", suffix), authorID, fmt.Sprintf("资料作者-%d", suffix)).Scan(&bookID); err != nil {
+	if err = db.QueryRowContext(ctx, `INSERT INTO novel_books(primary_category_id,category_code,category_name,book_name,author_id,author_name,description) VALUES($1,$2,$3,$4,$5,$6,'旧简介') RETURNING id`, oldCategoryID, oldCode, oldCategoryName, fmt.Sprintf("资料书-%d", suffix), authorID, fmt.Sprintf("资料作者-%d", suffix)).Scan(&bookID); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.QueryRowContext(ctx, `INSERT INTO novel_chapters(book_id,chapter_no,chapter_name,word_count,ai_clean_status) VALUES($1,1,'第一章',10,'cleaned') RETURNING id`, bookID).Scan(&chapterID); err != nil {
@@ -111,7 +115,23 @@ func TestWorkerApplyAndStaleSnapshotWithPostgreSQLAndMinIO(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport := &fixtureGenerator{}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET available_at='1900-01-01 00:00:00+00' WHERE module=$1 AND job_type=$2 AND idempotency_key=$3`, moduleName, jobType, "suggestion:"+created.ID); err != nil {
+		t.Fatal(err)
+	}
+	deadJob, err := service.Jobs.Claim(ctx, jobs.ClaimOptions{WorkerID: "profile-integration-dead", Module: moduleName, Types: []string{jobType}, LeaseDuration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET lease_expires_at=now()-interval '1 second' WHERE id=$1`, deadJob.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, recoverErr := service.Jobs.RecoverExpired(ctx); recoverErr != nil {
+		t.Fatal(recoverErr)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET available_at='1900-01-01 00:00:00+00' WHERE id=$1`, deadJob.ID); err != nil {
+		t.Fatal(err)
+	}
+	transport := &fixtureGenerator{categoryName: newCategoryName, subCategoryName: subCategoryName}
 	worker := &Worker{DB: db, Jobs: service.Jobs, AI: aiconfig.NewService(db, nil), Service: service, Transport: transport, WorkerID: "profile-integration", Lease: time.Minute}
 	worked := false
 	for attempt := 0; attempt < 20 && !worked; attempt++ {
@@ -129,6 +149,16 @@ func TestWorkerApplyAndStaleSnapshotWithPostgreSQLAndMinIO(t *testing.T) {
 	}
 	if transport.input == "" {
 		t.Fatal("worker did not receive the input snapshot")
+	}
+	var firstAttempts, firstRows int
+	if err = db.QueryRowContext(ctx, `SELECT attempt_count FROM platform_jobs WHERE module=$1 AND job_type=$2 AND idempotency_key=$3`, moduleName, jobType, "suggestion:"+created.ID).Scan(&firstAttempts); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM novel_book_profile_suggestion WHERE id=$1`, created.ID).Scan(&firstRows); err != nil {
+		t.Fatal(err)
+	}
+	if firstAttempts != 2 || firstRows != 1 {
+		t.Fatalf("attempts=%d suggestion rows=%d", firstAttempts, firstRows)
 	}
 	if err = service.Apply(ctx, mustID(t, created.ID), ReviewInput{BookName: "审核后的书名", CategoryCode: newCode, BookDesc: "审核后的作品简介", SubCategoryCodes: []string{subCode}, ReviewerName: "integration"}); err != nil {
 		t.Fatal(err)

@@ -59,31 +59,6 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	leaseCtx, stopLease := context.WithCancel(ctx)
-	leaseDone := make(chan struct{})
-	go func() {
-		defer close(leaseDone)
-		interval := w.Lease / 3
-		if interval < time.Second {
-			interval = time.Second
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-leaseCtx.Done():
-				return
-			case <-ticker.C:
-				if err := w.Jobs.Renew(leaseCtx, job.ID, w.WorkerID, w.Lease); err != nil {
-					return
-				}
-			}
-		}
-	}()
-	defer func() {
-		stopLease()
-		<-leaseDone
-	}()
 	var p struct {
 		ImportTaskID string `json:"importTaskId"`
 	}
@@ -101,14 +76,32 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if _, err = w.DB.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status='running',start_time=COALESCE(start_time,now()),attempt_count=$2,updated_at=now() WHERE id=$1`, taskID, job.AttemptCount); err != nil {
 		return true, w.finishFailure(ctx, job, err, true)
 	}
-	_ = w.Logs.Append(ctx, fetchlog.Entry{TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName, BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL, Stage: "import", Status: "started", Message: "任务开始执行"})
-	result, execErr := w.Executor.Execute(ctx, task)
-	w.appendFetchLogs(ctx, task, result.Fetches)
+	heartbeat, err := w.Jobs.KeepAlive(ctx, job.ID, w.WorkerID, w.Lease)
+	if err != nil {
+		return true, err
+	}
+	defer heartbeat.Stop()
+	leaseCtx := heartbeat.Context
+	_ = w.Logs.Append(leaseCtx, fetchlog.Entry{TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName, BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL, Stage: "import", Status: "started", Message: "任务开始执行"})
+	result, execErr := w.Executor.Execute(leaseCtx, task)
+	w.appendFetchLogs(leaseCtx, task, result.Fetches)
 	if execErr != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.finishFailureTask(ctx, job, task, execErr)
 	}
+	if leaseCtx.Err() != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
+		return true, leaseCtx.Err()
+	}
 	var taskStatus string
-	if err = w.DB.QueryRowContext(ctx, `SELECT status FROM novel_crawl_import_task WHERE id=$1`, task.ID).Scan(&taskStatus); err != nil {
+	if err = w.DB.QueryRowContext(leaseCtx, `SELECT status FROM novel_crawl_import_task WHERE id=$1`, task.ID).Scan(&taskStatus); err != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.finishFailureTask(ctx, job, task, err)
 	}
 	if taskStatus == "cancelled" {
@@ -116,21 +109,32 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	if w.Writer != nil && len(result.Chapters) > 0 {
-		imported, writeErr := w.Writer.Import(ctx, task, result.Chapters)
+		imported, writeErr := w.Writer.Import(leaseCtx, task, result.Chapters)
 		if writeErr != nil {
+			if leaseErr := heartbeat.Stop(); leaseErr != nil {
+				return true, leaseErr
+			}
 			return true, w.finishFailureTask(ctx, job, task, writeErr)
 		}
 		result.ImportedChapterCount = imported
 	}
-	if _, err = w.DB.ExecContext(ctx, `UPDATE novel_crawl_import_task SET status='succeeded',quality_status=$2,quality_summary=$3,total_chapter_count=$4,imported_chapter_count=$5,empty_chapter_count=$6,duplicate_chapter_count=$7,end_time=now(),updated_at=now() WHERE id=$1`, taskID, result.QualityStatus, result.QualitySummary, result.TotalChapterCount, result.ImportedChapterCount, result.EmptyChapterCount, result.DuplicateChapterCount); err != nil {
+	if _, err = w.DB.ExecContext(leaseCtx, `UPDATE novel_crawl_import_task SET status='succeeded',quality_status=$2,quality_summary=$3,total_chapter_count=$4,imported_chapter_count=$5,empty_chapter_count=$6,duplicate_chapter_count=$7,end_time=now(),updated_at=now() WHERE id=$1`, taskID, result.QualityStatus, result.QualitySummary, result.TotalChapterCount, result.ImportedChapterCount, result.EmptyChapterCount, result.DuplicateChapterCount); err != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.finishFailureTask(ctx, job, task, err)
 	}
-	_, err = w.DB.ExecContext(ctx, `UPDATE novel_crawl_thread_candidate SET status='imported',last_import_page_no=$2,last_follow_time=now(),follow_count=follow_count+CASE WHEN $3='incremental' THEN 1 ELSE 0 END,follow_fail_reason='',updated_at=now() WHERE id=$1`, task.CandidateID, len(result.Fetches), task.ImportMode)
+	_, err = w.DB.ExecContext(leaseCtx, `UPDATE novel_crawl_thread_candidate SET status='imported',last_import_page_no=$2,last_follow_time=now(),follow_count=follow_count+CASE WHEN $3='incremental' THEN 1 ELSE 0 END,follow_fail_reason='',updated_at=now() WHERE id=$1`, task.CandidateID, len(result.Fetches), task.ImportMode)
 	if err != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.finishFailureTask(ctx, job, task, err)
 	}
-	_ = w.Logs.Append(ctx, fetchlog.Entry{TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName, BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL, Stage: "import", Status: "succeeded", ItemCount: result.ImportedChapterCount, Message: "任务执行成功"})
-	if err = w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`)); err != nil {
+	_ = w.Logs.Append(leaseCtx, fetchlog.Entry{TaskID: task.ID, SourceID: task.SourceID, SourceName: task.SourceName, BoardID: task.BoardID, BoardName: task.BoardName, ThreadURL: task.ThreadURL, Stage: "import", Status: "succeeded", ItemCount: result.ImportedChapterCount, Message: "任务执行成功"})
+	if err = heartbeat.Finalize(func() error {
+		return w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`))
+	}); err != nil {
 		return true, fmt.Errorf("complete platform job: %w", err)
 	}
 	return true, nil
@@ -165,6 +169,9 @@ func (w *Worker) Run(ctx context.Context) error {
 				return nil
 			}
 			if err != nil {
+				if worked {
+					continue
+				}
 				return err
 			}
 			if !worked {

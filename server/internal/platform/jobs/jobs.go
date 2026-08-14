@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -55,6 +56,83 @@ type Repository struct {
 	db          *sql.DB
 	baseBackoff time.Duration
 	maxBackoff  time.Duration
+}
+
+// Heartbeat keeps a claimed job lease alive and cancels Context when the
+// repository can no longer prove ownership of the lease.
+type Heartbeat struct {
+	Context context.Context
+	cancel  context.CancelFunc
+	done    chan error
+	once    sync.Once
+	err     error
+}
+
+func (repository *Repository) KeepAlive(parent context.Context, jobID int64, workerID string, leaseDuration time.Duration) (*Heartbeat, error) {
+	workerID = strings.TrimSpace(workerID)
+	if jobID <= 0 || workerID == "" || leaseDuration < time.Millisecond {
+		return nil, errors.New("job ID, worker ID, and lease duration of at least one millisecond are required")
+	}
+	ctx, cancel := context.WithCancel(parent)
+	heartbeat := &Heartbeat{Context: ctx, cancel: cancel, done: make(chan error, 1)}
+	interval := leaseDuration / 3
+	if interval <= 0 {
+		interval = time.Nanosecond
+	}
+	if interval < 100*time.Millisecond && leaseDuration >= 300*time.Millisecond {
+		interval = 100 * time.Millisecond
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				heartbeat.done <- nil
+				return
+			case <-ticker.C:
+				if err := repository.Renew(ctx, jobID, workerID, leaseDuration); err != nil {
+					if ctx.Err() != nil {
+						heartbeat.done <- nil
+					} else {
+						heartbeat.done <- err
+						heartbeat.cancel()
+					}
+					return
+				}
+			}
+		}
+	}()
+	return heartbeat, nil
+}
+
+func (heartbeat *Heartbeat) Stop() error {
+	if heartbeat == nil {
+		return nil
+	}
+	heartbeat.once.Do(func() {
+		heartbeat.cancel()
+		heartbeat.err = <-heartbeat.done
+	})
+	return heartbeat.err
+}
+
+// Finalize keeps renewal active while the caller persists the terminal job
+// state. A successful finalizer proves ownership, so a concurrent renewal
+// observing that new terminal state is not treated as lease loss.
+func (heartbeat *Heartbeat) Finalize(finalizer func() error) error {
+	if heartbeat == nil || finalizer == nil {
+		return errors.New("job heartbeat and finalizer are required")
+	}
+	finalizeErr := finalizer()
+	heartbeatErr := heartbeat.Stop()
+	if finalizeErr != nil {
+		if heartbeatErr != nil {
+			return heartbeatErr
+		}
+		return finalizeErr
+	}
+	return nil
 }
 
 func NewRepository(db *sql.DB) *Repository {
@@ -138,8 +216,8 @@ func (repository *Repository) Claim(ctx context.Context, options ClaimOptions) (
 			return Job{}, errors.New("job types must contain 1 to 64 characters")
 		}
 	}
-	if options.LeaseDuration <= 0 {
-		return Job{}, errors.New("lease duration must be positive")
+	if options.LeaseDuration < time.Millisecond {
+		return Job{}, errors.New("lease duration must be at least one millisecond")
 	}
 	tx, err := repository.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
@@ -194,8 +272,8 @@ func (repository *Repository) Claim(ctx context.Context, options ClaimOptions) (
 }
 
 func (repository *Repository) Renew(ctx context.Context, jobID int64, workerID string, leaseDuration time.Duration) error {
-	if leaseDuration <= 0 {
-		return errors.New("lease duration must be positive")
+	if leaseDuration < time.Millisecond {
+		return errors.New("lease duration must be at least one millisecond")
 	}
 	result, err := repository.db.ExecContext(ctx, `
 		UPDATE platform_jobs

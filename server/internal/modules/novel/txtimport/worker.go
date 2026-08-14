@@ -55,18 +55,33 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if _, err = w.DB.ExecContext(ctx, `UPDATE novel_txt_import_task SET status='running',start_time=COALESCE(start_time,now()),attempt_count=$2,updated_at=now() WHERE id=$1`, taskID, job.AttemptCount); err != nil {
 		return true, w.fail(ctx, job, taskID, err, true)
 	}
+	heartbeat, err := w.Jobs.KeepAlive(ctx, job.ID, w.WorkerID, w.Lease)
+	if err != nil {
+		return true, err
+	}
+	defer heartbeat.Stop()
+	workCtx := heartbeat.Context
 	size, sizeErr := strconv.ParseInt(task.ObjectByteSize, 10, 64)
 	if sizeErr != nil || size <= 0 {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.failTask(ctx, job, task, errors.New("invalid TXT object size"), false)
 	}
-	data, err := w.Store.Get(ctx, ObjectMeta{Key: task.ObjectKey, SHA256: task.ObjectSHA256, ByteSize: size})
+	data, err := w.Store.Get(workCtx, ObjectMeta{Key: task.ObjectKey, SHA256: task.ObjectSHA256, ByteSize: size})
 	if err != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.failTask(ctx, job, task, err, true)
 	}
 	parsed := importtask.ParseTXTChapters(data, strings.TrimSuffix(task.OriginalFilename, filepath.Ext(task.OriginalFilename)))
 	converted := importtask.Task{ID: task.ID, TargetBookID: task.TargetBookID, ImportMode: "txt"}
-	imported, err := w.Writer.Import(ctx, converted, parsed)
+	imported, err := w.Writer.Import(workCtx, converted, parsed)
 	if err != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.failTask(ctx, job, task, err, false)
 	}
 	empty := 0
@@ -79,11 +94,16 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if len(parsed) == 0 {
 		quality, summary = "warning", "未识别章节标记"
 	}
-	_, err = w.DB.ExecContext(ctx, `UPDATE novel_txt_import_task SET status='succeeded',quality_status=$2,quality_summary=$3,total_chapter_count=$4,imported_chapter_count=$5,empty_chapter_count=$6,end_time=now(),updated_at=now() WHERE id=$1`, taskID, quality, summary, len(parsed), imported, empty)
+	_, err = w.DB.ExecContext(workCtx, `UPDATE novel_txt_import_task SET status='succeeded',quality_status=$2,quality_summary=$3,total_chapter_count=$4,imported_chapter_count=$5,empty_chapter_count=$6,end_time=now(),updated_at=now() WHERE id=$1`, taskID, quality, summary, len(parsed), imported, empty)
 	if err != nil {
+		if leaseErr := heartbeat.Stop(); leaseErr != nil {
+			return true, leaseErr
+		}
 		return true, w.failTask(ctx, job, task, err, true)
 	}
-	if err = w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`)); err != nil {
+	if err = heartbeat.Finalize(func() error {
+		return w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`))
+	}); err != nil {
 		return true, err
 	}
 	return true, nil
@@ -111,6 +131,9 @@ func (w *Worker) Run(ctx context.Context) error {
 				return nil
 			}
 			if err != nil {
+				if worked {
+					continue
+				}
 				return err
 			}
 			if !worked {

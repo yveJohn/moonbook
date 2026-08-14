@@ -49,38 +49,21 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if err != nil {
 		return true, w.fail(ctx, job, err, false)
 	}
-	workCtx, cancel := context.WithCancel(ctx)
-	renewDone := make(chan error, 1)
-	go func() {
-		interval := w.Lease / 3
-		if interval < time.Second {
-			interval = time.Second
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-workCtx.Done():
-				renewDone <- nil
-				return
-			case <-ticker.C:
-				if renewErr := w.Jobs.Renew(workCtx, job.ID, w.WorkerID, w.Lease); renewErr != nil {
-					renewDone <- renewErr
-					cancel()
-					return
-				}
-			}
-		}
-	}()
-	err = w.execute(workCtx, taskID)
-	cancel()
-	if renewErr := <-renewDone; renewErr != nil {
-		err = renewErr
-	}
+	heartbeat, err := w.Jobs.KeepAlive(ctx, job.ID, w.WorkerID, w.Lease)
 	if err != nil {
+		return true, err
+	}
+	defer heartbeat.Stop()
+	err = w.execute(heartbeat.Context, taskID)
+	if err != nil {
+		if renewErr := heartbeat.Stop(); renewErr != nil {
+			return true, renewErr
+		}
 		return true, w.fail(ctx, job, err, true)
 	}
-	return true, w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`))
+	return true, heartbeat.Finalize(func() error {
+		return w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{}`))
+	})
 }
 func (w *Worker) execute(ctx context.Context, taskID int64) error {
 	var status string
@@ -317,6 +300,9 @@ func (w *Worker) Run(ctx context.Context) error {
 		for {
 			worked, err := w.RunOnce(ctx)
 			if err != nil && !strings.Contains(err.Error(), "context canceled") {
+				if worked {
+					continue
+				}
 				return fmt.Errorf("chapter clean worker: %w", err)
 			}
 			if !worked {

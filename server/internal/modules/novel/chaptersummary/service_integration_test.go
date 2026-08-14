@@ -10,6 +10,7 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/aiconfig"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobs"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -146,6 +147,22 @@ func TestWorkerCompletesSummaryWithPostgreSQLAndMinIO(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET available_at='1900-01-01 00:00:00+00' WHERE module='novel' AND job_type='chapter_summary' AND idempotency_key=$1`, "chapter-summary:"+task.ID); err != nil {
+		t.Fatal(err)
+	}
+	deadJob, err := service.Jobs.Claim(ctx, jobs.ClaimOptions{WorkerID: "summary-integration-dead", Module: "novel", Types: []string{"chapter_summary"}, LeaseDuration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET lease_expires_at=now()-interval '1 second' WHERE id=$1`, deadJob.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, recoverErr := service.Jobs.RecoverExpired(ctx); recoverErr != nil {
+		t.Fatal(recoverErr)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE platform_jobs SET available_at='1900-01-01 00:00:00+00' WHERE id=$1`, deadJob.ID); err != nil {
+		t.Fatal(err)
+	}
 	transport := &fixtureSummarizer{}
 	worker := &Worker{DB: db, Jobs: service.Jobs, AI: aiconfig.NewService(db, nil), Objects: objects, Transport: transport, WorkerID: "summary-integration", Lease: time.Minute}
 	worked := false
@@ -162,18 +179,18 @@ func TestWorkerCompletesSummaryWithPostgreSQLAndMinIO(t *testing.T) {
 		t.Fatal("summary job was not claimable within 500ms")
 	}
 	var summary, taskStatus, jobStatus string
-	var processed, succeeded int
+	var processed, succeeded, jobAttempts int
 	if err = db.QueryRowContext(ctx, `SELECT chapter_summary FROM novel_chapter_clean_result WHERE id=$1`, cleanResultID).Scan(&summary); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.QueryRowContext(ctx, `SELECT status,processed_count,success_count FROM novel_chapter_summary_task WHERE id=$1`, task.ID).Scan(&taskStatus, &processed, &succeeded); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.QueryRowContext(ctx, `SELECT status FROM platform_jobs WHERE module='novel' AND job_type='chapter_summary' AND idempotency_key=$1`, "chapter-summary:"+task.ID).Scan(&jobStatus); err != nil {
+	if err = db.QueryRowContext(ctx, `SELECT status,attempt_count FROM platform_jobs WHERE module='novel' AND job_type='chapter_summary' AND idempotency_key=$1`, "chapter-summary:"+task.ID).Scan(&jobStatus, &jobAttempts); err != nil {
 		t.Fatal(err)
 	}
-	if summary != "主角在密道中找到线索" || taskStatus != "completed" || processed != 1 || succeeded != 1 || jobStatus != "succeeded" {
-		t.Fatalf("summary=%q task=%s processed=%d succeeded=%d job=%s", summary, taskStatus, processed, succeeded, jobStatus)
+	if summary != "主角在密道中找到线索" || taskStatus != "completed" || processed != 1 || succeeded != 1 || jobStatus != "succeeded" || jobAttempts != 2 {
+		t.Fatalf("summary=%q task=%s processed=%d succeeded=%d job=%s attempts=%d", summary, taskStatus, processed, succeeded, jobStatus, jobAttempts)
 	}
 	if transport.content != "第一段正文，主角" {
 		t.Fatalf("maxInputChars was not applied: %q", transport.content)

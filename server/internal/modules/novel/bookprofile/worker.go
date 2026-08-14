@@ -42,38 +42,21 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if err != nil {
 		return true, w.fail(ctx, job, 0, err)
 	}
-	workCtx, cancel := context.WithCancel(ctx)
-	renewDone := make(chan error, 1)
-	go func() {
-		interval := w.Lease / 3
-		if interval < time.Second {
-			interval = time.Second
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-workCtx.Done():
-				renewDone <- nil
-				return
-			case <-ticker.C:
-				if renewErr := w.Jobs.Renew(workCtx, job.ID, w.WorkerID, w.Lease); renewErr != nil {
-					renewDone <- renewErr
-					cancel()
-					return
-				}
-			}
-		}
-	}()
-	err = w.execute(workCtx, job, id)
-	cancel()
-	if renewErr := <-renewDone; renewErr != nil {
-		err = renewErr
-	}
+	heartbeat, err := w.Jobs.KeepAlive(ctx, job.ID, w.WorkerID, w.Lease)
 	if err != nil {
 		return true, err
 	}
-	return true, nil
+	defer heartbeat.Stop()
+	err = w.execute(heartbeat.Context, job, id)
+	if err != nil {
+		if renewErr := heartbeat.Stop(); renewErr != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+			return true, renewErr
+		}
+		return true, err
+	}
+	return true, heartbeat.Finalize(func() error {
+		return w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{"suggestionId":"`+strconv.FormatInt(id, 10)+`"}`))
+	})
 }
 func (w *Worker) execute(ctx context.Context, job jobs.Job, id int64) error {
 	config, err := w.Service.GetConfig(ctx)
@@ -85,7 +68,6 @@ func (w *Worker) execute(ctx context.Context, job jobs.Job, id int64) error {
 		return w.fail(ctx, job, id, err)
 	}
 	if suggestion.Status != "running" {
-		_ = w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{"skipped":true}`))
 		return nil
 	}
 	primary, err := w.AI.ResolveEnabled(ctx, config.AIConfigID)
@@ -154,7 +136,7 @@ func (w *Worker) execute(ctx context.Context, job jobs.Job, id int64) error {
 			return w.failRaw(ctx, job, id, fmt.Errorf("自动应用失败: %w", err), raw)
 		}
 	}
-	return w.Jobs.Complete(ctx, job.ID, w.WorkerID, json.RawMessage(`{"suggestionId":"`+strconv.FormatInt(id, 10)+`"}`))
+	return nil
 }
 func (w *Worker) resolveCategories(ctx context.Context, s *SuggestedSnapshot) error {
 	if s.CategoryCode != "" {
