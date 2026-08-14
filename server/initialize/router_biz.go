@@ -3,6 +3,7 @@ package initialize
 import (
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/admincheckin"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminmembership"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminorder"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminpayment"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminproduct"
@@ -60,6 +61,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	adminrecharge.RegisterRoutes(privateGroup, adminrecharge.NewService(adminrecharge.SQLRepository{DB: db}))
 	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))
 	adminorder.RegisterRoutes(privateGroup, adminorder.NewService(adminorder.SQLRepository{DB: db}))
+	adminmembership.RegisterRoutes(privateGroup, adminmembership.NewService(adminmembership.SQLRepository{DB: db}))
 	adminproduct.RegisterRoutes(privateGroup, adminproduct.NewService(adminproduct.SQLRepository{DB: db}))
 	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db}))
 	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}))
