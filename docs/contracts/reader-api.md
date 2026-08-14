@@ -96,6 +96,16 @@
 
 2026-08-15 的隔离 Compose + Playwright 关键旅程已覆盖匿名目录/详情、匿名章节 `46101`、邀请码注册、登录免费 MinIO 正文、书架、两章切换、第二章历史恢复、退出及旧 Token `401`。`server/internal/modules/reader/public` 的单元和真实依赖测试固化完整作品商品状态、登录态详情聚合、Long ID 字符串与前后章 ID；详细运行证据见 `docs/migration/m3-reader-commerce.md`。以下清单仍按逐接口矩阵继续收敛，不能因关键旅程通过而整体勾选。
 
+### 可执行覆盖矩阵
+
+| 路由组 | 正常 JSON | 错误/鉴权 | 空值/分页/Long ID | 当前结论 |
+| --- | --- | --- | --- | --- |
+| `/reader/auth/*` 5 条 | 登录与注册 Long ID 已覆盖；其余成功响应待逐条快照 | `http_contract_test.go` 覆盖无 Token、过期、撤销、封禁账号统一 HTTP 200 + 业务 `401`；服务测试覆盖旧密码升级和退出撤销 | `9007199254740993`、`9223372036854775807` 已覆盖 | 部分完成 |
+| `/reader/books*`、`/reader/chapters/*` 8 条 | `public/http_integration_test.go` 与 Playwright 覆盖分页书库、详情、目录、正文；精选、随机、分类仍待逐条快照 | 匿名正文 `46101` 已覆盖；计费模式错误矩阵待补 | 作品、章节、前后章 ID 字符串已覆盖；空目录与分页边界待补 | 部分完成 |
+| `/reader/seo/*` 4 条 | SSR、curl 和真实依赖 HTTP 测试已有正常证据 | 超时、非 JSON 和非法 sitemap page 待补 | Content-Type 已在运行证据核对，仍需可执行测试 | 部分完成 |
+| `/reader/me/bookshelf|likes|feedbacks|history|preference` 13 条 | `me/http_contract_test.go` 对全部路由执行 JSON 快照 | 共享 Reader 中间件的无 Token/失效 Token `401` 已由认证契约覆盖；服务测试覆盖非法 ID、进度和偏好 | 显式 `data:null`、空数组、空分页、分页归一化及两个 Long ID 边界已覆盖 | 正常响应矩阵完成 |
+| 钱包、充值、签到、邀请、权益、会员产品、购买 15 条 | 真实 PostgreSQL 服务/仓储集成已覆盖业务闭环 | 报价变化、余额不足、重复请求等服务语义已有测试 | HTTP JSON、金额字符串、空分页仍待逐条快照 | 待补 HTTP 契约 |
+
 - [ ] 每个接口的正常请求与响应 JSON 快照
 - [ ] 未登录、Token 过期、封禁和权限不足响应
 - [ ] `null`、空数组、缺省字段和分页边界

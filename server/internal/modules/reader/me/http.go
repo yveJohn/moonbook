@@ -60,7 +60,7 @@ func fail(c *gin.Context, e error) {
 	c.JSON(http.StatusOK, response{Code: code, Msg: p.Message})
 }
 func ok(c *gin.Context, data any, msg string) {
-	c.JSON(http.StatusOK, response{Code: 200, Msg: msg, Data: data})
+	c.JSON(http.StatusOK, map[string]any{"code": 200, "msg": msg, "data": data})
 }
 func (h *Handler) listBookshelf(c *gin.Context) {
 	rid, e := id(c)

@@ -77,3 +77,70 @@ func TestProtectedHTTPContractUsesReaderCompatibilityError(t *testing.T) {
 		t.Fatalf("status=%d body=%s", resp.Code, resp.Body.String())
 	}
 }
+
+func TestProtectedHTTPContractRejectsExpiredRevokedAndDisabledSessions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		name   string
+		mutate func(*memoryRepository)
+	}{
+		{
+			name: "expired",
+			mutate: func(repo *memoryRepository) {
+				session := repo.sessions[1]
+				session.ExpiresAt = time.Now().Add(-time.Minute)
+				repo.sessions[1] = session
+			},
+		},
+		{
+			name: "revoked",
+			mutate: func(repo *memoryRepository) {
+				session := repo.sessions[1]
+				revokedAt := time.Now()
+				session.RevokedAt = &revokedAt
+				repo.sessions[1] = session
+			},
+		},
+		{
+			name: "disabled account",
+			mutate: func(repo *memoryRepository) {
+				repo.account.Status = AccountStatusDisabled
+			},
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			hashBytes, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo := &memoryRepository{account: ReaderAccount{
+				ID: 9007199254740993, Username: "reader", PasswordHash: string(hashBytes),
+				PasswordAlgorithm: PasswordAlgorithmBcrypt, Status: AccountStatusEnabled,
+			}}
+			service := newServiceForTest(repo, &fixedLimiter{allowed: true})
+			token, err := service.Login(context.Background(), "reader", "correct-password", "203.0.113.8")
+			if err != nil {
+				t.Fatal(err)
+			}
+			test.mutate(repo)
+
+			router := gin.New()
+			RegisterRoutes(router.Group("/"), NewHandler(service, contractRegistration{}))
+			req := httptest.NewRequest(http.MethodGet, "/reader/auth/profile", nil)
+			req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, req)
+			var body struct {
+				Code int    `json:"code"`
+				Msg  string `json:"msg"`
+			}
+			if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if resp.Code != http.StatusOK || body.Code != 401 || body.Msg != "认证失败，无法访问系统资源" {
+				t.Fatalf("status=%d body=%s", resp.Code, resp.Body.String())
+			}
+		})
+	}
+}
