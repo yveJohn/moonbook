@@ -109,6 +109,7 @@ services:
       MOONBOOK_REDIS_ADDR: redis:6379
       MOONBOOK_MINIO_ENDPOINT: minio:9000
       MOONBOOK_MINIO_BUCKET_URL: http://minio:9000/${MINIO_BUCKET:-moonbook-content}
+      MOONBOOK_READER_ORIGIN: ${MOONBOOK_READER_ORIGIN:-http://localhost:8081}
     depends_on:
       postgres:
         condition: service_healthy

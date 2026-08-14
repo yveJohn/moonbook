@@ -27,6 +27,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
+	readeraccount "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/account"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/adminfeedback"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/admininvite"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/adminuser"
@@ -59,6 +60,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	registration := readerinvite.NewService(readerinvite.SQLRepository{DB: db}, readerService)
 	readerauth.RegisterRoutes(publicGroup, readerauth.NewHandler(readerService, registration))
 	readerme.RegisterRoutes(publicGroup, readerme.NewService(readerme.SQLRepository{DB: db}), readerService)
+	readeraccount.RegisterRoutes(publicGroup, db, readerService)
 	wallet.RegisterRoutes(publicGroup, wallet.NewService(wallet.SQLRepository{DB: db}), readerService)
 	recharge.RegisterRoutes(publicGroup, recharge.NewService(recharge.SQLRepository{DB: db}), readerService)
 	checkin.RegisterRoutes(publicGroup, checkin.NewService(checkin.SQLRepository{DB: db}), readerService)

@@ -140,6 +140,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 读者管理已补充密码重置：`PUT /reader/users/:id/password` 使用 bcrypt 更新密码并在同一事务撤销所有 Reader session，管理端提供确认密码表单，真实 PostgreSQL 集成测试验证旧会话失效和新哈希可用，迁移版本推进至 `00027`。
 - 当前代码证据提交为 `b908041`、`163664b`、`86fd095`、`b983227`、`4af0f25`、`daa3654`、`f5cd1bd`、`4976066`、`ce7de9d`、`97ba7fe`、`b195dae`。
 - Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，批量读者隔离修复提交 `725c5ad`）。认证 HTTP 包装契约测试提交 `cfcb2a9` 已验证 Long ID 字符串和未登录错误语义；新增 public HTTP 集成契约测试覆盖匿名书库、Bearer 章节目录和 MinIO 正文。冻结 `reader-ui` 离线测试已通过 44 个测试文件/536 个用例，SSR 生产构建通过；隔离 Go API + Reader SSR 已使用真实书籍/章节 fixture 验证书籍详情、章节目录、匿名正文 46101、Book JSON-LD 和实际内容页面。Playwright CLI 因本机无缓存且网络受限未启动，浏览器关键旅程和 8GB 副本演练仍未完成，不能作为 M3 退出证据。
+- 隔离 Compose 浏览器环境已验证注册后 `/me` 所需的 `GET /reader/me/entitlements`、`GET /reader/products/membership`、`POST /reader/me/invite/code` 均经 Reader 网关返回 HTTP 200；邀请码首次生成使用 PostgreSQL 事务和 advisory lock 并保证重复请求复用同一邀请码。Reader Origin 已加入严格 CORS 白名单，注册请求从 `127.0.0.1` 页面返回 200。浏览器视觉旅程和 8GB 副本演练仍待完成。
 
 下一步：
 

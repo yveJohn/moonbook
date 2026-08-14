@@ -132,6 +132,11 @@ cors:
       allow-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
       expose-headers: Content-Length,Content-Type
       allow-credentials: true
+    - allow-origin: ${MOONBOOK_READER_ORIGIN}
+      allow-headers: Content-Type,Authorization,X-Token,X-User-Id
+      allow-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      expose-headers: Content-Length,Content-Type
+      allow-credentials: true
 
 mcp:
   name: MOONBOOK_MCP
