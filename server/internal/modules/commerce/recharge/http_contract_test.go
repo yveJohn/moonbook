@@ -3,7 +3,9 @@ package recharge
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -20,6 +22,7 @@ const (
 )
 
 type rechargeContractRepo struct {
+	err          error
 	quotedAmount int64
 	create       CreateRequest
 	getReaderID  int64
@@ -27,6 +30,9 @@ type rechargeContractRepo struct {
 }
 
 func (r *rechargeContractRepo) Catalog(context.Context) (Catalog, error) {
+	if r.err != nil {
+		return Catalog{}, r.err
+	}
 	return Catalog{
 		Products: []Product{{
 			ID: rechargeMaxID, DiamondAmount: rechargeSafeID, ProductName: "边界充值",
@@ -38,16 +44,25 @@ func (r *rechargeContractRepo) Catalog(context.Context) (Catalog, error) {
 }
 
 func (r *rechargeContractRepo) Quote(_ context.Context, amount int64) (Quote, error) {
+	if r.err != nil {
+		return Quote{}, r.err
+	}
 	r.quotedAmount = amount
 	return Quote{DiamondAmount: "9223372036854775807", PriceUSDT: "92233720368.54775807"}, nil
 }
 
 func (r *rechargeContractRepo) CreateOrder(_ context.Context, request CreateRequest) (Order, error) {
+	if r.err != nil {
+		return Order{}, r.err
+	}
 	r.create = request
 	return rechargeContractOrder("9223372036854775807", "9007199254740993"), nil
 }
 
 func (r *rechargeContractRepo) GetOrder(_ context.Context, readerID int64, orderID string) (Order, error) {
+	if r.err != nil {
+		return Order{}, r.err
+	}
 	r.getReaderID, r.getOrderID = readerID, orderID
 	return rechargeContractOrder(orderID, ""), nil
 }
@@ -122,6 +137,44 @@ func TestRechargeHTTPContractKeepsIDsAmountsAndNulls(t *testing.T) {
 	}
 	if repo.getReaderID != rechargeMaxID || repo.getOrderID != "9223372036854775807" {
 		t.Fatalf("get reader=%d order=%s", repo.getReaderID, repo.getOrderID)
+	}
+}
+
+func TestRechargeHTTPErrorContracts(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		name, method, path, body, want string
+		err                            error
+	}{
+		{name: "invalid quote", method: http.MethodPost, path: "/reader/recharge/quote", body: `{"diamondAmount":"not-a-number"}`, want: `{"code":500,"msg":"充值参数无效","data":null}`},
+		{name: "product unavailable", method: http.MethodPost, path: "/reader/me/recharge/orders", body: `{"productId":"9007199254740993","requestId":"request-error"}`, err: ErrRechargeProductUnavailable, want: `{"code":500,"msg":"充值档位不存在或已下架","data":null}`},
+		{name: "order not found", method: http.MethodGet, path: "/reader/me/recharge/orders/9007199254740993", err: sql.ErrNoRows, want: `{"code":500,"msg":"充值订单不存在","data":null}`},
+		{name: "repository failure", method: http.MethodGet, path: "/reader/recharge/products", err: errors.New("database host secret detail"), want: `{"code":500,"msg":"internal service error","data":null}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := &rechargeContractRepo{err: test.err}
+			handler := &Handler{service: NewService(repo)}
+			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Set("reader.identity", readerauth.Identity{ReaderID: rechargeMaxID, SessionID: rechargeSafeID})
+				c.Next()
+			})
+			router.GET("/reader/recharge/products", handler.catalog)
+			router.POST("/reader/recharge/quote", handler.quote)
+			router.POST("/reader/me/recharge/orders", handler.create)
+			router.GET("/reader/me/recharge/orders/:orderId", handler.get)
+			req := httptest.NewRequest(test.method, test.path, bytes.NewBufferString(test.body))
+			if test.body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, req)
+			if resp.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", resp.Code, resp.Body.String())
+			}
+			assertRechargeJSON(t, test.want, resp.Body.String())
+		})
 	}
 }
 

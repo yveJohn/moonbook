@@ -1,6 +1,8 @@
 package recharge
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -13,7 +15,7 @@ import (
 type response struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
-	Data any    `json:"data,omitempty"`
+	Data any    `json:"data"`
 }
 type Handler struct{ service *Service }
 
@@ -34,6 +36,17 @@ func rid(c *gin.Context) (int64, error) {
 	return x.ReaderID, nil
 }
 func fail(c *gin.Context, e error) {
+	switch {
+	case errors.Is(e, ErrInvalidRecharge):
+		c.JSON(http.StatusOK, response{Code: 500, Msg: "充值参数无效"})
+		return
+	case errors.Is(e, ErrRechargeProductUnavailable):
+		c.JSON(http.StatusOK, response{Code: 500, Msg: "充值档位不存在或已下架"})
+		return
+	case errors.Is(e, sql.ErrNoRows):
+		c.JSON(http.StatusOK, response{Code: 500, Msg: "充值订单不存在"})
+		return
+	}
 	p := apperror.Expose(e)
 	code := 500
 	if p.Code == apperror.CodeUnauthenticated {

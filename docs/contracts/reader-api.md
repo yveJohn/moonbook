@@ -104,7 +104,7 @@
 | `/reader/books*`、`/reader/chapters/*` 8 条 | `public/http_integration_test.go` 逐条覆盖精选、分页、随机、主/子分类、详情、目录和真实 MinIO 正文 | 匿名真实正文覆盖 `46101`；`public/http_test.go` 固定登录、会员、整本、章节和未知收费模式 `46101`-`46105` HTTP 契约 | 作品、章节、前后章 ID 均为字符串；空分页、日期和真实商品状态已覆盖，空目录待补 | 正常与收费错误矩阵完成 |
 | `/reader/seo/*` 4 条 | `public/http_integration_test.go` 覆盖配置 JSON、robots、根 sitemap 及分页 sitemap 边界 | 非法页 `0` 和小数据集分页 `1` 均为 HTTP 404；SSR 超时与上游非 JSON 待补 | SEO 配置 ID 为字符串；robots 为 `text/plain`，sitemap 为 XML | 正常响应与 Content-Type 完成 |
 | `/reader/me/bookshelf|likes|feedbacks|history|preference` 13 条 | `me/http_contract_test.go` 对全部路由执行 JSON 快照 | 共享 Reader 中间件的无 Token/失效 Token `401` 已由认证契约覆盖；服务测试覆盖非法 ID、进度和偏好 | 显式 `data:null`、空数组、空分页、分页归一化及两个 Long ID 边界已覆盖 | 正常响应矩阵完成 |
-| 钱包、流水、充值商品/报价/订单 6 条 | `wallet/http_contract_test.go`、`recharge/http_contract_test.go` 已逐条执行 JSON 快照 | 共享 Reader 鉴权已覆盖；充值参数和仓储错误仍待 HTTP 错误快照 | 余额、流水、钻石、USDT 金额、ID 均为字符串；分页归一化和订单 `null` 已覆盖 | 正常响应矩阵完成 |
+| 钱包、流水、充值商品/报价/订单 6 条 | `wallet/http_contract_test.go`、`recharge/http_contract_test.go` 已逐条执行 JSON 快照 | 共享 Reader 鉴权已覆盖；无效充值参数、下架档位、订单不存在和未知仓储异常均已固定 HTTP 错误快照 | 余额、流水、钻石、USDT 金额、ID 均为字符串；分页归一化、订单及错误 `null` 已覆盖 | 正常与充值错误矩阵完成 |
 | 签到、邀请、权益、会员产品、购买 8 条 | `checkin/http_contract_test.go`、`account/http_contract_test.go`、`purchase/http_contract_test.go` 已逐条执行 JSON 快照 | 购买参数、商品不可用、整本报价变化 `46106` 和余额不足已固定 HTTP 错误快照；重复请求服务语义已有测试 | 奖励、余额扣减、报价、商品/订单/权益 ID 均为字符串；错误与订单空值显式 `null`，旧日期格式已覆盖 | 正常与购买错误矩阵完成 |
 
 Reader 线协议日期统一由 `server/internal/modules/reader/wire` 输出 UTC 的 `yyyy-MM-dd HH:mm:ss`，与旧 Java `spring.jackson.date-format` 一致；个人数据、作品/章节、钱包流水、充值订单、购买订单和会员商品的 HTTP 快照均已固定该格式，零值与空指针保持 `null`。
