@@ -23,4 +23,8 @@ func (s *Service) Create(ctx context.Context, in Input) (Product, error) {
 func (s *Service) Update(ctx context.Context, id int64, in Input) (Product, error) {
 	return s.Repo.Update(ctx, id, in)
 }
-func (s *Service) Delete(ctx context.Context, id int64) error { return s.Repo.Delete(ctx, id) }
+func (s *Service) Delete(ctx context.Context, id int64) error      { return s.Repo.Delete(ctx, id) }
+func (s *Service) GetSetting(ctx context.Context) (Setting, error) { return s.Repo.GetSetting(ctx) }
+func (s *Service) UpdateSetting(ctx context.Context, in SettingInput) (Setting, error) {
+	return s.Repo.UpdateSetting(ctx, in)
+}

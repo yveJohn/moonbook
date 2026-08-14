@@ -91,3 +91,55 @@ func (r SQLRepository) Delete(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+func normalizeSetting(in SettingInput) (SettingInput, error) {
+	in.DiamondsPerUSDT = strings.TrimSpace(in.DiamondsPerUSDT)
+	in.MinDiamondAmount = strings.TrimSpace(in.MinDiamondAmount)
+	in.MaxDiamondAmount = strings.TrimSpace(in.MaxDiamondAmount)
+	rate, ok := new(big.Rat).SetString(in.DiamondsPerUSDT)
+	if !ok || rate.Sign() <= 0 || decimalPlaces(in.DiamondsPerUSDT) > 8 {
+		return SettingInput{}, ErrInvalid
+	}
+	min, err := strconv.ParseInt(in.MinDiamondAmount, 10, 64)
+	if err != nil || min <= 0 {
+		return SettingInput{}, ErrInvalid
+	}
+	max, err := strconv.ParseInt(in.MaxDiamondAmount, 10, 64)
+	if err != nil || max < min {
+		return SettingInput{}, ErrInvalid
+	}
+	return in, nil
+}
+
+func decimalPlaces(value string) int {
+	if i := strings.IndexByte(value, '.'); i >= 0 {
+		return len(value) - i - 1
+	}
+	return 0
+}
+
+func formatDecimal(value string) string {
+	value = strings.TrimRight(strings.TrimRight(value, "0"), ".")
+	if value == "" || value == "-0" {
+		return "0"
+	}
+	return value
+}
+
+func (r SQLRepository) GetSetting(ctx context.Context) (Setting, error) {
+	var v Setting
+	err := r.DB.QueryRowContext(ctx, `SELECT id,custom_enabled,diamonds_per_usdt::text,min_diamond_amount::text,max_diamond_amount::text,amount_scale,rounding_mode FROM reader_recharge_settings WHERE id=1`).Scan(&v.ID, &v.CustomEnabled, &v.DiamondsPerUSDT, &v.MinDiamondAmount, &v.MaxDiamondAmount, &v.AmountScale, &v.RoundingMode)
+	v.DiamondsPerUSDT = formatDecimal(v.DiamondsPerUSDT)
+	return v, err
+}
+
+func (r SQLRepository) UpdateSetting(ctx context.Context, in SettingInput) (Setting, error) {
+	in, err := normalizeSetting(in)
+	if err != nil {
+		return Setting{}, err
+	}
+	var v Setting
+	err = r.DB.QueryRowContext(ctx, `UPDATE reader_recharge_settings SET custom_enabled=$1,diamonds_per_usdt=$2,min_diamond_amount=$3,max_diamond_amount=$4,updated_at=now() WHERE id=1 RETURNING id,custom_enabled,diamonds_per_usdt::text,min_diamond_amount::text,max_diamond_amount::text,amount_scale,rounding_mode`, in.CustomEnabled, in.DiamondsPerUSDT, in.MinDiamondAmount, in.MaxDiamondAmount).Scan(&v.ID, &v.CustomEnabled, &v.DiamondsPerUSDT, &v.MinDiamondAmount, &v.MaxDiamondAmount, &v.AmountScale, &v.RoundingMode)
+	v.DiamondsPerUSDT = formatDecimal(v.DiamondsPerUSDT)
+	return v, err
+}

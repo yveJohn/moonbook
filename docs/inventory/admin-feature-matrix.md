@@ -44,7 +44,7 @@
 | 消费商品 | `reader/product` / `ReaderProductController` | 书籍、章节、会员、免广告商品及上下架 | M4 | 基线已盘点 |
 | 消费订单 | `reader/order` / `ReaderOrderAdminController` | 查询、人工充值、确认 | M4 | 基线已盘点 |
 | 会员发放 | 读者详情组件 | 发放、有效期、永久会员 | M4 | 基线已盘点 |
-| 充值产品与设置 | `reader/payment/product` / `ReaderRechargeProductAdminController` | 预设档位、自定义兑换范围 | M4 | 充值档位 CRUD 已实现；自定义兑换设置管理待补 |
+| 充值产品与设置 | `reader/payment/product` / `ReaderRechargeProductAdminController` | 预设档位、自定义兑换范围 | M4 | 充值档位 CRUD、自定义充值开关/汇率/最小最大范围管理已实现；真实 PostgreSQL 集成测试覆盖非法规则 |
 | 支付渠道 | `reader/payment/channel` / `ReaderPaymentChannelAdminController` | 配置、启停、连通性检查、凭据保护 | M4 | 渠道查询、启停和凭据状态已实现；连通性探测待补 |
 | 充值订单与回调 | `reader/payment/order` / `ReaderRechargeOrderAdminController` | 详情、回调日志、主动同步、异常状态 | M4 | 订单列表、筛选、详情、回调日志审计已实现；主动同步和人工补单待补 |
 
