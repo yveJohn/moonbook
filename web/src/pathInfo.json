@@ -55,6 +55,7 @@
   "/src/view/novel/chapters/index.vue": "NovelChapters",
   "/src/view/novel/crawlBoards/index.vue": "NovelCrawlBoards",
   "/src/view/novel/crawlCandidates/index.vue": "NovelCrawlCandidates",
+  "/src/view/novel/crawlImportTasks/index.vue": "NovelCrawlImportTasks",
   "/src/view/novel/crawlSources/index.vue": "NovelCrawlSources",
   "/src/view/novel/metadata/index.vue": "NovelMetadata",
   "/src/view/novel/readerSeo/index.vue": "NovelReaderSeo",

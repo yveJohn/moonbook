@@ -22,6 +22,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlboard"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlsource"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/importtask"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
@@ -86,6 +87,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	crawlsource.RegisterRoutes(privateGroup, crawlsource.NewService(crawlsource.SQLRepository{DB: db}))
 	crawlboard.RegisterRoutes(privateGroup, crawlboard.NewService(crawlboard.SQLRepository{DB: db}))
 	candidate.RegisterRoutes(privateGroup, candidate.NewService(candidate.SQLRepository{DB: db}))
+	importtask.RegisterRoutes(privateGroup, importtask.NewService(importtask.SQLRepository{DB: db}))
 	readerseo.RegisterRoutes(privateGroup, db)
 	readerpublic.RegisterRoutes(publicGroup, db, objects, readerService, commerce)
 
