@@ -53,6 +53,7 @@
   "/src/view/novel/authors/index.vue": "NovelAuthors",
   "/src/view/novel/books/index.vue": "NovelBooks",
   "/src/view/novel/chapters/index.vue": "NovelChapters",
+  "/src/view/novel/crawlSources/index.vue": "NovelCrawlSources",
   "/src/view/novel/metadata/index.vue": "NovelMetadata",
   "/src/view/novel/readerSeo/index.vue": "NovelReaderSeo",
   "/src/view/person/person.vue": "Person",

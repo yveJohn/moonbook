@@ -53,7 +53,7 @@
 
 | 功能 | 旧页面/Controller | 关键操作 | 新系统证据 | 状态 |
 | --- | --- | --- | --- | --- |
-| 论坛来源 | `crawl/forumSource` / `CrawlForumSourceController` | CRUD、启停、连接与规则配置 | 待补 | 基线已盘点 |
+| 论坛来源 | `crawl/forumSource` / `CrawlForumSourceController` | CRUD、启停、连接与规则配置 | M5 | 来源 CRUD、URL/节流校验、Cookie 脱敏、权限和真实 PostgreSQL 测试已实现；连接检查待补 |
 | 论坛板块 | `crawl/forumBoard` / `CrawlForumBoardController` | CRUD、增量游标、抓取策略 | 待补 | 基线已盘点 |
 | 线程候选 | `crawl/threadCandidate` / `CrawlThreadCandidateController` | 筛选、状态、加入导入 | 待补 | 基线已盘点 |
 | 导入任务 | `crawl/importTask` / `CrawlImportTaskController` | 创建、执行、暂停/恢复、重试、日志 | 待补 | 基线已盘点 |
