@@ -10,7 +10,13 @@
 <script setup>
   import { ref, nextTick } from 'vue'
   import VCharts from 'vue-echarts'
+  import { use } from 'echarts/core'
+  import { CanvasRenderer } from 'echarts/renderers'
+  import { LineChart } from 'echarts/charts'
+  import { GraphicComponent, GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
   import { useWindowResize } from '@/hooks/use-windows-resize'
+
+  use([CanvasRenderer, LineChart, GraphicComponent, GridComponent, LegendComponent, TooltipComponent])
 
   defineProps({
     options: {

@@ -20,8 +20,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-reader-seo|reader-identity|reader-commerce|reader-finance]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -85,15 +85,19 @@ func run() int {
 			legacymigrate.ReaderIdentityStage{},
 			legacymigrate.ReaderCommerceStage{},
 			legacymigrate.ReaderFinanceStage{},
+			legacymigrate.ReaderActivityStage{},
 		)
 	}
-	if command == "reader-identity" || command == "reader-commerce" || command == "reader-finance" {
+	if command == "reader-identity" || command == "reader-commerce" || command == "reader-finance" || command == "reader-activity" {
 		stages = append(stages, legacymigrate.ReaderIdentityStage{})
-		if command == "reader-commerce" || command == "reader-finance" {
+		if command == "reader-commerce" || command == "reader-finance" || command == "reader-activity" {
 			stages = append(stages, legacymigrate.ReaderCommerceStage{})
 		}
-		if command == "reader-finance" {
+		if command == "reader-finance" || command == "reader-activity" {
 			stages = append(stages, legacymigrate.ReaderFinanceStage{})
+		}
+		if command == "reader-activity" {
+			stages = append(stages, legacymigrate.ReaderActivityStage{})
 		}
 	}
 	if command == "novel-reader-seo" {

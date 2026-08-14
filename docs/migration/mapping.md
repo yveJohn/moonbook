@@ -26,7 +26,7 @@
 | AI 配置和模型 | `novel_ai_config`、`novel_ai_config_model` | `novel_ai_config`、`novel_ai_config_model` | 配置和模型 ID 原值保留 | 非秘密参数、有序模型、当前模型、失败阈值/计数、状态版本；密钥改由 Secret 注入 | `00048` 建立目标结构和管理闭环；旧 `api_key` 值禁止写入 PostgreSQL、日志或报告，仅按旧配置 ID 生成 `MOONBOOK_AI_LEGACY_<ID>_API_KEY` 引用并列入迁移后的待注入 Secret 清单，旧单 `model` 在缺少模型子表时作为顺序 1 模型迁移 |
 | AI 清洗/摘要/画像 | clean、summary、profile 配置/任务/结果表 | PostgreSQL 内容生产域；清洗正文进入 MinIO | 旧配置、任务和建议 ID 原值保留；新序列推进 | 任务结果、采用状态、失败重试、对象版本、正文哈希、原始/建议/审核快照和 Long ID | `00049` 建立清洗配置/任务/结果，清洗稿写 `chapter-clean/{bookId}/{resultId}/v{version}.txt`，`00051` 前向补齐对象约束；`00050` 建立摘要配置/任务并回写 `chapter_summary`；`00053` 建立画像单例配置和建议事实，原始、AI 建议与审核结果分别保存 JSONB 快照，每本书只允许一个 running/pending 建议。画像输入优先读取 MinIO 清洗正文，超预算后降级到章节简介/分段简介；旧明文 AI 密钥不迁移，运行中旧任务按失败中断记录导入后人工重试，待审核建议保留原始快照以支持采用前并发校验 |
 | 读者 SEO | `novel_reader_seo_config` | `novel_reader_seo_config` 单例 | 固定配置 `id=1` 原值保留；额外 ID 不迁移 | 开关、站点字段、模板、时间、单例、错误清单和幂等 | M2 管理配置与迁移已实现；M3 接入公开 SEO、robots、sitemap 契约 |
-| 每日活动统计 | `reader_daily_activity` | PostgreSQL 分析事实 | 复合键保留 | 日期时区、读者关联、去重 | 待 M4 设计 |
+| 每日活动统计 | `reader_daily_activity` | `reader_daily_activity`、`reader_activity_settings` | `(activity_date,reader_id)` 复合键和读者 bigint 原值保留 | Kuala Lumpur 日期、首次活跃时间、读者关联、按日去重、追踪起始边界 | `reader-activity` 阶段已实现；真实只读 MySQL 8.4 → PostgreSQL 17 覆盖大 ID、复合游标、错误清单与幂等重跑 |
 
 ## 明确不迁移
 

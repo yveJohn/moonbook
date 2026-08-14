@@ -14,6 +14,7 @@ func OptionalReader(service *Service) gin.HandlerFunc {
 		if raw != "" {
 			if identity, err := service.ValidateToken(c.Request.Context(), raw); err == nil {
 				c.Set(readerIdentityKey, identity)
+				service.recordActivity(c.Request.Context(), identity.ReaderID)
 			}
 		}
 		c.Next()
@@ -36,6 +37,7 @@ func RequireReader(service *Service) gin.HandlerFunc {
 		}
 		c.Set(readerIdentityKey, identity)
 		c.Set("reader.token", raw)
+		service.recordActivity(c.Request.Context(), identity.ReaderID)
 		c.Next()
 	}
 }

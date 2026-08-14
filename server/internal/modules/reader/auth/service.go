@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -66,12 +67,28 @@ type Repository interface {
 type RateLimiter interface {
 	Allow(context.Context, string, int64, time.Duration) (bool, error)
 }
+type ActivityRecorder interface {
+	Record(context.Context, int64, time.Time) error
+}
 type Service struct {
-	repo    Repository
-	limiter RateLimiter
-	tokens  TokenConfig
-	limit   int64
-	window  time.Duration
+	repo     Repository
+	limiter  RateLimiter
+	activity ActivityRecorder
+	tokens   TokenConfig
+	limit    int64
+	window   time.Duration
+}
+
+func (s *Service) SetActivityRecorder(recorder ActivityRecorder) {
+	s.activity = recorder
+}
+
+func (s *Service) recordActivity(ctx context.Context, readerID int64) {
+	if s.activity != nil {
+		if err := s.activity.Record(ctx, readerID, time.Now()); err != nil {
+			slog.ErrorContext(ctx, "record reader activity", "reader_id", readerID, "error", err)
+		}
+	}
 }
 
 func NewService(repo Repository, limiter RateLimiter, config TokenConfig) *Service {
@@ -135,6 +152,7 @@ func (s *Service) Login(ctx context.Context, username, password, ip string) (Acc
 	if err := s.repo.SetSessionDigest(ctx, sessionID, digest(token)); err != nil {
 		return AccessToken{}, apperror.Wrap(err, apperror.CodeInternal, 500, "登录失败")
 	}
+	s.recordActivity(ctx, account.ID)
 	return AccessToken{AccessToken: token, ExpiresAt: expires}, nil
 }
 
@@ -155,6 +173,7 @@ func (s *Service) CreateToken(ctx context.Context, readerID int64) (AccessToken,
 	if err = s.repo.SetSessionDigest(ctx, sessionID, digest(token)); err != nil {
 		return AccessToken{}, apperror.Wrap(err, apperror.CodeInternal, 500, "登录失败")
 	}
+	s.recordActivity(ctx, readerID)
 	return AccessToken{AccessToken: token, ExpiresAt: expires}, nil
 }
 

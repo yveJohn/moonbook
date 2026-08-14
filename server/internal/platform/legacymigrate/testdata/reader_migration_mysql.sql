@@ -17,6 +17,18 @@ INSERT INTO reader_user VALUES
     (9007199254740994,'reader_md5','夜读者','5f4dcc3b5aa765d61d8327deb882cf99','disabled',9,NULL,NULL,'2026-06-02 01:02:03','2026-07-02 01:02:03'),
     (9007199254740995,'reader_invalid','坏摘要','not-a-password-hash','enabled',11,NULL,NULL,'2026-06-03 01:02:03','2026-07-03 01:02:03');
 
+CREATE TABLE reader_daily_activity (
+    activity_date date NOT NULL,
+    reader_id bigint NOT NULL,
+    first_active_time datetime NOT NULL,
+    create_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(activity_date, reader_id)
+);
+INSERT INTO reader_daily_activity VALUES
+    ('2026-08-13',9007199254740993,'2026-08-13 23:59:58','2026-08-13 23:59:59'),
+    ('2026-08-14',9007199254740993,'2026-08-14 00:01:02','2026-08-14 00:01:03'),
+    ('2026-08-14',9007199254740995,'2026-08-14 08:00:00','2026-08-14 08:00:01');
+
 CREATE TABLE reader_invite_code (
     id bigint NOT NULL PRIMARY KEY, code varchar(64) NOT NULL, inviter_reader_id bigint,
     status varchar(20) NOT NULL, max_use_count int, used_count int NOT NULL, expire_time datetime,

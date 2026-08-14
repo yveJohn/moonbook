@@ -90,6 +90,13 @@ type fixedLimiter struct {
 	keys    []string
 }
 
+type failingActivityRecorder struct{ calls int }
+
+func (r *failingActivityRecorder) Record(context.Context, int64, time.Time) error {
+	r.calls++
+	return errors.New("activity database unavailable")
+}
+
 func (l *fixedLimiter) Allow(_ context.Context, key string, _ int64, _ time.Duration) (bool, error) {
 	l.keys = append(l.keys, key)
 	return l.allowed, l.err
@@ -114,6 +121,20 @@ func TestLoginBcryptAndValidateSession(t *testing.T) {
 	}
 	if identity.ReaderID != repo.account.ID || len(limiter.keys) != 2 {
 		t.Fatalf("identity=%+v limiter keys=%v", identity, limiter.keys)
+	}
+}
+
+func TestLoginSucceedsWhenActivityRecordingFails(t *testing.T) {
+	hash, _ := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	repo := &memoryRepository{account: ReaderAccount{ID: 77, Username: "reader", PasswordHash: string(hash), PasswordAlgorithm: PasswordAlgorithmBcrypt, Status: AccountStatusEnabled}}
+	service := newServiceForTest(repo, &fixedLimiter{allowed: true})
+	recorder := &failingActivityRecorder{}
+	service.SetActivityRecorder(recorder)
+	if _, err := service.Login(context.Background(), "reader", "correct-password", "127.0.0.1"); err != nil {
+		t.Fatalf("activity failure changed login result: %v", err)
+	}
+	if recorder.calls != 1 {
+		t.Fatalf("activity calls=%d, want 1", recorder.calls)
 	}
 }
 

@@ -50,7 +50,7 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stages := []Stage{ReaderIdentityStage{}, ReaderCommerceStage{}, ReaderFinanceStage{}}
+	stages := []Stage{ReaderIdentityStage{}, ReaderCommerceStage{}, ReaderFinanceStage{}, ReaderActivityStage{}}
 	if err := runner.Run(ctx, stages...); err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +87,8 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_recharge_orders WHERE merchant_pid_sha256='legacy-merchant-pid'`, nil, 0)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE id=9007199254743801 AND source_ip_sha256=$1 AND payload_snapshot->>'trade_id'='TRADE-FIXTURE'`, []any{sha256Text("203.0.113.9")}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE source_ip_sha256 IN ('203.0.113.9','203.0.113.10')`, nil, 0)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_daily_activity WHERE reader_id=$1 AND source_type='legacy'`, []any{readerIDs[0]}, 2)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_daily_activity WHERE reader_id=$1 AND activity_date='2026-08-14' AND first_active_at='2026-08-14 00:01:02+08'`, []any{readerIDs[0]}, 1)
 	reconcileReport, err := reconcile.Wallets(ctx, target)
 	if err != nil {
 		t.Fatal(err)
@@ -95,10 +97,11 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 		t.Fatalf("wallet reconciliation mismatches: %+v", reconcileReport.Mismatches)
 	}
 
-	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND (metadata->>'done')::boolean`, []any{migration}, 3)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND (metadata->>'done')::boolean`, []any{migration}, 4)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-identity' AND processed_count=3 AND error_count=1`, []any{migration}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-commerce' AND processed_count=13 AND error_count=2`, []any{migration}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-finance' AND processed_count=19 AND error_count=2`, []any{migration}, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-activity' AND processed_count=3 AND error_count=1`, []any{migration}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_errors WHERE migration_name=$1 AND error_code IN ('INVALID_PASSWORD_HASH','INVALID_MEMBERSHIP_GRANT_TYPE','INVALID_ENTITLEMENT_TYPE','INVALID_PURCHASE_ORDER','INVALID_PAYMENT_CALLBACK')`, []any{migration}, 5)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_errors WHERE migration_name=$1 AND (error_message ILIKE '%not-a-password-hash%' OR error_message ILIKE '%5f4dcc3b%')`, []any{migration}, 0)
 
@@ -176,6 +179,7 @@ func cleanupReaderMigrationFixture(t *testing.T, db *sql.DB, migration string, r
 	}{
 		{`DELETE FROM migration_errors WHERE migration_name=$1`, []any{migration}},
 		{`DELETE FROM migration_checkpoints WHERE migration_name=$1`, []any{migration}},
+		{`DELETE FROM reader_daily_activity WHERE reader_id = ANY($1)`, []any{readerIDs}},
 		{`DELETE FROM reader_payment_callback_logs WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743801' AND '9007199254743809'`, nil},
 		{`DELETE FROM reader_recharge_orders WHERE legacy_source_ref BETWEEN '9007199254743701' AND '9007199254743709'`, nil},
 		{`DELETE FROM reader_wallet_adjustments WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743502' AND '9007199254743509'`, nil},
