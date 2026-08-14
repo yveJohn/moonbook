@@ -41,7 +41,7 @@
 | 邀请码 | `reader/inviteCode` / `ReaderInviteCodeController` | 生成、编辑、删除、状态 | M4 | 生成、删除、启停已实现；已使用码禁止删除，编辑字段待补 |
 | 签到奖励规则 | `reader/checkinReward` / `ReaderCheckinRewardRuleController` | CRUD、启停 | M4 | `00025`、`/reader/checkinRules`、管理页面已实现；fixed/random 校验及启用唯一约束有集成测试 |
 | 钱包与流水 | `reader/wallet` / `ReaderWalletAdminController` | 余额、流水、调整、签到、邀请奖励 | M4 | 余额、不可变流水和人工调账已实现；请求 ID 幂等、钱包锁和余额不足保护有真实 PostgreSQL 集成测试；签到/邀请奖励运营入口待补 |
-| 消费商品 | `reader/product` / `ReaderProductController` | 书籍、章节、会员、免广告商品及上下架 | M4 | 基线已盘点 |
+| 消费商品 | `reader/product` / `ReaderProductController` | 书籍、章节、会员、免广告商品及上下架 | M4 | 管理端分页筛选、CRUD、在售状态、目标存在性校验和历史订单删除保护已实现；真实 PostgreSQL 集成测试通过 |
 | 消费订单 | `reader/order` / `ReaderOrderAdminController` | 查询、人工充值、确认 | M4 | 基线已盘点 |
 | 会员发放 | 读者详情组件 | 发放、有效期、永久会员 | M4 | 基线已盘点 |
 | 充值产品与设置 | `reader/payment/product` / `ReaderRechargeProductAdminController` | 预设档位、自定义兑换范围 | M4 | 充值档位 CRUD、自定义充值开关/汇率/最小最大范围管理已实现；真实 PostgreSQL 集成测试覆盖非法规则 |

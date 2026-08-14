@@ -64,6 +64,7 @@
   "/src/view/reader/payment/orders/index.vue": "ReaderRechargeOrders",
   "/src/view/reader/payment/rechargeProducts/index.vue": "ReaderRechargeProducts",
   "/src/view/reader/payment/rechargeSettings/index.vue": "ReaderRechargeSettings",
+  "/src/view/reader/products/index.vue": "ReaderProducts",
   "/src/view/reader/users/index.vue": "ReaderUsers",
   "/src/view/reader/wallet/index.vue": "ReaderWallet",
   "/src/view/routerHolder.vue": "RouterHolder",

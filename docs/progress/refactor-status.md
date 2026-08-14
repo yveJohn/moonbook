@@ -169,3 +169,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 新增签到奖励规则管理 API 和页面（`GET/POST/PUT/DELETE /reader/checkinRules`），支持每日/连续签到、固定/随机奖励、启停、排序和备注；所有 ID/金额字段按字符串传输，数据库唯一索引保证同一启用规则不重复，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00025`。
 - 新增自定义充值设置管理 API 和页面（`GET/PUT /reader/payment/rechargeSettings`），支持自定义充值启停、钻石/USDT 汇率及最小/最大钻石范围；汇率最多 8 位小数，范围和正数校验在服务端与页面双重执行，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00026`。
 - 新增钱包人工调账 API 和管理入口（`POST /reader/wallets/:readerId/adjust`），支持充值币/奖励币收入与支出、原因和请求 ID；请求 ID通过不可变流水幂等键处理，事务锁定读者和钱包，支出不足自动拒绝，真实 PostgreSQL 集成测试覆盖重复请求和余额保护，迁移版本推进至 `00028`。
+- 新增消费商品管理 API 和页面（`GET/POST /reader/products`、`PUT/DELETE /reader/products/:id`），覆盖书籍、章节、会员和免广告商品；所有 ID/价格以字符串传输，目标书籍/章节存在性、商品类型约束、历史订单引用删除保护均在服务端校验，迁移版本推进至 `00031`，真实 PostgreSQL 集成测试覆盖 CRUD、筛选和引用删除保护。
