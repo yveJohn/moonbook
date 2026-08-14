@@ -54,6 +54,7 @@ func commerceCursor(raw string) (string, int64, error) {
 func runCommerceTable(ctx context.Context, source *sql.DB, target *sql.Tx, table string, last int64, limit int) (BatchResult, error) {
 	q := map[string]string{
 		"reader_invite_code":        `SELECT id,code,COALESCE(inviter_reader_id,0),COALESCE(status,'enabled'),max_use_count,used_count,expire_time,COALESCE(remark,''),create_time,update_time FROM reader_invite_code WHERE id>? ORDER BY id LIMIT ?`,
+		"reader_invite_relation":    `SELECT id,inviter_reader_id,invitee_reader_id,invite_code,COALESCE(status,'active'),create_time FROM reader_invite_relation WHERE id>? ORDER BY id LIMIT ?`,
 		"reader_product":            `SELECT id,product_type,COALESCE(target_id,0),product_name,price_coin,allow_bonus_coin,duration_days,sale_status,sort_order,create_time,update_time FROM reader_product WHERE id>? ORDER BY id LIMIT ?`,
 		"reader_membership_grant":   `SELECT id,reader_id,grant_type,create_time,after_expire_time,after_permanent,status FROM reader_membership_grant WHERE id>? ORDER BY id LIMIT ?`,
 		"reader_entitlement":        `SELECT id,reader_id,entitlement_type,target_id,start_time,expire_time,status,create_time,update_time FROM reader_entitlement WHERE id>? ORDER BY id LIMIT ?`,
@@ -62,13 +63,15 @@ func runCommerceTable(ctx context.Context, source *sql.DB, target *sql.Tx, table
 		"user_bookshelf":            `SELECT id,user_id,book_id,pre_content_id,create_time,update_time FROM user_bookshelf WHERE id>? ORDER BY id LIMIT ?`,
 		"user_read_history":         `SELECT id,user_id,book_id,pre_content_id,create_time,update_time FROM user_read_history WHERE id>? ORDER BY id LIMIT ?`,
 		"reader_reading_history":    `SELECT id,reader_id,book_id,chapter_id,chapter_no,position_type,position_value,progress_percent,last_read_time,create_time,update_time FROM reader_reading_history WHERE id>? ORDER BY id LIMIT ?`,
+		"reader_read_history":       `SELECT id,reader_id,book_id,chapter_id,chapter_no,position_type,position_value,progress_percent,last_read_time,create_time,update_time FROM reader_read_history WHERE id>? ORDER BY id LIMIT ?`,
 		"reader_reading_preference": `SELECT id,reader_id,font_size,line_height,theme,reading_mode,create_time,update_time FROM reader_reading_preference WHERE id>? ORDER BY id LIMIT ?`,
 		"user_feedback":             `SELECT id,COALESCE(user_id,0),COALESCE(content,''),create_time FROM user_feedback WHERE id>? ORDER BY id LIMIT ?`,
 		"reader_feedback":           `SELECT id,reader_id,book_id,chapter_id,content,status,reply,replied_at,created_at,updated_at FROM reader_feedback WHERE id>? ORDER BY id LIMIT ?`,
 	}
 	query, ok := q[table]
-	if !ok || table == "reader_invite_relation" {
-		return BatchResult{Done: true, NextCursor: fmt.Sprintf("%s:%d", table, last), Metadata: map[string]any{"source": table, "skipped": "unsupported_legacy_shape"}}, nil
+	if !ok {
+		next := nextCommerceCursor(table)
+		return BatchResult{Done: next == "", NextCursor: next, Metadata: map[string]any{"source": table, "skipped": "unsupported_legacy_shape"}}, nil
 	}
 	rows, err := source.QueryContext(ctx, query, last, limit)
 	if err != nil {
@@ -90,6 +93,15 @@ func runCommerceTable(ctx context.Context, source *sql.DB, target *sql.Tx, table
 			if scanErr == nil {
 				_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count,used_count,expires_at,remark,created_at,updated_at) VALUES($1,$2,NULLIF($3,0),$4,$5,$6,$7,$8,COALESCE($9,now()),COALESCE($10,now())) ON CONFLICT(id) DO UPDATE SET code=EXCLUDED.code,status=EXCLUDED.status,used_count=EXCLUDED.used_count,updated_at=EXCLUDED.updated_at`, id, s1, a, s2, n1, b, nullableLegacyTime(t1), s3, nullableLegacyTime(t2), nullableLegacyTime(t3))
 			}
+		case "reader_invite_relation":
+			scanErr = rows.Scan(&id, &a, &b, &s1, &s2, &t1)
+			if scanErr == nil {
+				var codeID int64
+				scanErr = target.QueryRowContext(ctx, `SELECT id FROM reader_invite_codes WHERE code=$1`, s1).Scan(&codeID)
+				if scanErr == nil {
+					_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_invite_relations(id,inviter_reader_id,invitee_reader_id,invite_code_id,status,created_at) VALUES($1,$2,$3,$4,$5,COALESCE($6,now())) ON CONFLICT(invitee_reader_id) DO NOTHING`, id, a, b, codeID, s2, nullableLegacyTime(t1))
+				}
+			}
 		case "reader_product":
 			scanErr = rows.Scan(&id, &s1, &a, &s2, &b, &flag, &n1, &s3, &c, &t1, &t2)
 			if scanErr == nil {
@@ -109,6 +121,34 @@ func runCommerceTable(ctx context.Context, source *sql.DB, target *sql.Tx, table
 			scanErr = rows.Scan(&id, &a, &b, &n1, &t1, &t2)
 			if scanErr == nil {
 				_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_bookshelf_entries(id,reader_id,book_id,last_chapter_id,last_read_at,created_at,updated_at) VALUES($1,$2,$3,NULLIF($4,0),$5,COALESCE($6,now()),COALESCE($6,now())) ON CONFLICT(reader_id,book_id) DO NOTHING`, id, a, b, n1.Int64, nullableLegacyTime(t2), nullableLegacyTime(t1))
+			}
+		case "reader_feedback":
+			scanErr = rows.Scan(&id, &a, &n1, &n1, &s1, &s2, &s3, &t1, &t2, &t3)
+			if scanErr == nil {
+				if s2 == "pending" {
+					s3 = ""
+				}
+				_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_feedback(id,reader_id,content,status,reply,created_at,updated_at) VALUES($1,$2,$3,$4,$5,COALESCE($6,now()),COALESCE($7,now())) ON CONFLICT(id) DO NOTHING`, id, a, s1, s2, s3, nullableLegacyTime(t2), nullableLegacyTime(t3))
+			}
+		case "user_feedback":
+			scanErr = rows.Scan(&id, &a, &s1, &t1)
+			if scanErr == nil {
+				_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_feedback(id,reader_id,content,status,reply,created_at,updated_at) VALUES($1,NULLIF($2,0),$3,'pending','',COALESCE($4,now()),COALESCE($4,now())) ON CONFLICT(id) DO NOTHING`, id, a, s1, nullableLegacyTime(t1))
+			}
+		case "reader_reading_preference":
+			scanErr = rows.Scan(&id, &a, &n1, &s1, &s2, &s3, &t1, &t2)
+			if scanErr == nil {
+				_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_reading_preferences(id,reader_id,font_size,theme,reading_mode,created_at,updated_at) VALUES($1,$2,$3,$4,$5,COALESCE($6,now()),COALESCE($7,now())) ON CONFLICT(reader_id) DO UPDATE SET font_size=EXCLUDED.font_size,theme=EXCLUDED.theme,reading_mode=EXCLUDED.reading_mode,updated_at=EXCLUDED.updated_at`, id, a, n1.Int64, s2, s3, nullableLegacyTime(t1), nullableLegacyTime(t2))
+			}
+		case "user_read_history":
+			scanErr = rows.Scan(&id, &a, &b, &n1, &t1, &t2)
+			if scanErr == nil {
+				_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_reading_history(id,reader_id,book_id,chapter_id,last_read_at,created_at,updated_at) VALUES($1,$2,$3,$4,COALESCE($5,now()),COALESCE($6,now()),COALESCE($6,now())) ON CONFLICT(reader_id,book_id) DO NOTHING`, id, a, b, n1.Int64, nullableLegacyTime(t2), nullableLegacyTime(t1))
+			}
+		case "reader_reading_history", "reader_read_history":
+			scanErr = rows.Scan(&id, &a, &b, &c, &n1, &s1, &n1, &n1, &t1, &t2, &t3)
+			if scanErr == nil {
+				_, scanErr = target.ExecContext(ctx, `INSERT INTO reader_reading_history(id,reader_id,book_id,chapter_id,last_read_at,created_at,updated_at) VALUES($1,$2,$3,$4,COALESCE($5,now()),COALESCE($6,now()),COALESCE($7,now())) ON CONFLICT(reader_id,book_id) DO UPDATE SET chapter_id=EXCLUDED.chapter_id,last_read_at=EXCLUDED.last_read_at,updated_at=EXCLUDED.updated_at`, id, a, b, c, nullableLegacyTime(t1), nullableLegacyTime(t2), nullableLegacyTime(t3))
 			}
 		default:
 			scanErr = rows.Scan(&id, &a, &b, &n1, &t1, &t2)
@@ -134,4 +174,13 @@ func runCommerceTable(ctx context.Context, source *sql.DB, target *sql.Tx, table
 		}
 	}
 	return result, nil
+}
+
+func nextCommerceCursor(table string) string {
+	for i, value := range readerCommerceTables {
+		if value == table && i+1 < len(readerCommerceTables) {
+			return fmt.Sprintf("%s:0", readerCommerceTables[i+1])
+		}
+	}
+	return ""
 }

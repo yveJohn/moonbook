@@ -98,6 +98,10 @@ func migrateReaderUsers(ctx context.Context, source *sql.DB, target *sql.Tx, las
 		}
 	}
 	result.Done = result.Processed < int64(limit)
+	if result.Done {
+		result.Done = false
+		result.NextCursor = "user:0"
+	}
 	return result, nil
 }
 
