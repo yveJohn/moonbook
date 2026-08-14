@@ -15,6 +15,7 @@ func Reload() error {
 		return err
 	}
 	StopObjectGC()
+	StopImportWorker()
 
 	// 重新初始化数据库连接
 	if global.GVA_DB != nil {
@@ -45,6 +46,9 @@ func Reload() error {
 		}
 		logger.Bg().Mod("jobs").Field("recovered", recovered).Info("持久化任务恢复完成")
 		if err := StartObjectGC(); err != nil {
+			return err
+		}
+		if err := StartImportWorker(); err != nil {
 			return err
 		}
 	}
