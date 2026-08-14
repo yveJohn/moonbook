@@ -38,7 +38,7 @@
 | 读者用户 | `reader/user` / `ReaderUserAdminController` | 查询、详情、启停、重置密码 | M3 | 查询、详情、启停已实现；密码重置待补 |
 | 书架、历史、偏好、点赞 | 读者 API 与相关表 | 查看读者行为、兼容读者端 | M3 | 基线已盘点 |
 | 反馈处理 | `reader/feedback` / `ReaderFeedbackAdminController` | 列表、详情、回复 | M3 | 列表、详情、单次回复已实现；行为运营关联视图待补 |
-| 邀请码 | `reader/inviteCode` / `ReaderInviteCodeController` | 生成、编辑、删除、状态 | M4 | 基线已盘点 |
+| 邀请码 | `reader/inviteCode` / `ReaderInviteCodeController` | 生成、编辑、删除、状态 | M4 | 生成、删除、启停已实现；已使用码禁止删除，编辑字段待补 |
 | 签到奖励规则 | `reader/checkinReward` / `ReaderCheckinRewardRuleController` | CRUD、启停 | M4 | 基线已盘点 |
 | 钱包与流水 | `reader/wallet` / `ReaderWalletAdminController` | 余额、流水、调整、签到、邀请奖励 | M4 | 余额汇总与不可变流水只读管理已实现；人工调整、签到/邀请奖励运营入口待补 |
 | 消费商品 | `reader/product` / `ReaderProductController` | 书籍、章节、会员、免广告商品及上下架 | M4 | 基线已盘点 |

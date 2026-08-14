@@ -163,3 +163,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 新增钱包与流水管理 API 和页面（`GET /reader/wallets`、`GET /reader/wallets/:readerId/ledgers`），支持读者关键词、余额汇总和币种流水只读核对；余额、累计值、流水 ID、读者 ID均以字符串输出，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00021`。人工调整、签到/邀请奖励运营入口仍待实现。
 - 新增读者用户管理 API 和页面（`GET /reader/users`、`GET /reader/users/:id`、`PUT /reader/users/:id/status`），支持账号/昵称和状态筛选、详情、启停；停用或删除状态会在同一事务撤销现有读者会话，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00022`。密码重置、反馈处理和行为运营页面仍待实现。
 - 新增读者反馈管理 API 和页面（`GET /reader/feedback`、`GET /reader/feedback/:id`、`PUT /reader/feedback/:id/reply`），支持关键词/状态筛选、详情和单次回复；回复状态转换使用事务锁，重复回复被拒绝并写入操作审计，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00023`。密码重置和行为运营页面仍待实现。
+- 新增邀请码管理 API 和页面（`GET/POST /reader/inviteCodes`、`PUT/DELETE /reader/inviteCodes/:id`），支持自动/自定义生成、使用次数、过期时间、启停和未使用码删除；已使用邀请码禁止删除，ID 生成使用事务 advisory lock，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00024`。
