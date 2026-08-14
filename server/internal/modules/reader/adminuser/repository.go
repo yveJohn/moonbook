@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type SQLRepository struct{ DB *sql.DB }
@@ -12,6 +13,35 @@ const userSelect = `SELECT id::text,username,nickname,status,password_algorithm,
 
 func scan(row interface{ Scan(...any) error }, u *User) error {
 	return row.Scan(&u.ID, &u.Username, &u.Nickname, &u.Status, &u.PasswordAlgorithm, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt)
+}
+
+func (r SQLRepository) ResetPassword(ctx context.Context, id int64, password, confirm string) error {
+	if id <= 0 || password != confirm || len([]rune(password)) < 6 || len([]rune(password)) > 64 {
+		return errors.New("invalid reader password")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var status string
+	if err = tx.QueryRowContext(ctx, `SELECT status FROM reader_accounts WHERE id=$1 FOR UPDATE`, id).Scan(&status); err != nil {
+		return err
+	}
+	if status == "deleted" {
+		return errors.New("reader account deleted")
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE reader_accounts SET password_hash=$1,password_algorithm='bcrypt',password_upgraded_at=now(),updated_at=now() WHERE id=$2`, string(hash), id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE reader_sessions SET revoked_at=now() WHERE reader_id=$1 AND revoked_at IS NULL`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (r SQLRepository) List(ctx context.Context, k, status string, p, n int) ([]User, int64, error) {
 	where := ` WHERE ($1='' OR username ILIKE '%'||$1||'%' OR nickname ILIKE '%'||$1||'%') AND ($2='' OR status=$2)`

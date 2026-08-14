@@ -35,7 +35,7 @@
 
 | 功能 | 旧页面/Controller | 关键操作 | 里程碑 | 状态 |
 | --- | --- | --- | --- | --- |
-| 读者用户 | `reader/user` / `ReaderUserAdminController` | 查询、详情、启停、重置密码 | M3 | 查询、详情、启停已实现；密码重置待补 |
+| 读者用户 | `reader/user` / `ReaderUserAdminController` | 查询、详情、启停、重置密码 | M3 | 查询、详情、启停、密码重置已实现；重置统一 bcrypt 并撤销现有会话，真实 PostgreSQL 集成测试覆盖 |
 | 书架、历史、偏好、点赞 | 读者 API 与相关表 | 查看读者行为、兼容读者端 | M3 | 基线已盘点 |
 | 反馈处理 | `reader/feedback` / `ReaderFeedbackAdminController` | 列表、详情、回复 | M3 | 列表、详情、单次回复已实现；行为运营关联视图待补 |
 | 邀请码 | `reader/inviteCode` / `ReaderInviteCodeController` | 生成、编辑、删除、状态 | M4 | 生成、删除、启停已实现；已使用码禁止删除，编辑字段待补 |

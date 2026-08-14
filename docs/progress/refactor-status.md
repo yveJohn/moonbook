@@ -137,6 +137,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Reader 公开内容已实现：书目精选/分页/随机、分类、书籍详情、章节目录、章节正文、SEO JSON、robots 和 sitemap；公开查询过滤已发布且未软删除数据，正文读取通过 MinIO 活动对象并校验大小/SHA-256/UTF-8。
 - Commerce 访问合同已实现批量商品、定价、会员和权益读取；章节目录与正文访问使用统一访问判定和 46101-46105 兼容错误。
 - Reader 个人数据已实现：书架、点赞、阅读历史、偏好和反馈；写操作按 reader_id 隔离，点赞在 PostgreSQL 事务内锁书并重算汇总，历史写入校验书籍/章节归属和可见状态。
+- 读者管理已补充密码重置：`PUT /reader/users/:id/password` 使用 bcrypt 更新密码并在同一事务撤销所有 Reader session，管理端提供确认密码表单，真实 PostgreSQL 集成测试验证旧会话失效和新哈希可用，迁移版本推进至 `00027`。
 - 当前代码证据提交为 `b908041`、`163664b`、`86fd095`、`b983227`、`4af0f25`、`daa3654`、`f5cd1bd`、`4976066`、`ce7de9d`、`97ba7fe`、`b195dae`。
 - Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，批量读者隔离修复提交 `725c5ad`）。认证 HTTP 包装契约测试提交 `cfcb2a9` 已验证 Long ID 字符串和未登录错误语义；新增 public HTTP 集成契约测试覆盖匿名书库、Bearer 章节目录和 MinIO 正文。冻结 `reader-ui` 离线测试已通过 44 个测试文件/536 个用例，SSR 生产构建通过；隔离 Go API + Reader SSR 已使用真实书籍/章节 fixture 验证书籍详情、章节目录、匿名正文 46101、Book JSON-LD 和实际内容页面。Playwright CLI 因本机无缓存且网络受限未启动，浏览器关键旅程和 8GB 副本演练仍未完成，不能作为 M3 退出证据。
 
@@ -161,8 +162,8 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 新增充值订单管理 API 和页面（`GET /reader/payment/orders`、`GET /reader/payment/orders/:id`），支持订单号/读者关键词、状态筛选、详情及网关交易信息只读审计；真实 PostgreSQL 集成测试覆盖列表、分页筛选和详情，迁移版本推进至 `00019`。
 - 新增支付回调日志管理 API 和页面（`GET /reader/payment/callbackLogs`、`GET /reader/payment/callbackLogs/:id`），支持商户订单号/网关交易号、处理结果筛选、签名有效性、失败原因和响应状态审计；原始 payload 不通过管理接口返回，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00020`。主动同步和人工补单仍待实现。
 - 新增钱包与流水管理 API 和页面（`GET /reader/wallets`、`GET /reader/wallets/:readerId/ledgers`），支持读者关键词、余额汇总和币种流水只读核对；余额、累计值、流水 ID、读者 ID均以字符串输出，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00021`。人工调整、签到/邀请奖励运营入口仍待实现。
-- 新增读者用户管理 API 和页面（`GET /reader/users`、`GET /reader/users/:id`、`PUT /reader/users/:id/status`），支持账号/昵称和状态筛选、详情、启停；停用或删除状态会在同一事务撤销现有读者会话，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00022`。密码重置、反馈处理和行为运营页面仍待实现。
-- 新增读者反馈管理 API 和页面（`GET /reader/feedback`、`GET /reader/feedback/:id`、`PUT /reader/feedback/:id/reply`），支持关键词/状态筛选、详情和单次回复；回复状态转换使用事务锁，重复回复被拒绝并写入操作审计，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00023`。密码重置和行为运营页面仍待实现。
+- 新增读者用户管理 API 和页面（`GET /reader/users`、`GET /reader/users/:id`、`PUT /reader/users/:id/status`），支持账号/昵称和状态筛选、详情、启停；停用或删除状态会在同一事务撤销现有读者会话，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00022`。密码重置已在 `00027` 补齐，反馈处理和行为运营页面仍待实现。
+- 新增读者反馈管理 API 和页面（`GET /reader/feedback`、`GET /reader/feedback/:id`、`PUT /reader/feedback/:id/reply`），支持关键词/状态筛选、详情和单次回复；回复状态转换使用事务锁，重复回复被拒绝并写入操作审计，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00023`。行为运营页面仍待实现。
 - 新增邀请码管理 API 和页面（`GET/POST /reader/inviteCodes`、`PUT/DELETE /reader/inviteCodes/:id`），支持自动/自定义生成、使用次数、过期时间、启停和未使用码删除；已使用邀请码禁止删除，ID 生成使用事务 advisory lock，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00024`。
 - 新增签到奖励规则管理 API 和页面（`GET/POST/PUT/DELETE /reader/checkinRules`），支持每日/连续签到、固定/随机奖励、启停、排序和备注；所有 ID/金额字段按字符串传输，数据库唯一索引保证同一启用规则不重复，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00025`。
 - 新增自定义充值设置管理 API 和页面（`GET/PUT /reader/payment/rechargeSettings`），支持自定义充值启停、钻石/USDT 汇率及最小/最大钻石范围；汇率最多 8 位小数，范围和正数校验在服务端与页面双重执行，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00026`。

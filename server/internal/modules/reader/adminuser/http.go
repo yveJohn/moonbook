@@ -18,6 +18,27 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	read.GET("users", h.list)
 	read.GET("users/:id", h.get)
 	write.PUT("users/:id/status", h.status)
+	write.PUT("users/:id/password", h.password)
+}
+func (h *Handler) password(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串"))
+		return
+	}
+	var req struct {
+		Password        string `json:"password"`
+		ConfirmPassword string `json:"confirmPassword"`
+	}
+	if c.ShouldBindJSON(&req) != nil {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "请求参数无效"))
+		return
+	}
+	if err := h.service.ResetPassword(c, id, req.Password, req.ConfirmPassword); err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, nil, "密码已重置")
 }
 func render(u User) map[string]any {
 	return map[string]any{"id": u.ID, "username": u.Username, "nickname": u.Nickname, "status": u.Status, "passwordAlgorithm": u.PasswordAlgorithm, "lastLoginAt": u.LastLoginAt, "createdAt": u.CreatedAt, "updatedAt": u.UpdatedAt}

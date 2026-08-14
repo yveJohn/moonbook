@@ -1,6 +1,9 @@
 package adminuser
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 type Service struct{ Repo Repository }
 
@@ -20,4 +23,10 @@ func (s *Service) List(ctx context.Context, k, st string, p, n int) ([]User, int
 func (s *Service) Get(ctx context.Context, id int64) (User, error) { return s.Repo.Get(ctx, id) }
 func (s *Service) SetStatus(ctx context.Context, id int64, st string) (User, error) {
 	return s.Repo.SetStatus(ctx, id, st)
+}
+func (s *Service) ResetPassword(ctx context.Context, id int64, password, confirm string) error {
+	if len([]rune(password)) < 6 || len([]rune(password)) > 64 || password != confirm {
+		return errors.New("invalid reader password")
+	}
+	return s.Repo.ResetPassword(ctx, id, password, confirm)
 }
