@@ -17,6 +17,21 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	write := private.Group("reader/payment").Use(middleware.OperationRecord())
 	read.GET("channels", h.list)
 	write.PUT("channels/:id", h.update)
+	write.POST("channels/:id/check", h.check)
+}
+
+func (h *Handler) check(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串"))
+		return
+	}
+	v, err := h.service.Check(c, id)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, map[string]any{"channelId": strconv.FormatInt(v.ChannelID, 10), "provider": v.Provider, "status": v.Status, "message": v.Message, "checkedAt": v.CheckedAt}, "检查完成")
 }
 func render(v Channel) map[string]any {
 	return map[string]any{"id": strconv.FormatInt(v.ID, 10), "provider": v.Provider, "enabled": v.Enabled, "currency": v.Currency, "token": v.Token, "network": v.Network, "configured": v.Configured}

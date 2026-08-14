@@ -9,3 +9,6 @@ func (s *Service) List(ctx context.Context) ([]Channel, error) { return s.Repo.L
 func (s *Service) SetEnabled(ctx context.Context, id int64, enabled bool) (Channel, error) {
 	return s.Repo.SetEnabled(ctx, id, enabled)
 }
+func (s *Service) Check(ctx context.Context, id int64) (Connectivity, error) {
+	return s.Repo.Check(ctx, id)
+}

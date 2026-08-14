@@ -45,7 +45,7 @@
 | 消费订单 | `reader/order` / `ReaderOrderAdminController` | 查询、人工充值、确认 | M4 | 基线已盘点 |
 | 会员发放 | 读者详情组件 | 发放、有效期、永久会员 | M4 | 基线已盘点 |
 | 充值产品与设置 | `reader/payment/product` / `ReaderRechargeProductAdminController` | 预设档位、自定义兑换范围 | M4 | 充值档位 CRUD、自定义充值开关/汇率/最小最大范围管理已实现；真实 PostgreSQL 集成测试覆盖非法规则 |
-| 支付渠道 | `reader/payment/channel` / `ReaderPaymentChannelAdminController` | 配置、启停、连通性检查、凭据保护 | M4 | 渠道查询、启停和凭据状态已实现；连通性探测待补 |
+| 支付渠道 | `reader/payment/channel` / `ReaderPaymentChannelAdminController` | 配置、启停、连通性检查、凭据保护 | M4 | 渠道查询、启停、凭据状态和脱敏连通性检查已实现；真实生产网关连通性仍需切换前使用受控凭据验收 |
 | 充值订单与回调 | `reader/payment/order` / `ReaderRechargeOrderAdminController` | 详情、回调日志、主动同步、异常状态 | M4 | 订单列表、筛选、详情、回调日志审计和人工补单已实现；真实网关主动同步仍需外部连通性与安全替身验收 |
 
 ## 内容生产（M5）

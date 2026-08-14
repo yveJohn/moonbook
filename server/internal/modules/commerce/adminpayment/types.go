@@ -12,7 +12,16 @@ type Channel struct {
 	Configured bool
 }
 
+type Connectivity struct {
+	ChannelID int64
+	Provider  string
+	Status    string
+	Message   string
+	CheckedAt string
+}
+
 type Repository interface {
 	List(ctx context.Context) ([]Channel, error)
 	SetEnabled(ctx context.Context, id int64, enabled bool) (Channel, error)
+	Check(ctx context.Context, id int64) (Connectivity, error)
 }
