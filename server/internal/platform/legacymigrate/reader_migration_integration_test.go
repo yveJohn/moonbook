@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/reconcile"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -49,7 +50,7 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stages := []Stage{ReaderIdentityStage{}, ReaderCommerceStage{}}
+	stages := []Stage{ReaderIdentityStage{}, ReaderCommerceStage{}, ReaderFinanceStage{}}
 	if err := runner.Run(ctx, stages...); err != nil {
 		t.Fatal(err)
 	}
@@ -73,20 +74,50 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_reading_history WHERE id=9007199254741701 AND chapter_no=12 AND position_type='page' AND position_value=4 AND progress_percent=37.50`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_reading_preferences WHERE id=9007199254741801 AND font_size=24 AND line_height=2.25 AND theme='green' AND reading_mode='scroll'`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_feedback WHERE id=9007199254741901 AND status='replied' AND reply='已处理' AND replied_at IS NOT NULL`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_wallets WHERE reader_id=$1 AND recharge_coin_balance=900 AND bonus_coin_balance=150 AND total_recharge_coin_income=1000 AND total_bonus_coin_income=200 AND total_recharge_coin_expense=100 AND total_bonus_coin_expense=50 AND source_type='legacy'`, []any{readerIDs[0]}, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_wallet_ledgers WHERE reader_id=$1 AND source_type='legacy'`, []any{readerIDs[0]}, 4)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_bonus_coin_buckets WHERE id=9007199254743101 AND remaining_amount=150 AND source_kind='invite'`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_purchase_orders WHERE id=9007199254743201 AND order_type='book' AND status='paid' AND source_type='legacy'`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_checkin_reward_rules WHERE id=9007199254743301 AND rule_type='continuous' AND continuous_days=3`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_checkin_records WHERE id=9007199254743401 AND total_reward_coin=30`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_invite_reward_records WHERE id=9007199254743501 AND reward_stage='register' AND reward_coin=200`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_wallet_adjustments WHERE id=9007199254743502 AND ledger_id=9007199254743004`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_recharge_products WHERE id=9007199254743601 AND diamond_amount=1000 AND source_type='legacy'`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_recharge_orders WHERE id=9007199254743701 AND merchant_pid_sha256=$1 AND legacy_payment_credential_id=77 AND legacy_source_ref='9007199254743701'`, []any{sha256Text("legacy-merchant-pid")}, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_recharge_orders WHERE merchant_pid_sha256='legacy-merchant-pid'`, nil, 0)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE id=9007199254743801 AND source_ip_sha256=$1 AND payload_snapshot->>'trade_id'='TRADE-FIXTURE'`, []any{sha256Text("203.0.113.9")}, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE source_ip_sha256 IN ('203.0.113.9','203.0.113.10')`, nil, 0)
+	reconcileReport, err := reconcile.Wallets(ctx, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reconcileReport.Mismatches) != 0 {
+		t.Fatalf("wallet reconciliation mismatches: %+v", reconcileReport.Mismatches)
+	}
 
-	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND (metadata->>'done')::boolean`, []any{migration}, 2)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND (metadata->>'done')::boolean`, []any{migration}, 3)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-identity' AND processed_count=3 AND error_count=1`, []any{migration}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-commerce' AND processed_count=13 AND error_count=2`, []any{migration}, 1)
-	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_errors WHERE migration_name=$1 AND error_code IN ('INVALID_PASSWORD_HASH','INVALID_MEMBERSHIP_GRANT_TYPE','INVALID_ENTITLEMENT_TYPE')`, []any{migration}, 3)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-finance' AND processed_count=19 AND error_count=2`, []any{migration}, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_errors WHERE migration_name=$1 AND error_code IN ('INVALID_PASSWORD_HASH','INVALID_MEMBERSHIP_GRANT_TYPE','INVALID_ENTITLEMENT_TYPE','INVALID_PURCHASE_ORDER','INVALID_PAYMENT_CALLBACK')`, []any{migration}, 5)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_errors WHERE migration_name=$1 AND (error_message ILIKE '%not-a-password-hash%' OR error_message ILIKE '%5f4dcc3b%')`, []any{migration}, 0)
 
 	for table, minimum := range map[string]int64{
-		"reader_invite_relations":    9007199254741102,
-		"reader_book_likes":          9007199254741501,
-		"reader_bookshelf_entries":   9007199254741601,
-		"reader_reading_history":     9007199254741701,
-		"reader_reading_preferences": 9007199254741801,
-		"reader_feedback":            9007199254741901,
+		"reader_invite_relations":      9007199254741102,
+		"reader_book_likes":            9007199254741501,
+		"reader_bookshelf_entries":     9007199254741601,
+		"reader_reading_history":       9007199254741701,
+		"reader_reading_preferences":   9007199254741801,
+		"reader_feedback":              9007199254741901,
+		"reader_wallet_ledgers":        9007199254743004,
+		"reader_bonus_coin_buckets":    9007199254743101,
+		"reader_purchase_orders":       9007199254743201,
+		"reader_checkin_reward_rules":  9007199254743301,
+		"reader_checkin_records":       9007199254743401,
+		"reader_invite_reward_records": 9007199254743501,
+		"reader_wallet_adjustments":    9007199254743502,
+		"reader_recharge_orders":       9007199254743701,
+		"reader_payment_callback_logs": 9007199254743801,
 	} {
 		var lastValue int64
 		query := fmt.Sprintf(`SELECT last_value FROM %s_id_seq`, table)
@@ -105,6 +136,14 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	}
 	if sourceCount != 3 || tokenVersionSum != 27 {
 		t.Fatalf("legacy source changed: count=%d tokenVersionSum=%d", sourceCount, tokenVersionSum)
+	}
+	var sourceLedgerCount int
+	var sourceAmountSum int64
+	if err := source.QueryRowContext(ctx, `SELECT count(*),sum(amount) FROM reader_wallet_ledger`).Scan(&sourceLedgerCount, &sourceAmountSum); err != nil {
+		t.Fatal(err)
+	}
+	if sourceLedgerCount != 4 || sourceAmountSum != 1350 {
+		t.Fatalf("legacy finance source changed: ledgerCount=%d amountSum=%d", sourceLedgerCount, sourceAmountSum)
 	}
 }
 
@@ -137,6 +176,21 @@ func cleanupReaderMigrationFixture(t *testing.T, db *sql.DB, migration string, r
 	}{
 		{`DELETE FROM migration_errors WHERE migration_name=$1`, []any{migration}},
 		{`DELETE FROM migration_checkpoints WHERE migration_name=$1`, []any{migration}},
+		{`DELETE FROM reader_payment_callback_logs WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743801' AND '9007199254743809'`, nil},
+		{`DELETE FROM reader_recharge_orders WHERE legacy_source_ref BETWEEN '9007199254743701' AND '9007199254743709'`, nil},
+		{`DELETE FROM reader_wallet_adjustments WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743502' AND '9007199254743509'`, nil},
+		{`DELETE FROM reader_invite_reward_records WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743501' AND '9007199254743509'`, nil},
+		{`DELETE FROM reader_checkin_records WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743401' AND '9007199254743409'`, nil},
+		{`DELETE FROM reader_checkin_reward_rules WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743301' AND '9007199254743309'`, nil},
+		{`DELETE FROM reader_purchase_orders WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743201' AND '9007199254743209'`, nil},
+		{`DELETE FROM reader_bonus_coin_buckets WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743101' AND '9007199254743109'`, nil},
+		{`ALTER TABLE reader_wallet_ledgers DISABLE TRIGGER reader_wallet_ledgers_immutable_update`, nil},
+		{`DELETE FROM reader_wallet_ledgers WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743001' AND '9007199254743009'`, nil},
+		{`ALTER TABLE reader_wallet_ledgers ENABLE TRIGGER reader_wallet_ledgers_immutable_update`, nil},
+		{`DELETE FROM reader_wallets WHERE source_type='legacy' AND reader_id = ANY($1)`, []any{readerIDs}},
+		{`DELETE FROM reader_recharge_products WHERE source_type='legacy' AND source_ref BETWEEN '9007199254743601' AND '9007199254743609'`, nil},
+		{`UPDATE reader_recharge_settings SET custom_enabled=true,diamonds_per_usdt=7,min_diamond_amount=7,max_diamond_amount=70000,amount_scale=2,rounding_mode='CEILING',source_type='runtime',source_ref=NULL WHERE id=1 AND source_type='legacy'`, nil},
+		{`UPDATE reader_payment_channels SET enabled=false,currency='usd',token='usdt',network='tron',source_type='runtime',source_ref=NULL WHERE id=1 AND source_type='legacy'`, nil},
 		{`DELETE FROM reader_feedback WHERE reader_id = ANY($1)`, []any{readerIDs}},
 		{`DELETE FROM reader_reading_preferences WHERE reader_id = ANY($1)`, []any{readerIDs}},
 		{`DELETE FROM reader_reading_history WHERE reader_id = ANY($1)`, []any{readerIDs}},

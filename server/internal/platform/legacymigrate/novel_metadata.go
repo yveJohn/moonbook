@@ -298,15 +298,24 @@ func mapBookAuthorStatus(status int) string {
 
 func syncIdentitySequence(ctx context.Context, target *sql.Tx, table string) error {
 	supported := map[string]bool{
-		"novel_categories":           true,
-		"novel_authors":              true,
-		"novel_books":                true,
-		"reader_invite_relations":    true,
-		"reader_bookshelf_entries":   true,
-		"reader_book_likes":          true,
-		"reader_reading_history":     true,
-		"reader_reading_preferences": true,
-		"reader_feedback":            true,
+		"novel_categories":             true,
+		"novel_authors":                true,
+		"novel_books":                  true,
+		"reader_invite_relations":      true,
+		"reader_bookshelf_entries":     true,
+		"reader_book_likes":            true,
+		"reader_reading_history":       true,
+		"reader_reading_preferences":   true,
+		"reader_feedback":              true,
+		"reader_wallet_ledgers":        true,
+		"reader_bonus_coin_buckets":    true,
+		"reader_purchase_orders":       true,
+		"reader_checkin_reward_rules":  true,
+		"reader_checkin_records":       true,
+		"reader_invite_reward_records": true,
+		"reader_wallet_adjustments":    true,
+		"reader_recharge_orders":       true,
+		"reader_payment_callback_logs": true,
 	}
 	if !supported[table] {
 		return fmt.Errorf("unsupported identity table %q", table)

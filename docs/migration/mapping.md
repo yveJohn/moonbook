@@ -15,11 +15,11 @@
 | 读者账号 | 当前 `reader_user`；仅当该表不存在时回退历史 `user` | `reader_accounts` | 原值保留；密码只保存摘要并标记 `bcrypt`/`md5` | 用户名唯一、状态、坏摘要错误清单；旧 `token_version` 和 Token 不迁移，新会话重新登录签发 | M3 映射和真实 MySQL→PostgreSQL 测试已实现 |
 | 书架/历史/偏好/点赞 | `reader_bookshelf`、`reader_reading_history`、`reader_reading_preference`、`reader_book_like`、历史对应表 | `reader_bookshelf_entries`、`reader_reading_history`、`reader_reading_preferences`、`reader_book_likes` | ID、书籍/章节/读者关联原值保留；identity 序列推进 | 去重、章节序号、位置类型/值、阅读百分比、字号、行高、主题和 Long ID | M3 映射和真实 MySQL→PostgreSQL 测试已实现 |
 | 反馈 | 当前 `reader_feedback`、历史 `user_feedback` | `reader_feedback` | ID 原值保留；`reply_content/reply_time` 映射为 `reply/replied_at` | 状态、回复、回复时间、创建/更新时间；identity 序列推进 | M3 映射和真实 MySQL→PostgreSQL 测试已实现 |
-| 钱包与流水 | `reader_wallet`、`reader_wallet_ledger`、奖励桶和调整表 | PostgreSQL 交易域 | 原值保留 | 余额=流水汇总、方向、币种 | 待 M4 设计 |
-| 商品与订单 | `reader_product`、`reader_order`、历史购买记录 | `commerce_products`；订单迁移目标按 M4 财务阶段 | 商品 ID 和目标 ID 原值保留 | 商品类型、金额、销售状态、来源引用；订单金额快照和幂等键仍待全量核对 | 商品映射已真实验证；订单仍待 M4/M6 全量核对 |
+| 钱包与流水 | `reader_wallet`、`reader_wallet_ledger`、`reader_bonus_coin_bucket`、`reader_wallet_adjustment` | `reader_wallets`、`reader_wallet_ledgers`、`reader_bonus_coin_buckets`、`reader_wallet_adjustments` | reader/ledger/bucket/adjustment ID 原值保留并推进 identity 序列；流水 `biz_id` 按十进制字符串保留 | 每个流水余额跃迁、方向、币种、金额和关联；钱包余额/收入/支出由不可变流水重算必须零差异 | M4 `reader-finance` 映射和真实 MySQL→PostgreSQL 核对已实现；完整副本仍待 M6 |
+| 商品与订单 | `reader_product`、`reader_order`、历史购买记录 | `commerce_products`、`reader_purchase_orders` | 商品、订单、目标 ID 原值保留并推进订单序列 | `buy_*` 转目标订单类型；金额快照、扣款拆分、状态、幂等键和来源引用 | 当前商品/订单映射已真实验证；更早历史购买表待 M6 盘点 |
 | 会员和权益 | `reader_entitlement`、`reader_membership_grant` | `commerce_entitlements`、`commerce_membership_grants` | ID、读者和目标 ID 原值保留 | 有效期、永久标志、来源订单；非法类型/状态/目标写错误清单 | M3/M4 映射和真实 MySQL→PostgreSQL 测试已实现 |
-| 签到与邀请 | `reader_checkin_record`、奖励规则、邀请关系/奖励/邀请码 | PostgreSQL 运营域 | 原值保留 | 连续天数、唯一日期、奖励汇总 | 待 M4 设计 |
-| 充值与支付 | `reader_recharge_*`、`reader_payment_*`、历史 `order_pay` | PostgreSQL 支付域 | 原值保留 | 金额、状态、回调幂等、凭据不明文迁移 | 待 M4 设计 |
+| 签到与邀请 | `reader_checkin_record`、`reader_checkin_reward_rule`、邀请关系/奖励/邀请码 | `reader_checkin_records`、`reader_checkin_reward_rules`、`reader_invite_reward_records` 及现有邀请表 | 原值保留并推进 identity 序列 | 连续天数、唯一日期、奖励分项汇总、关系和读者关联、奖励枚举 | M4 当前表映射和真实 MySQL→PostgreSQL 测试已实现；完整副本仍待 M6 |
+| 充值与支付 | `reader_recharge_product`、`reader_recharge_setting`、`reader_payment_channel`、`reader_recharge_order`、`reader_payment_callback_log`、`reader_payment_credential`、历史 `order_pay` | `reader_recharge_*`、`reader_payment_*` | 当前业务事实 ID 原值保留并推进 identity 序列；渠道/凭据 ID 仅保存为旧数字引用 | 金额、订单/回调状态、关联、回调 JSON；商户 PID 和来源 IP 只保存 SHA-256；支付 Secret 不迁移 | M4 当前 EPUSDT 事实映射已真实验证；`reader_payment_credential` 明文/密文均不迁移，历史 `order_pay` 待 M6 盘点 |
 | 采集 | `novel_crawl_*`、历史 `crawl_*` | PostgreSQL 内容生产域 | 原值保留 | 来源、游标、候选、任务与日志关联 | 待 M5 设计 |
 | TXT 导入 | `novel_txt_import_task`、原文件和失败修复记录 | PostgreSQL + MinIO | 原值保留 | 文件哈希、任务状态、章节结果 | `00042` 建立任务事实；上传和失败文件替换都先完成大小/SHA-256 校验，再写任务和 `txt_import` 队列；预览只读已校验对象并限制返回量 |
 | 书籍合并 | `novel_book_merge_*` | PostgreSQL + MinIO | 原值保留 | 源/目标书、章节映射、源/目标对象、执行结果 | `00046` 建立任务、来源快照和章节血缘，`00047` 补齐目标外键；新目标章节对象先完成大小/SHA-256 校验，再与目标书、章节、对象引用及源书下架在同一事务提交 |
@@ -35,6 +35,15 @@
 - 纯运行日志、构建产物、缓存、临时中间文件；
 - 已废弃或无业务追溯价值的任务瞬时数据；
 - 生产密钥、Token、私钥和支付凭据明文。
+
+## M4 当前财务字段规则
+
+- `moonbook-legacy-migrate reader-finance` 固定先执行 `reader-identity`、`reader-commerce`，再按钱包、不可变流水、奖励桶、购买订单、签到、邀请奖励、人工调账、充值配置、充值订单和回调日志的依赖顺序迁移。
+- `reader_order.order_type` 映射为 `buy_book -> book`、`buy_chapter -> chapter`、`buy_ad_free -> ad_free`、`buy_membership -> membership`、`mock_recharge -> mock_recharge`；保留 `pending/paid/closed/failed` 历史状态。
+- 钱包汇总保留旧余额与累计值，但验收必须调用 `commerce/reconcile.Wallets` 按不可变流水重新计算；任一币种的余额、收入或支出差异均阻止切换。
+- 旧 `reader_payment_credential.encrypted_secret` 和任何支付密钥不进入 PostgreSQL。充值订单只保留旧渠道 ID、凭据 ID 数字引用和商户 PID 的 SHA-256，回调来源 IP 只保存 SHA-256。
+- `payload_snapshot` 仅迁移旧 DDL 明确标注的已解析非敏感 JSON；迁移前验证 JSON，有效载荷不写日志或错误消息。无效枚举、金额、余额跃迁和关联进入 `migration_errors`，不静默丢弃。
+- 详细命令、合成数据覆盖和本次真实依赖结果见 `docs/migration/m4-reader-finance.md`；约 8 GB 完整副本的逐表、财务和耗时验收仍属于 M6。
 
 ## M2 当前书籍字段规则
 
