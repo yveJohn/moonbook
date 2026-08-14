@@ -95,6 +95,8 @@ make test-reader-integration
 测试仅使用上述连接指向的本地项目资源；每次运行创建随机 MinIO bucket，并在清理阶段删除 bucket、对象及带测试 ID 的数据库行。缺少任一依赖变量时测试会 `Skip`，不能将该结果作为真实集成验收证据。
 
 - M3 Reader/Commerce 代码、真实迁移 stage 和五路由契约测试已完成；本次补充的真实依赖测试覆盖上列四个模块及注册事务。
+- 2026-08-14 在隔离 Compose 项目 `moonbook_m3_verify` 上完成真实验证：Flyway `current=0 target=12 pending=true`，执行后 `applied=12`，复查 `current=12 target=12 pending=false`；使用 PostgreSQL `127.0.0.1:25432`、Redis `127.0.0.1:26379`、MinIO `127.0.0.1:29000`，命令以 `CGO_ENABLED=0 -tags=integration -count=1 -v` 运行，`reader/auth`、`reader/invite`、`reader/me`、`reader/public`、`commerce/catalog` 全部 PASS。
+- 本次验证同时覆盖章节正文实际 MinIO 写入/读取和不同 reader 的批量权益隔离；测试完成后仅清理随机测试数据及 bucket，未触碰默认 `moonbook` 资源。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。
 - 当前仓库已知本机 macOS ARM cgo 会在上游 `go-m1cpu` 初始化时崩溃；计划中的后端回归应使用 `CGO_ENABLED=0` 可重复路径，race 需在官方 Linux Go 容器执行。该限制不能被记录为 M3 通过证据。
 - 计划命令 `go test ./internal/... ./initialize/... ./cmd/moonbook-legacy-migrate/...` 和 Docker 集成测试须在实现后运行并保存原始输出摘要。

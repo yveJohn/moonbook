@@ -27,7 +27,7 @@ func TestReaderRegistrationConsumesInviteAndCreatesRelation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES($1,$2,'邀请人',$3,'bcrypt')`, inviter, inviterName, string(passwordHash)); err != nil {
+	if _, err = db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES($1,$2,'邀请人',$3,'enabled')`, inviter, inviterName, string(passwordHash)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count) VALUES($1,$2,$3,'enabled',1)`, inviteCodeID, code, inviter); err != nil {

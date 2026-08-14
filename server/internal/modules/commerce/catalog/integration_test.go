@@ -53,7 +53,7 @@ func TestCatalogAccessReadersPostgresEntitlementIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !owned.Readable || !owned.MembershipEntitled || !owned.ChapterPurchased || owned.AccessReason != string(Membership) {
+	if !owned.Readable || !owned.MembershipEntitled || !owned.ChapterPurchased || owned.AccessReason != string(ChapterOwned) {
 		t.Fatalf("entitled access=%+v", owned)
 	}
 	readerTwo := req

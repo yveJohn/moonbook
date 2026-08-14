@@ -220,4 +220,10 @@ func (r SQLRepository) LoadAccessContexts(ctx context.Context, reqs []AccessRequ
 	return out, nil
 }
 
-func key(r AccessRequest) string { return decimal(r.BookID) + ":" + decimal(r.ChapterID) }
+func key(r AccessRequest) string {
+	reader := "anonymous"
+	if r.ReaderID != nil {
+		reader = decimal(*r.ReaderID)
+	}
+	return reader + ":" + decimal(r.BookID) + ":" + decimal(r.ChapterID)
+}

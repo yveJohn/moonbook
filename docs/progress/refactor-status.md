@@ -9,7 +9,7 @@
 | M0 冻结、基线与盘点 | 已完成 | GVA 与旧仓库基线已锁定；reader-ui 原样迁入并通过 536 个基线测试；功能、API、数据和容量盘点范围已建立 |
 | M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
-| M3 读者域与零修改兼容 | 实施中 | Task 7 文档已固化；Reader/Commerce 实现与真实依赖验收待完成，见 `docs/contracts/reader-auth-api.md`、`docs/migration/m3-reader-commerce.md` |
+| M3 读者域与零修改兼容 | 实施中 | Reader/Commerce 实现、迁移 stage 和隔离 PostgreSQL/Redis/MinIO 真实集成测试已完成；冻结接口契约快照、SSR/浏览器旅程和 8GB 副本演练仍待完成 |
 | M4 交易、支付与运营 | 未开始 | - |
 | M5 内容生产与长任务 | 未开始 | - |
 | M6 全量迁移与校验 | 未开始 | - |
@@ -138,10 +138,10 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Commerce 访问合同已实现批量商品、定价、会员和权益读取；章节目录与正文访问使用统一访问判定和 46101-46105 兼容错误。
 - Reader 个人数据已实现：书架、点赞、阅读历史、偏好和反馈；写操作按 reader_id 隔离，点赞在 PostgreSQL 事务内锁书并重算汇总，历史写入校验书籍/章节归属和可见状态。
 - 当前代码证据提交为 `b908041`、`163664b`、`86fd095`、`b983227`、`4af0f25`、`daa3654`、`f5cd1bd`、`4976066`、`ce7de9d`、`97ba7fe`、`b195dae`。
-- Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收、全部冻结接口契约快照、SSR/浏览器关键旅程仍未完成；现有个人/公开测试主要是 Go 单元和编译验证，不能作为 M3 退出证据。
+- Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，后续批量读者隔离修复待提交）；全部冻结接口契约快照、SSR/浏览器关键旅程和 8GB 副本演练仍未完成，不能作为 M3 退出证据。
 
 下一步：
 
-1. 用本地专用 PostgreSQL、Redis、MinIO 启动真实 Reader API，执行 00012 迁移并补齐 SQL repository/MinIO/Redis 集成测试。
+1. 补齐冻结版 reader-ui 的 HTTP 契约快照、SSR 请求和浏览器关键旅程，并保留可复现输出。
 2. 对冻结 `reader-ui` 运行全部 Reader API 契约、SSR 请求和浏览器关键旅程，逐项修正响应字段、错误和缓存语义。
 3. 完成 M3 迁移 stage 的真实 MySQL 副本演练、行数/主键/关联核对和 M3 退出审计，再进入 M4 钱包、订单和支付写流程。
