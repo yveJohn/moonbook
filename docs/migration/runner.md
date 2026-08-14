@@ -13,6 +13,17 @@ go run ./cmd/moonbook-legacy-migrate preflight
 
 后续业务 stage 必须实现 `legacymigrate.Stage`：以 checkpoint cursor 和批量上限读取，不得一次载入整表；通过 Runner 提供的 PostgreSQL `*sql.Tx` 写入目标数据，并返回下一游标、处理数、显式错误清单和完成状态。Runner 在同一个 PostgreSQL 事务中提交业务目标、`migration_errors` 和 checkpoint，任一步失败全部回滚；重跑已完成 stage 时不会重复执行。具体转换规则和业务核对仍需在 M2-M6 逐域实现，不能仅依赖本骨架宣称迁移完成。
 
+## 全量编排入口
+
+已实现的迁移域可以用一次命令按依赖顺序执行：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate all
+```
+
+`all` 固定执行 `preflight`、小说分类/作者、书籍/副分类/封面、章节正文、Reader SEO、Reader 身份和 Reader Commerce。小说对象阶段需要额外注入 MinIO 端点、凭据和 Bucket；所有 DSN、凭据和允许的封面主机只能通过 Secret/环境变量注入。每个 stage 仍由同一个 Runner 使用独立 checkpoint，失败后重新执行会从最近提交的游标继续。该入口只编排当前已实现的 stage，不代表尚未实现的业务表或 8GB 生产副本演练已经完成。
+
 M2 小说分类与作者迁移：
 
 ```bash

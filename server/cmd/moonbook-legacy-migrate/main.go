@@ -20,8 +20,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books|novel-chapters|novel-reader-seo|reader-identity|reader-commerce]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-reader-seo|reader-identity|reader-commerce]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -63,17 +63,39 @@ func run() int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	command := flag.Arg(0)
 	stages := []legacymigrate.Stage{legacymigrate.PreflightStage{}}
-	if flag.Arg(0) == "reader-identity" || flag.Arg(0) == "reader-commerce" {
+	if command == "all" {
+		objects, downloader, err := coverDependencies(target)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		stages = append(stages,
+			legacymigrate.NovelCategoryDictionaryStage{},
+			legacymigrate.LegacyBookCategoryStage{},
+			legacymigrate.NovelBookAuthorStage{},
+			legacymigrate.LegacyAuthorTableStage{Table: "book_author"},
+			legacymigrate.LegacyAuthorTableStage{Table: "author"},
+			legacymigrate.NovelBooksStage{},
+			legacymigrate.NovelBookSubCategoriesStage{},
+			legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader},
+			legacymigrate.NovelChaptersStage{Objects: objects},
+			legacymigrate.NovelReaderSEOStage{},
+			legacymigrate.ReaderIdentityStage{},
+			legacymigrate.ReaderCommerceStage{},
+		)
+	}
+	if command == "reader-identity" || command == "reader-commerce" {
 		stages = append(stages, legacymigrate.ReaderIdentityStage{})
-		if flag.Arg(0) == "reader-commerce" {
+		if command == "reader-commerce" {
 			stages = append(stages, legacymigrate.ReaderCommerceStage{})
 		}
 	}
-	if flag.Arg(0) == "novel-reader-seo" {
+	if command == "novel-reader-seo" {
 		stages = append(stages, legacymigrate.NovelReaderSEOStage{})
 	}
-	if flag.Arg(0) == "novel-metadata" || flag.Arg(0) == "novel-books" || flag.Arg(0) == "novel-chapters" {
+	if command == "novel-metadata" || command == "novel-books" || command == "novel-chapters" {
 		stages = append(stages,
 			legacymigrate.NovelCategoryDictionaryStage{},
 			legacymigrate.LegacyBookCategoryStage{},
@@ -82,14 +104,14 @@ func run() int {
 			legacymigrate.LegacyAuthorTableStage{Table: "author"},
 		)
 	}
-	if flag.Arg(0) == "novel-books" || flag.Arg(0) == "novel-chapters" {
+	if command == "novel-books" || command == "novel-chapters" {
 		objects, downloader, err := coverDependencies(target)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
 		stages = append(stages, legacymigrate.NovelBooksStage{}, legacymigrate.NovelBookSubCategoriesStage{}, legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader})
-		if flag.Arg(0) == "novel-chapters" {
+		if command == "novel-chapters" {
 			stages = append(stages, legacymigrate.NovelChaptersStage{Objects: objects})
 		}
 	}
@@ -97,7 +119,7 @@ func run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	fmt.Printf("migration=moonbook-v1 command=%s status=complete\n", flag.Arg(0))
+	fmt.Printf("migration=moonbook-v1 command=%s status=complete\n", command)
 	return 0
 }
 
