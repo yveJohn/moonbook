@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
 
@@ -21,6 +22,20 @@ func TestSummaryKeepsLongIDsAsStrings(t *testing.T) {
 	}
 	if got["bookId"] != "9223372036854775807" || got["lastChapterId"] != "9223372036854775807" {
 		t.Fatalf("unexpected IDs: %s", data)
+	}
+}
+
+func TestProductStatusKeepsLongIDsAndLoginFreeContract(t *testing.T) {
+	status := productStatus(normalizeBookStatus(catalog.AccessResult{
+		BookID: "9223372036854775807", ChargeMode: "login_free", AccessReason: "free_chapter",
+	}))
+	if status["bookId"] != "9223372036854775807" || status["accessReason"] != "login_free" || status["readable"] != true {
+		t.Fatalf("unexpected product status: %+v", status)
+	}
+	for _, key := range []string{"productId", "productName", "priceCoin", "saleStatus", "product"} {
+		if status[key] != nil {
+			t.Fatalf("%s should stay null without a fixed book product: %+v", key, status)
+		}
 	}
 }
 

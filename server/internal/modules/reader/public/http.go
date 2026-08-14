@@ -92,15 +92,54 @@ func summary(book Book) map[string]any {
 	return out
 }
 
+func productStatus(status catalog.AccessResult) map[string]any {
+	value := map[string]any{
+		"bookId": status.BookID, "chargeMode": status.ChargeMode, "readable": status.Readable,
+		"accessReason": status.AccessReason, "entitled": status.BookPurchased || status.MembershipEntitled,
+		"purchased": status.BookPurchased, "membershipEntitled": status.MembershipEntitled,
+		"purchasable": status.Purchasable, "productId": nil, "productName": nil,
+		"priceCoin": nil, "saleStatus": nil, "product": nil,
+	}
+	if status.ProductID != "" {
+		value["productId"], value["productName"], value["priceCoin"], value["saleStatus"] = status.ProductID, status.ProductName, status.PriceCoin, status.SaleStatus
+		value["product"] = map[string]any{
+			"id": status.ProductID, "productType": "book", "targetId": status.BookID,
+			"productName": status.ProductName, "priceCoin": status.PriceCoin, "allowBonusCoin": 0,
+			"durationDays": nil, "saleStatus": status.SaleStatus, "sortOrder": 0, "remark": "",
+			"createTime": nil, "updateTime": nil,
+		}
+	}
+	return value
+}
+
+func history(v *History) any {
+	if v == nil {
+		return nil
+	}
+	return map[string]any{
+		"historyId": strconv.FormatInt(v.ID, 10), "bookId": strconv.FormatInt(v.BookID, 10),
+		"chapterId": strconv.FormatInt(v.ChapterID, 10), "chapterNo": v.ChapterNo, "chapterName": v.ChapterName,
+		"positionType": v.PositionType, "positionValue": v.PositionValue, "progressPercent": v.ProgressPercent,
+		"lastReadTime": v.LastReadAt,
+	}
+}
+
 func (h *Handler) featured(c *gin.Context) {
 	books, err := h.service.Featured(c)
 	if err != nil {
 		fail(c, err)
 		return
 	}
+	statuses, err := h.service.BookStatuses(c, books, identity(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
 	out := make([]map[string]any, 0, len(books))
 	for _, book := range books {
-		out = append(out, summary(book))
+		item := summary(book)
+		item["productStatus"] = productStatus(statuses[book.ID])
+		out = append(out, item)
 	}
 	ok(c, out, "查询成功")
 }
@@ -110,9 +149,16 @@ func (h *Handler) random(c *gin.Context) {
 		fail(c, err)
 		return
 	}
+	statuses, err := h.service.BookStatuses(c, books, identity(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
 	out := make([]map[string]any, 0, len(books))
 	for _, book := range books {
-		out = append(out, summary(book))
+		item := summary(book)
+		item["productStatus"] = productStatus(statuses[book.ID])
+		out = append(out, item)
 	}
 	ok(c, out, "查询成功")
 }
@@ -165,16 +211,17 @@ func (h *Handler) book(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	book, err := h.service.Get(c, id)
+	detail, err := h.service.Detail(c, id, identity(c))
 	if err != nil {
 		fail(c, err)
 		return
 	}
-	out := summary(book)
-	out["visitCount"] = int64(0)
-	out["liked"] = false
-	out["inBookshelf"] = false
-	out["readingHistory"] = nil
+	out := summary(detail.Book)
+	out["visitCount"] = detail.VisitCount
+	out["liked"] = detail.Liked
+	out["inBookshelf"] = detail.InBookshelf
+	out["readingHistory"] = history(detail.History)
+	out["productStatus"] = productStatus(detail.Status)
 	ok(c, out, "查询成功")
 }
 
@@ -195,7 +242,7 @@ func (h *Handler) chapters(c *gin.Context) {
 		if chapter.Access.BookID != "" {
 			access = map[string]any{"bookId": chapter.Access.BookID, "chapterId": chapter.Access.ChapterID, "chargeMode": chapter.Access.ChargeMode, "readable": chapter.Access.Readable, "accessReason": chapter.Access.AccessReason, "membershipEntitled": chapter.Access.MembershipEntitled, "bookPurchased": chapter.Access.BookPurchased, "chapterPurchased": chapter.Access.ChapterPurchased, "purchasable": chapter.Access.Purchasable, "chapterWordCount": chapter.Access.ChapterWordCount, "pricingWordUnit": chapter.Access.PricingWordUnit, "pricingCoinUnit": chapter.Access.PricingCoinUnit, "chapterPrice": chapter.Access.ChapterPrice}
 		}
-		out = append(out, map[string]any{"chapterId": strconv.FormatInt(chapter.ID, 10), "bookId": strconv.FormatInt(chapter.BookID, 10), "chapterNo": chapter.No, "chapterName": chapter.Name, "wordCount": chapter.WordCount, "updateTime": chapter.UpdatedAt.UTC().Format(time.RFC3339Nano), "accessStatus": access, "productStatus": map[string]any{}})
+		out = append(out, map[string]any{"chapterId": strconv.FormatInt(chapter.ID, 10), "bookId": strconv.FormatInt(chapter.BookID, 10), "chapterNo": chapter.No, "chapterName": chapter.Name, "wordCount": chapter.WordCount, "updateTime": chapter.UpdatedAt.UTC().Format(time.RFC3339Nano), "accessStatus": access, "productStatus": productStatus(normalizeBookStatus(chapter.Access))})
 	}
 	ok(c, out, "查询成功")
 }
@@ -210,7 +257,14 @@ func (h *Handler) chapter(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	ok(c, map[string]any{"chapterId": strconv.FormatInt(chapter.ID, 10), "bookId": strconv.FormatInt(chapter.BookID, 10), "chapterNo": chapter.No, "chapterName": chapter.Name, "bookName": chapter.BookName, "content": text, "prevChapterId": nil, "nextChapterId": nil, "contentVersion": object.Version, "contentSha256": object.SHA256, "contentBytes": object.ByteSize}, "查询成功")
+	out := map[string]any{"chapterId": strconv.FormatInt(chapter.ID, 10), "bookId": strconv.FormatInt(chapter.BookID, 10), "chapterNo": chapter.No, "chapterName": chapter.Name, "bookName": chapter.BookName, "content": text, "prevChapterId": nil, "nextChapterId": nil, "contentVersion": object.Version, "contentSha256": object.SHA256, "contentBytes": object.ByteSize}
+	if chapter.PrevID != nil {
+		out["prevChapterId"] = strconv.FormatInt(*chapter.PrevID, 10)
+	}
+	if chapter.NextID != nil {
+		out["nextChapterId"] = strconv.FormatInt(*chapter.NextID, 10)
+	}
+	ok(c, out, "查询成功")
 }
 
 func (h *Handler) seoConfig(c *gin.Context) {

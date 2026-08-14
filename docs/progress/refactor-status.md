@@ -9,7 +9,7 @@
 | M0 冻结、基线与盘点 | 已完成 | GVA 与旧仓库基线已锁定；reader-ui 原样迁入并通过 536 个基线测试；功能、API、数据和容量盘点范围已建立 |
 | M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
-| M3 读者域与零修改兼容 | 实施中 | Reader/Commerce 实现、迁移 stage 和隔离 PostgreSQL/Redis/MinIO 真实集成测试已完成；冻结接口契约快照、SSR/浏览器旅程和 8GB 副本演练仍待完成 |
+| M3 读者域与零修改兼容 | 实施中 | Reader/Commerce 实现、迁移 stage、真实依赖集成、SSR 和 Playwright 浏览器关键旅程已通过；逐接口契约快照/边界矩阵和 8GB 副本演练仍待完成 |
 | M4 交易、支付与运营 | 实施中 | 钱包、充值、签到、购买、支付回调、财务核对、充值档位/自定义充值设置/支付渠道/渠道连通性检查/签到规则/钱包人工调账/充值订单人工补单/主动同步/邀请奖励/会员发放已实现；迁移演练和综合退出审计仍待完成 |
 | M5 内容生产与长任务 | 实施中 | 论坛来源、板块、候选、导入任务、抓取日志、TXT 闭环、书籍合并、AI 配置/模型和章节清洗已完成，迁移版本 `00049`；AI 摘要/画像任务、分页抓取和全量恢复演练仍待完成 |
 | M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；新增 `moonbook-legacy-migrate all` 全量编排入口，真实 8GB 副本演练和完整差异报告仍待完成 |
@@ -139,14 +139,16 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Reader 个人数据已实现：书架、点赞、阅读历史、偏好和反馈；写操作按 reader_id 隔离，点赞在 PostgreSQL 事务内锁书并重算汇总，历史写入校验书籍/章节归属和可见状态。
 - 读者管理已补充密码重置：`PUT /reader/users/:id/password` 使用 bcrypt 更新密码并在同一事务撤销所有 Reader session，管理端提供确认密码表单，真实 PostgreSQL 集成测试验证旧会话失效和新哈希可用，迁移版本推进至 `00027`。
 - 当前代码证据提交为 `b908041`、`163664b`、`86fd095`、`b983227`、`4af0f25`、`daa3654`、`f5cd1bd`、`4976066`、`ce7de9d`、`97ba7fe`、`b195dae`。
-- Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，批量读者隔离修复提交 `725c5ad`）。认证 HTTP 包装契约测试提交 `cfcb2a9` 已验证 Long ID 字符串和未登录错误语义；新增 public HTTP 集成契约测试覆盖匿名书库、Bearer 章节目录和 MinIO 正文。冻结 `reader-ui` 离线测试已通过 44 个测试文件/536 个用例，SSR 生产构建通过；隔离 Go API + Reader SSR 已使用真实书籍/章节 fixture 验证书籍详情、章节目录、匿名正文 46101、Book JSON-LD 和实际内容页面。Playwright CLI 因本机无缓存且网络受限未启动，浏览器关键旅程和 8GB 副本演练仍未完成，不能作为 M3 退出证据。
-- 隔离 Compose 浏览器环境已验证注册后 `/me` 所需的 `GET /reader/me/entitlements`、`GET /reader/products/membership`、`POST /reader/me/invite/code` 均经 Reader 网关返回 HTTP 200；邀请码首次生成使用 PostgreSQL 事务和 advisory lock 并保证重复请求复用同一邀请码。Reader Origin 已加入严格 CORS 白名单，注册请求从 `127.0.0.1` 页面返回 200。浏览器视觉旅程和 8GB 副本演练仍待完成。
+- Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，批量读者隔离修复提交 `725c5ad`）。认证 HTTP 包装契约测试提交 `cfcb2a9` 已验证 Long ID 字符串和未登录错误语义；public HTTP 集成契约测试覆盖匿名书库、Bearer 章节目录和 MinIO 正文。冻结 `reader-ui` 离线测试已通过 44 个测试文件/536 个用例，SSR 生产构建通过；隔离 Go API + Reader SSR 已使用真实书籍/章节 fixture 验证书籍详情、章节目录、匿名正文 46101、Book JSON-LD 和实际内容页面。
+- 2026-08-15 在隔离 Compose 项目 `moonbook_browser` 完成 Playwright 真实浏览器旅程：匿名目录/详情、匿名章节登录要求、邀请码注册、登录免费正文、加入书架、两章切换、第二章历史持久化、继续阅读恢复、UI 退出和旧 Token 401 全部通过，控制台 0 error。旅程发现并修复详情/章节列表空 `productStatus`、登录态详情状态写死以及正文前后章 ID 恒空三个同源后端兼容缺陷；冻结 Reader UI 业务代码未修改。
+- 新增仅允许本机回环 PostgreSQL/MinIO 且要求显式确认的 `moonbook-browser-fixture seed|cleanup`。正文经真实对象服务校验激活；验收后删除 2 个对象并核对书籍、章节、对象、读者、邀请码均为 0。隔离浏览器库由迁移 41 前向补齐 12 个版本到 53，readiness 四项依赖全部为 `ok`。
+- 隔离 Compose 浏览器环境已验证注册后 `/me` 所需的 `GET /reader/me/entitlements`、`GET /reader/products/membership`、`POST /reader/me/invite/code` 均经 Reader 网关返回 HTTP 200；邀请码首次生成使用 PostgreSQL 事务和 advisory lock 并保证重复请求复用同一邀请码。Reader Origin 已加入严格 CORS 白名单，注册请求从 `127.0.0.1` 页面返回 200。浏览器关键旅程已于 2026-08-15 补齐，8GB 副本演练仍待完成。
 
 下一步：
 
 1. 用真实 Reader API 补充有实际书籍/章节数据的书籍详情和章节 SSR 请求，并固定 HTTP 契约快照；当前空库书库 SSR 已通过。
-2. 在可用的浏览器运行环境执行冻结 `reader-ui` 登录、公开浏览、书架和阅读关键旅程，逐项记录响应字段、错误和缓存语义。
-3. 完成 M3 迁移 stage 的真实 MySQL 副本演练、行数/主键/关联核对和 M3 退出审计，再进入 M4 钱包、订单和支付写流程。
+2. 补齐 `docs/contracts/reader-api.md` 中逐接口正常/错误 JSON 快照、空值/分页、Long ID、MinIO 故障和反向代理前缀证据，执行 M3 退出审计。
+3. 使用受控 8GB MySQL 副本完成全量演练、行数/主键/关联/对象核对；该容量演练同时作为 M6 退出证据。
 
 ## M4 当前进度
 

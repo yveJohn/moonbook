@@ -101,7 +101,10 @@ make test-reader-integration
 - 2026-08-14 在隔离 Go API `127.0.0.1:4188` + Reader SSR `127.0.0.1:4189` 上完成真实上游验证：`/reader/seo/config`、精选/随机/分页书库、分类、robots、sitemap 均返回预期 200；SSR `/`、`/books`、`/auth/login`、`/robots.txt`、`/sitemap.xml` 均返回 200，书库空状态、SEO title/canonical/JSON-LD 和登录页 `noindex,nofollow` 正确。该临时 API readiness 因隔离 MinIO bucket 未创建返回 503，未影响本次只读路由验证。
 - 新增 `reader/public/http_integration_test.go` 后，完整五包真实集成套件再次通过；该测试直接注册 Gin Reader public 路由，验证匿名分页书库、Bearer Reader 章节目录和 MinIO 正文响应，Long ID 为字符串。
 - 使用可清理的真实 fixture 完成带内容验证：API 书籍详情和章节目录返回 `SSR 集成作品`、`SSR 第一章` 及字符串 ID；匿名正文请求返回冻结 `46101/请先登录后阅读`；Reader SSR `/books/{bookId}` 返回实际书名、作者、章节、canonical 和 Book JSON-LD。fixture 与正文对象已在验证结束后删除。
-- Playwright CLI 试运行因 `@playwright/cli` 未在本机 npm 缓存且当前网络受限而未启动，浏览器级关键旅程仍未验收；不能将 curl/SSR 结果替代浏览器证据。
+- 2026-08-15 使用已缓存的 Playwright CLI 和隔离 Compose 项目 `moonbook_browser` 完成真实浏览器关键旅程：匿名首页/书籍详情可见，匿名章节访问跳转登录；邀请码注册后自动回到第一章并读取真实 MinIO 正文；加入书架、第一章切换第二章、历史上报、书架展示第二章及“继续阅读”恢复第二章均通过；UI 退出后旧 Token 请求 `/reader/me/history` 返回 `code=401`，再次访问书架跳转 `/auth/login?redirect=/shelf`。浏览器全过程控制台为 0 error。
+- 浏览器旅程发现并修复 Reader 详情聚合兼容缺陷：`productStatus` 不再为空对象，登录免费作品恢复“登录免费”和“开始阅读”；登录态详情返回真实 `liked/inBookshelf/readingHistory`；章节列表返回同一作品商品状态；章节正文返回字符串 `prevChapterId/nextChapterId`。真实 PostgreSQL + MinIO 集成测试覆盖上述状态和两章导航。
+- 新增安全门控命令 `moonbook-browser-fixture`，仅在显式确认值且 PostgreSQL/MinIO 均为回环地址时允许 `seed/cleanup`。本次 fixture 使用独立 `moonbook_browser` 数据库和 `moonbook-content` Bucket，正文通过 `UploadVerified/Activate` 写入；验收后清理 2 个 MinIO 对象，并核对测试书籍、章节、对象、读者和邀请码计数均为 0。
+- 浏览器栈重建后 readiness 检出数据库从迁移 41 落后到 53，已通过 Compose `migrate` 服务前向应用 12 个版本；随后 `/health/ready` 的 migrations、MinIO、PostgreSQL、Redis 全部恢复 `ok`。该动作只作用于隔离 `moonbook_browser` 卷。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。
 - 当前仓库已知本机 macOS ARM cgo 会在上游 `go-m1cpu` 初始化时崩溃；计划中的后端回归应使用 `CGO_ENABLED=0` 可重复路径，race 需在官方 Linux Go 容器执行。该限制不能被记录为 M3 通过证据。
 - 计划命令 `go test ./internal/... ./initialize/... ./cmd/moonbook-legacy-migrate/...` 和 Docker 集成测试须在实现后运行并保存原始输出摘要。

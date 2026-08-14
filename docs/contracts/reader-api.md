@@ -94,6 +94,8 @@
 
 认证 HTTP 包装和 Long ID 边界已有可执行证据：`server/internal/modules/reader/auth/http_contract_test.go`，并与 `service_test.go`、真实 PostgreSQL/Redis 集成测试共同覆盖登录、未登录和会话语义。
 
+2026-08-15 的隔离 Compose + Playwright 关键旅程已覆盖匿名目录/详情、匿名章节 `46101`、邀请码注册、登录免费 MinIO 正文、书架、两章切换、第二章历史恢复、退出及旧 Token `401`。`server/internal/modules/reader/public` 的单元和真实依赖测试固化完整作品商品状态、登录态详情聚合、Long ID 字符串与前后章 ID；详细运行证据见 `docs/migration/m3-reader-commerce.md`。以下清单仍按逐接口矩阵继续收敛，不能因关键旅程通过而整体勾选。
+
 - [ ] 每个接口的正常请求与响应 JSON 快照
 - [ ] 未登录、Token 过期、封禁和权限不足响应
 - [ ] `null`、空数组、缺省字段和分页边界

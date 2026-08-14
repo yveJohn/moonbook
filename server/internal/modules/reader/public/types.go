@@ -9,6 +9,8 @@ type Book struct {
 	Name, Author, Description, CategoryCode, CategoryName, BookStatus, ChargeMode string
 	SubCategories                                                                 []Category
 	WordCount, LikeCount                                                          int
+	VisitCount                                                                    int64
+	FixedPriceCoin                                                                *int64
 	LastChapterID                                                                 *int64
 	LastChapterName                                                               *string
 	LastChapterUpdatedAt                                                          *time.Time
@@ -26,4 +28,23 @@ type Chapter struct {
 	ChargeMode string
 	BookName   string
 	Access     catalog.AccessResult
+	PrevID     *int64
+	NextID     *int64
+}
+
+type History struct {
+	ID, BookID, ChapterID     int64
+	ChapterNo                 int
+	ChapterName, PositionType string
+	PositionValue             int
+	ProgressPercent           string
+	LastReadAt                time.Time
+}
+
+type BookDetail struct {
+	Book
+	Status      catalog.AccessResult
+	Liked       bool
+	InBookshelf bool
+	History     *History
 }
