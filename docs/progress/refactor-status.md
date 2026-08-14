@@ -155,3 +155,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 前向迁移 `00015_reader_checkin_foundation.sql` 建立签到奖励规则和每日签到记录；签到使用 PostgreSQL advisory lock、幂等键，并在同一事务写入奖励记录和 bonus 钱包流水；已接入 `/reader/me/checkin/status` 与 `/reader/me/checkin`。
 - 前向迁移 `00016_reader_purchase_orders.sql` 建立读者购买订单事实和权益 ID 序列；新增会员、章节、整书购买服务，订单、钱包扣款和会员/作品权益在同一事务内提交，并接入 `/reader/me/orders/membership`、`/reader/me/orders/chapter`、`/reader/me/orders/book`。支付充值回调仍待实现。
 - 支付模块接入 `/reader/payment/epusdt/notify`，使用环境变量注入 PID/密钥，采用排序规范化字段和 HMAC-SHA256 验签；校验金额、USDT、状态、交易哈希唯一性后，在同一事务写入充值钱包流水、订单状态和回调日志，重复成功回调幂等返回。
+- 新增 `moonbook-finance-reconcile` 命令和 `commerce/reconcile`，逐钱包按不可变流水重算余额、收入和支出累计值；输出差异明细并在存在差异时返回非零退出码，作为迁移演练和切换验收硬门。
