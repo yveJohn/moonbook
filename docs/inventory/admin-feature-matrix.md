@@ -62,8 +62,8 @@
 | TXT 导入 | `novel/txtImport` / `TxtImportController` | 上传、解析、预览、导入、失败文件修复 | `novel_txt_import_task`、`/novel/txtImports`、`view/novel/txtImports` | 上传、MinIO 校验、持久化队列、章节导入、受限预览和失败任务文件替换已实现 |
 | 书籍合并 | `novel/bookMerge` / `NovelBookMergeController` | 候选、章节映射、执行、审计 | `novel_book_merge_*`、`/novel/bookMerges`、`view/novel/bookMerges` | 论坛导入来源筛选、时间排序、重复标记、人工排除、MinIO 正文复制、事务执行、源书下架和血缘审计已实现（迁移至 `00047`）；active AI 清洗结果优先策略待 AI 切片接入 |
 | AI 配置与模型 | `novel/aiConfig` / `NovelAiConfigController` | OpenAI 兼容地址、有序模型、启停、失败切换、秘密保护 | `novel_ai_config*`、`/novel/aiConfigs`、`view/novel/aiConfigs` | 配置 CRUD、启用选项、流式模式、有序模型、连续失败循环切换、状态版本和人工重置已实现（迁移 `00048`）；API Key 改为环境变量 Secret 引用，连通性随 AI 执行器切片验证 |
-| 章节清洗 | `novel/chapterClean` / `NovelChapterCleanController` | 配置、任务、结果、采用、失败重试 | `novel_chapter_clean_*`、`/novel/chapterClean`、`view/novel/chapterClean` | 配置、OpenAI 兼容流式/非流式传输、持久化任务、模型失败切换、自动采用、人工采用/丢弃、停止/续跑和失败重洗已实现（迁移 `00049`） |
-| 章节摘要 | `NovelChapterSummaryController` | 配置、批量回填、失败重试 | 待补 | 基线已盘点 |
+| 章节清洗 | `novel/chapterClean` / `NovelChapterCleanController` | 配置、任务、结果、采用、失败重试 | `novel_chapter_clean_*`、`/novel/chapterClean`、`view/novel/chapterClean` | 配置、OpenAI 兼容流式/非流式传输、持久化任务、模型失败切换、自动采用、人工采用/丢弃、停止/续跑和失败重洗已实现（迁移 `00049`）；`00051` 前向修复清洗稿对象类型约束 |
+| 章节摘要 | `NovelChapterSummaryController` | 配置、批量回填、失败重试 | `novel_chapter_summary_*`、`/novel/chapterSummary`、`view/novel/chapterClean` 简介补全页签 | 单例配置、状态/任务分页及详情、手动与自动批处理、停止/续跑、租约恢复、MinIO 清洗稿读取、JSON/SSE、拒答备用 AI、模型轮换和 7 天诊断清理已实现（迁移 `00050`、`00052`） |
 | 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | 配置、建议、采用、自动应用、重试 | 待补 | 基线已盘点 |
 
 ## 当前有效集成候选

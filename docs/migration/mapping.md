@@ -24,7 +24,7 @@
 | TXT 导入 | `novel_txt_import_task`、原文件和失败修复记录 | PostgreSQL + MinIO | 原值保留 | 文件哈希、任务状态、章节结果 | `00042` 建立任务事实；上传和失败文件替换都先完成大小/SHA-256 校验，再写任务和 `txt_import` 队列；预览只读已校验对象并限制返回量 |
 | 书籍合并 | `novel_book_merge_*` | PostgreSQL + MinIO | 原值保留 | 源/目标书、章节映射、源/目标对象、执行结果 | `00046` 建立任务、来源快照和章节血缘，`00047` 补齐目标外键；新目标章节对象先完成大小/SHA-256 校验，再与目标书、章节、对象引用及源书下架在同一事务提交 |
 | AI 配置和模型 | `novel_ai_config`、`novel_ai_config_model` | `novel_ai_config`、`novel_ai_config_model` | 配置和模型 ID 原值保留 | 非秘密参数、有序模型、当前模型、失败阈值/计数、状态版本；密钥改由 Secret 注入 | `00048` 建立目标结构和管理闭环；旧 `api_key` 值禁止写入 PostgreSQL、日志或报告，仅按旧配置 ID 生成 `MOONBOOK_AI_LEGACY_<ID>_API_KEY` 引用并列入迁移后的待注入 Secret 清单，旧单 `model` 在缺少模型子表时作为顺序 1 模型迁移 |
-| AI 清洗/摘要/画像 | clean、summary、profile 配置/任务/结果表 | PostgreSQL 内容生产域；清洗正文进入 MinIO | 原值保留 | 任务结果、采用状态、失败重试、对象版本和正文哈希 | 清洗目标模型已由 `00049` 建立：配置/任务/结果写 PostgreSQL，原文引用现有章节对象，清洗稿写 `chapter-clean/{bookId}/{resultId}/v{version}.txt`；采用后生成新的正式章节正文版本。摘要和画像待后续 M5 切片 |
+| AI 清洗/摘要/画像 | clean、summary、profile 配置/任务/结果表 | PostgreSQL 内容生产域；清洗正文进入 MinIO | 原值保留 | 任务结果、采用状态、失败重试、对象版本和正文哈希 | `00049` 建立清洗配置/任务/结果，清洗稿写 `chapter-clean/{bookId}/{resultId}/v{version}.txt`，`00051` 前向补齐 `chapter_clean` 对象约束；`00050` 建立摘要配置/任务，候选只读取 active+success 且未摘要的清洗结果并把最长 1000 字符摘要回写 `novel_chapter_clean_result.chapter_summary`。旧配置和任务 ID 原值迁移，运行中旧任务按失败中断记录导入后人工续跑；画像待后续 M5 切片 |
 | 读者 SEO | `novel_reader_seo_config` | `novel_reader_seo_config` 单例 | 固定配置 `id=1` 原值保留；额外 ID 不迁移 | 开关、站点字段、模板、时间、单例、错误清单和幂等 | M2 管理配置与迁移已实现；M3 接入公开 SEO、robots、sitemap 契约 |
 | 每日活动统计 | `reader_daily_activity` | PostgreSQL 分析事实 | 复合键保留 | 日期时区、读者关联、去重 | 待 M4 设计 |
 

@@ -23,6 +23,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/candidate"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapterclean"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chaptersummary"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlboard"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlsource"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/fetchlog"
@@ -92,6 +93,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	aiConfigs := aiconfig.NewService(db, os.LookupEnv)
 	aiconfig.RegisterRoutes(privateGroup, aiConfigs)
 	chapterclean.RegisterRoutes(privateGroup, chapterclean.NewService(db, objects))
+	chaptersummary.RegisterRoutes(privateGroup, chaptersummary.NewService(db))
 	books.RegisterRoutes(privateGroup, db, objects)
 	bookmerge.RegisterRoutes(privateGroup, bookmerge.NewService(db, objects))
 	chapters.RegisterRoutes(privateGroup, db, objects)
