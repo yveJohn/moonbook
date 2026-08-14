@@ -55,7 +55,7 @@
 | --- | --- | --- | --- | --- |
 | 论坛来源 | `crawl/forumSource` / `CrawlForumSourceController` | CRUD、启停、连接与规则配置 | M5 | 来源 CRUD、URL/节流校验、Cookie 脱敏、权限和真实 PostgreSQL 测试已实现；连接检查待补 |
 | 论坛板块 | `crawl/forumBoard` / `CrawlForumBoardController` | CRUD、增量游标、抓取策略 | M5 | 板块 CRUD、来源关联、同来源名称唯一、URL 域名和跟进策略校验已实现；导入任务引用保护待任务模块补齐 |
-| 线程候选 | `crawl/threadCandidate` / `CrawlThreadCandidateController` | 筛选、状态、加入导入 | M5 | 候选列表/详情、来源板块筛选、跳过/恢复/删除状态管理已实现；发现和导入任务接入待后续长任务模块 |
+| 线程候选 | `crawl/threadCandidate` / `CrawlThreadCandidateController` | 筛选、状态、加入导入 | M5 | 候选列表/详情、来源板块筛选、跳过/恢复/删除状态管理已实现；新增受控板块发现 API，按来源与外部帖子 ID 幂等写入候选 |
 | 导入任务 | `crawl/importTask` / `CrawlImportTaskController` | 创建、执行、暂停/恢复、重试、日志 | M5 | 导入任务创建、队列入库、状态/质量字段、取消和失败重试管理已实现；实际抓取执行器与日志待后续切片 |
 | 运行任务 | `CrawlRuntimeTaskController` | 调度、租约、恢复、取消 | 待补 | 基线已盘点 |
 | 抓取日志 | `crawl/fetchLog` / `CrawlFetchLogController` | 检索、错误详情、重试线索 | M5 | 抓取日志表、阶段/结果约束、任务/状态筛选、详情管理页面已实现；worker 实际网络抓取和日志写入接入待执行器切片 |

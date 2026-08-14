@@ -82,3 +82,29 @@ func (r SQLRepository) Delete(ctx context.Context, ids []int64) error {
 	}
 	return nil
 }
+
+func (r SQLRepository) GetBoardTarget(ctx context.Context, boardID string) (BoardTarget, error) {
+	var v BoardTarget
+	err := r.DB.QueryRowContext(ctx, `SELECT s.id::text,s.source_name,b.id::text,b.board_name,b.board_url,COALESCE(b.board_url_template,''),COALESCE(s.user_agent,''),s.enabled AND b.enabled FROM novel_crawl_forum_board b JOIN novel_crawl_forum_source s ON s.id=b.source_id WHERE b.id=$1`, boardID).Scan(&v.SourceID, &v.SourceName, &v.BoardID, &v.BoardName, &v.BoardURL, &v.BoardURLTemplate, &v.UserAgent, &v.Enabled)
+	return v, err
+}
+
+func (r SQLRepository) UpsertDiscovered(ctx context.Context, target BoardTarget, items []Discovered) (DiscoverResult, error) {
+	result := DiscoverResult{DiscoveredCount: len(items)}
+	for _, item := range items {
+		var inserted bool
+		err := r.DB.QueryRowContext(ctx, `INSERT INTO novel_crawl_thread_candidate(source_id,source_name,board_id,board_name,forum_thread_id,thread_title,thread_url,author_id,discover_time,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,now(),now()) ON CONFLICT(source_id,forum_thread_id) DO UPDATE SET source_name=EXCLUDED.source_name,board_name=EXCLUDED.board_name,thread_title=EXCLUDED.thread_title,thread_url=EXCLUDED.thread_url,author_id=EXCLUDED.author_id,discover_time=now(),updated_at=now() WHERE novel_crawl_thread_candidate.status IN ('pending','skipped','failed') RETURNING (xmax=0)`, target.SourceID, target.SourceName, target.BoardID, target.BoardName, item.ForumThreadID, item.ThreadTitle, item.ThreadURL, item.AuthorID).Scan(&inserted)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return result, err
+		}
+		if inserted {
+			result.InsertedCount++
+		} else {
+			result.UpdatedCount++
+		}
+	}
+	return result, nil
+}

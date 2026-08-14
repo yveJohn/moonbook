@@ -50,3 +50,37 @@ func TestCandidateListAndStatusLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCandidateDiscoveryUpsertIsIdempotent(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var sourceID, boardID string
+	if err := db.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_source(source_name,base_url) VALUES('发现测试来源','https://discover.example.test') RETURNING id::text`).Scan(&sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_board(source_id,source_name,board_name,board_url) VALUES($1,'发现测试来源','发现板块','https://discover.example.test/forum') RETURNING id::text`, sourceID).Scan(&boardID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM novel_crawl_thread_candidate WHERE source_id=$1`, sourceID)
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM novel_crawl_forum_board WHERE id=$1`, boardID)
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM novel_crawl_forum_source WHERE id=$1`, sourceID)
+	})
+	r := SQLRepository{DB: db}
+	target := BoardTarget{SourceID: sourceID, SourceName: "发现测试来源", BoardID: boardID, BoardName: "发现板块"}
+	items := []Discovered{{ForumThreadID: "123", ThreadTitle: "旧标题", ThreadURL: "https://discover.example.test/thread-123"}}
+	first, err := r.UpsertDiscovered(ctx, target, items)
+	if err != nil || first.InsertedCount != 1 {
+		t.Fatalf("first=%+v err=%v", first, err)
+	}
+	items[0].ThreadTitle = "新标题"
+	second, err := r.UpsertDiscovered(ctx, target, items)
+	if err != nil || second.UpdatedCount != 1 {
+		t.Fatalf("second=%+v err=%v", second, err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM novel_crawl_thread_candidate WHERE source_id=$1 AND forum_thread_id='123'`, sourceID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+}

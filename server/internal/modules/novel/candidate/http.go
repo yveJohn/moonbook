@@ -17,6 +17,7 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	read := private.Group("novel/crawl")
 	write := private.Group("novel/crawl").Use(middleware.OperationRecord())
 	read.GET("candidates", h.list)
+	write.POST("candidates/discover", h.discover)
 	read.GET("candidates/:id", h.get)
 	write.PUT("candidates/skip", h.skip)
 	write.PUT("candidates/restore", h.restore)
@@ -114,4 +115,22 @@ func (h *Handler) delete(c *gin.Context) {
 		return
 	}
 	managementresponse.OK(c, nil, "删除成功")
+}
+
+type discoverInput struct {
+	BoardID string `json:"boardId"`
+}
+
+func (h *Handler) discover(c *gin.Context) {
+	var in discoverInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "请求参数无效"))
+		return
+	}
+	result, err := h.service.Discover(c, in.BoardID)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, map[string]any{"discoveredCount": result.DiscoveredCount, "insertedCount": result.InsertedCount, "updatedCount": result.UpdatedCount}, "发现完成")
 }

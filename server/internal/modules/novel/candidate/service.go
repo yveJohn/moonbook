@@ -3,6 +3,7 @@ package candidate
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 type Service struct{ Repo Repository }
@@ -43,4 +44,23 @@ func (s *Service) Delete(ctx context.Context, ids []int64) error {
 		return errors.New("invalid candidate ids")
 	}
 	return s.Repo.Delete(ctx, ids)
+}
+
+func (s *Service) Discover(ctx context.Context, boardID string) (DiscoverResult, error) {
+	boardID = strings.TrimSpace(boardID)
+	if boardID == "" {
+		return DiscoverResult{}, errors.New("invalid board id")
+	}
+	target, err := s.Repo.GetBoardTarget(ctx, boardID)
+	if err != nil {
+		return DiscoverResult{}, err
+	}
+	if !target.Enabled {
+		return DiscoverResult{}, errors.New("board or source is disabled")
+	}
+	items, err := DiscoverBoard(ctx, target, nil)
+	if err != nil {
+		return DiscoverResult{}, err
+	}
+	return s.Repo.UpsertDiscovered(ctx, target, items)
 }
