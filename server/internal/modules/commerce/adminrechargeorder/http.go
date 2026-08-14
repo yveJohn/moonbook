@@ -3,6 +3,7 @@ package adminrechargeorder
 import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/managementresponse"
+	"github.com/flipped-aurora/gin-vue-admin/server/middleware"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
@@ -13,10 +14,31 @@ type Handler struct{ service *Service }
 func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	h := &Handler{service: service}
 	r := private.Group("reader/payment")
+	w := private.Group("reader/payment").Use(middleware.OperationRecord())
 	r.GET("orders", h.list)
 	r.GET("orders/:id", h.get)
+	w.POST("orders/:id/manualPay", h.manualPay)
 	r.GET("callbackLogs", h.callbackList)
 	r.GET("callbackLogs/:id", h.callbackGet)
+}
+
+func (h *Handler) manualPay(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串"))
+		return
+	}
+	var req ManualPayInput
+	if c.ShouldBindJSON(&req) != nil {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "请求参数无效"))
+		return
+	}
+	o, err := h.service.ManualPay(c, id, req)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, render(o), "人工补单成功")
 }
 
 func renderCallback(v CallbackLog) map[string]any {

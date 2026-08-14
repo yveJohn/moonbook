@@ -21,6 +21,9 @@ func (s *Service) List(ctx context.Context, k, st string, p, n int) ([]Order, in
 	return s.Repo.List(ctx, k, st, p, n)
 }
 func (s *Service) Get(ctx context.Context, id int64) (Order, error) { return s.Repo.Get(ctx, id) }
+func (s *Service) ManualPay(ctx context.Context, id int64, in ManualPayInput) (Order, error) {
+	return s.Repo.ManualPay(ctx, id, in)
+}
 func (s *Service) ListCallbacks(ctx context.Context, keyword, result string, page, size int) ([]CallbackLog, int64, error) {
 	r, ok := s.Repo.(CallbackRepository)
 	if !ok {
