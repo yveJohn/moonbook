@@ -40,7 +40,7 @@
 | 反馈处理 | `reader/feedback` / `ReaderFeedbackAdminController` | 列表、详情、回复 | M3 | 基线已盘点 |
 | 邀请码 | `reader/inviteCode` / `ReaderInviteCodeController` | 生成、编辑、删除、状态 | M4 | 基线已盘点 |
 | 签到奖励规则 | `reader/checkinReward` / `ReaderCheckinRewardRuleController` | CRUD、启停 | M4 | 基线已盘点 |
-| 钱包与流水 | `reader/wallet` / `ReaderWalletAdminController` | 余额、流水、调整、签到、邀请奖励 | M4 | 基线已盘点 |
+| 钱包与流水 | `reader/wallet` / `ReaderWalletAdminController` | 余额、流水、调整、签到、邀请奖励 | M4 | 余额汇总与不可变流水只读管理已实现；人工调整、签到/邀请奖励运营入口待补 |
 | 消费商品 | `reader/product` / `ReaderProductController` | 书籍、章节、会员、免广告商品及上下架 | M4 | 基线已盘点 |
 | 消费订单 | `reader/order` / `ReaderOrderAdminController` | 查询、人工充值、确认 | M4 | 基线已盘点 |
 | 会员发放 | 读者详情组件 | 发放、有效期、永久会员 | M4 | 基线已盘点 |

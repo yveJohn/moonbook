@@ -160,3 +160,4 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 新增支付渠道管理 API 和管理页面（`GET/PUT /reader/payment/channels`），支持渠道启停和凭据已配置状态检查；支付 PID/密钥只从环境变量读取，管理响应不返回敏感值。前向迁移版本已推进至 `00018`。
 - 新增充值订单管理 API 和页面（`GET /reader/payment/orders`、`GET /reader/payment/orders/:id`），支持订单号/读者关键词、状态筛选、详情及网关交易信息只读审计；真实 PostgreSQL 集成测试覆盖列表、分页筛选和详情，迁移版本推进至 `00019`。
 - 新增支付回调日志管理 API 和页面（`GET /reader/payment/callbackLogs`、`GET /reader/payment/callbackLogs/:id`），支持商户订单号/网关交易号、处理结果筛选、签名有效性、失败原因和响应状态审计；原始 payload 不通过管理接口返回，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00020`。主动同步和人工补单仍待实现。
+- 新增钱包与流水管理 API 和页面（`GET /reader/wallets`、`GET /reader/wallets/:readerId/ledgers`），支持读者关键词、余额汇总和币种流水只读核对；余额、累计值、流水 ID、读者 ID均以字符串输出，真实 PostgreSQL 集成测试通过，迁移版本推进至 `00021`。人工调整、签到/邀请奖励运营入口仍待实现。
