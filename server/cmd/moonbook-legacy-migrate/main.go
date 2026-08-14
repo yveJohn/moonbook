@@ -20,8 +20,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-reader-seo") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books|novel-chapters|novel-reader-seo]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books|novel-chapters|novel-reader-seo|reader-identity|reader-commerce]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -64,6 +64,12 @@ func run() int {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stages := []legacymigrate.Stage{legacymigrate.PreflightStage{}}
+	if flag.Arg(0) == "reader-identity" || flag.Arg(0) == "reader-commerce" {
+		stages = append(stages, legacymigrate.ReaderIdentityStage{})
+		if flag.Arg(0) == "reader-commerce" {
+			stages = append(stages, legacymigrate.ReaderCommerceStage{})
+		}
+	}
 	if flag.Arg(0) == "novel-reader-seo" {
 		stages = append(stages, legacymigrate.NovelReaderSEOStage{})
 	}
