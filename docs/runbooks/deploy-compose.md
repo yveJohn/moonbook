@@ -50,7 +50,7 @@ curl -H "Authorization: Bearer $MOONBOOK_METRICS_TOKEN" \
 | 管理端网关 | `http://127.0.0.1:18080` |
 | 读者端网关 | `http://127.0.0.1:18081` |
 
-所有宿主端口只绑定回环地址。Go API 不绑定宿主端口，管理端 `/api/` 和读者端 `/dev-api/` 由网关转发。Bucket `moonbook-content` 由 `minio-init` 幂等创建，并强制为私有访问。
+所有宿主端口只绑定回环地址。Go API 不绑定宿主端口，管理端 `/api/` 和读者生产路径 `/prod-api/` 由网关转发；Reader 镜像默认以 `/prod-api` 构建，网关同时保留 `/dev-api/` 供本地开发兼容。Bucket `moonbook-content` 由 `minio-init` 幂等创建，并强制为私有访问。
 
 ## 日常命令
 

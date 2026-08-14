@@ -116,4 +116,4 @@ Reader 线协议日期统一由 `server/internal/modules/reader/wire` 输出 UTC
 - [ ] 金额、钱包和报价变化并发语义
 - [x] MinIO 缺失、哈希不一致和超时的外部错误映射
 - [x] SSR 超时、上游非 JSON 和 SEO Content-Type
-- [ ] CORS、反向代理前缀与生产 `/prod-api` 路由
+- [x] CORS、反向代理前缀与生产 `/prod-api` 路由

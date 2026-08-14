@@ -113,6 +113,7 @@ make test-reader-integration
 - 充值 HTTP 错误适配已固定无效参数、下架档位和订单不存在的中文业务响应，未知仓储错误继续脱敏且所有错误显式 `data:null`。完整 Reader/Commerce 回归通过，`moonbook_browser` 真实 PostgreSQL 的精确报价、订单幂等和读者范围查询集成测试再次 PASS。
 - 2026-08-15 在 `moonbook_browser` 隔离栈复跑 `reader/public` 真实依赖集成测试：基于真实 PostgreSQL 活动对象引用和 MinIO 正常对象，分别注入对象缺失、正文大小/SHA-256 不一致及读取超时；三条路径均返回 HTTP 200 + `500/读取章节正文失败/data:null`，且响应未泄漏 MinIO 错误码、内部端点或对象键。原有 8 条公开路由、4 条 SEO 路由和真实正文读取测试同时 PASS。
 - 冻结 Reader SSR/SEO 代理异常路径已补契约测试但未修改业务实现：12 秒上游超时映射为服务不可用，`200 + 非 JSON` 在公共页面安全失败为 503；robots 返回禁止抓取正文，根及分页 sitemap 返回带 `Retry-After: 60` 的 503，错误资源均为 `no-store`。目标测试 12 个、全量 45 个测试文件 543 个用例和生产 SSR 构建全部通过。
+- 2026-08-15 在 `moonbook_browser` 隔离栈完成生产前缀与 CORS 验证：Nginx 配置测试和 Compose 模型校验通过，`/prod-api/health/live`、兼容 `/dev-api/health/live` 及 `/prod-api/reader/seo/config` 均返回 200；配置的 Reader Origin 返回精确 `Access-Control-Allow-Origin`，非白名单 Origin 返回 403。重建 Reader 镜像后在容器 bundle 中确认 `/prod-api` 已编译，Reader UI 与网关均保持 healthy。
 - 新增安全门控命令 `moonbook-browser-fixture`，仅在显式确认值且 PostgreSQL/MinIO 均为回环地址时允许 `seed/cleanup`。本次 fixture 使用独立 `moonbook_browser` 数据库和 `moonbook-content` Bucket，正文通过 `UploadVerified/Activate` 写入；验收后清理 2 个 MinIO 对象，并核对测试书籍、章节、对象、读者和邀请码计数均为 0。
 - 浏览器栈重建后 readiness 检出数据库从迁移 41 落后到 53，已通过 Compose `migrate` 服务前向应用 12 个版本；随后 `/health/ready` 的 migrations、MinIO、PostgreSQL、Redis 全部恢复 `ok`。该动作只作用于隔离 `moonbook_browser` 卷。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。

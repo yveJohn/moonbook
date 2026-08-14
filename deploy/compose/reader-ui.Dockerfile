@@ -4,7 +4,7 @@ WORKDIR /app
 COPY reader-ui/package.json reader-ui/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY reader-ui/ ./
-ARG VITE_READER_API_BASE=/dev-api
+ARG VITE_READER_API_BASE=/prod-api
 ENV VITE_READER_API_BASE=$VITE_READER_API_BASE
 RUN npm run build
 

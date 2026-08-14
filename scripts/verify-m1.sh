@@ -5,6 +5,7 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 project="${MOONBOOK_VERIFY_PROJECT:-moonbook_verify_m1}"
 env_file="$(mktemp "${TMPDIR:-/tmp}/moonbook-m1-env.XXXXXX")"
 response_file="$(mktemp "${TMPDIR:-/tmp}/moonbook-m1-response.XXXXXX")"
+header_file="$(mktemp "${TMPDIR:-/tmp}/moonbook-m1-headers.XXXXXX")"
 
 case "$project" in
   moonbook_verify_*) ;;
@@ -26,7 +27,7 @@ cleanup() {
   if [[ "${MOONBOOK_VERIFY_KEEP:-0}" != "1" ]]; then
     compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   fi
-  rm -f "$env_file" "$response_file"
+  rm -f "$env_file" "$response_file" "$header_file"
   exit "$status"
 }
 trap cleanup EXIT INT TERM
@@ -53,6 +54,8 @@ MOONBOOK_JWT_SIGNING_KEY=m1-verify-local-jwt-signing-key
 MOONBOOK_METRICS_TOKEN=$metrics_token
 MOONBOOK_ADMIN_HOST_PORT=$admin_port
 MOONBOOK_READER_HOST_PORT=$reader_port
+MOONBOOK_READER_ORIGIN=http://localhost:$reader_port
+VITE_READER_API_BASE=/prod-api
 MOONBOOK_ADMIN_USERNAME=$admin_username
 MOONBOOK_ADMIN_PASSWORD=$admin_password
 MOONBOOK_ADMIN_NICKNAME=M1 Verify Admin
@@ -123,6 +126,19 @@ compose exec -T server id | grep -q 'uid=100(moonbook)'
 curl -fsS -o "$response_file" "http://127.0.0.1:$admin_port/"
 grep -qi '<html' "$response_file"
 test "$(curl -fsS "http://127.0.0.1:$reader_port/health")" = "ok"
+curl -fsS -o "$response_file" "http://127.0.0.1:$reader_port/prod-api/health/live"
+grep -q '"status":"ok"' "$response_file"
+curl -fsS -o "$response_file" "http://127.0.0.1:$reader_port/dev-api/health/live"
+grep -q '"status":"ok"' "$response_file"
+status="$(curl -sS -o "$response_file" -D "$header_file" -w '%{http_code}' \
+  -H "Origin: http://localhost:$reader_port" \
+  "http://127.0.0.1:$reader_port/prod-api/health/live")"
+test "$status" = "200"
+grep -qi "^Access-Control-Allow-Origin: http://localhost:$reader_port" "$header_file"
+status="$(curl -sS -o "$response_file" -w '%{http_code}' \
+  -H 'Origin: https://untrusted.example' \
+  "http://127.0.0.1:$reader_port/prod-api/health/live")"
+test "$status" = "403"
 curl -fsS -o "$response_file" "http://127.0.0.1:$admin_port/api/health/live"
 grep -q '"status":"ok"' "$response_file"
 curl -fsS -o "$response_file" "http://127.0.0.1:$admin_port/api/health/ready"

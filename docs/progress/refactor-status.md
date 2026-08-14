@@ -149,6 +149,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - 修复充值 HTTP 适配层的同类错误映射：无效参数、下架档位和订单不存在返回稳定中文业务文案与显式 `data:null`；未知仓储异常继续脱敏为通用内部错误，不泄漏数据库细节。
 - Reader 正文存储故障已使用真实 PostgreSQL 活动对象引用和可控 Blob 适配器覆盖：对象缺失、正文大小/SHA-256 不一致和读取超时均固定为 HTTP 200 + 业务 `500/读取章节正文失败/data:null`，响应不包含对象键、MinIO 错误码或内部端点。
 - 冻结 Reader SSR 的异常契约已补测试证据：JSON 上游 12 秒超时映射为 503，`200 + 非 JSON` 最终由公共页面 loader 安全失败为 503；robots 超时返回 `503 + Disallow: /`，根及分页 sitemap 超时返回 `503 + Retry-After: 60`，错误资源均禁止缓存。
+- Reader Compose 生产镜像默认 API 基路径已切换为 `/prod-api`，Nginx Reader 网关同时提供 `/prod-api/` 与本地兼容 `/dev-api/` 的同源反向代理；M1 验收脚本新增两个前缀的真实健康路由，以及严格 CORS 白名单 Origin 回显和非白名单 403 检查。
 - Commerce HTTP 契约第一批补齐钱包、流水、充值商品/报价/订单 6 条正常响应，覆盖最大 `int64` 字符串 ID、所有余额/币值/USDT 字符串、分页归一化和订单 `null`。
 - Commerce 剩余签到、邀请、权益、会员产品和三类购买 8 条正常 HTTP 快照已补齐；购买订单恢复旧 DTO 的备注、操作人和三个时间字段，真实 PostgreSQL 验证首次写入与幂等重取均返回完整时间。Commerce 正常响应矩阵现已闭合，错误/并发 HTTP 矩阵仍待逐项固定。
 - Reader 兼容 DTO 的日期已集中统一为旧 Java `yyyy-MM-dd HH:mm:ss`，覆盖个人数据、作品/章节、钱包流水、充值/购买订单和会员商品；Go 默认 RFC3339 不再进入这些读者响应，空时间仍为 `null`。单元快照与真实 PostgreSQL/Redis/MinIO 回归通过。
@@ -156,8 +157,8 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 
 下一步：
 
-1. 补齐 Reader 反向代理前缀、生产 `/prod-api` 路由及 CORS 来源证据。
-2. 完成 `docs/contracts/reader-api.md` 剩余兼容矩阵并执行 M3 退出审计。
+1. 完成 `docs/contracts/reader-api.md` 剩余兼容矩阵并执行 M3 退出审计。
+2. 复核 Reader/Commerce 错误与并发契约的剩余条目及真实依赖证据。
 3. 使用受控 8GB MySQL 副本完成全量演练、行数/主键/关联/对象核对；该容量演练同时作为 M6 退出证据。
 
 ## M4 当前进度

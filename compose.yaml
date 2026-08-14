@@ -180,6 +180,8 @@ services:
     build:
       context: .
       dockerfile: deploy/compose/reader-ui.Dockerfile
+      args:
+        VITE_READER_API_BASE: ${VITE_READER_API_BASE:-/prod-api}
     image: ${MOONBOOK_READER_IMAGE:-moonbook/reader-ui:local}
     restart: unless-stopped
     environment:
