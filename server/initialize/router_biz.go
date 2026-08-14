@@ -6,6 +6,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/gin-gonic/gin"
 )
@@ -34,5 +35,6 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	objects := objectstore.NewService(db, blobs)
 	books.RegisterRoutes(privateGroup, db, objects)
 	chapters.RegisterRoutes(privateGroup, db, objects)
+	readerseo.RegisterRoutes(privateGroup, db)
 
 }
