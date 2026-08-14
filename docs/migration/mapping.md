@@ -25,7 +25,7 @@
 | 书籍合并 | `novel_book_merge_*` | PostgreSQL 内容生产域 | 原值保留 | 源/目标书、章节映射、执行结果 | 待 M5 设计 |
 | AI 配置和模型 | `novel_ai_config*` | PostgreSQL 配置域 | 原值保留 | 非秘密参数；密钥改由 Secret 注入 | 待 M5 设计 |
 | AI 清洗/摘要/画像 | clean、summary、profile 配置/任务/结果表 | PostgreSQL 内容生产域 | 原值保留 | 任务结果、采用状态、失败重试 | 待 M5 设计 |
-| 读者 SEO | `novel_reader_seo_config`、网站配置 | PostgreSQL 配置域 | 原值保留 | robots、sitemap、开关与站点字段 | 待 M2/M3 设计 |
+| 读者 SEO | `novel_reader_seo_config` | `novel_reader_seo_config` 单例 | 固定配置 `id=1` 原值保留；额外 ID 不迁移 | 开关、站点字段、模板、时间、单例、错误清单和幂等 | M2 管理配置与迁移已实现；M3 接入公开 SEO、robots、sitemap 契约 |
 | 每日活动统计 | `reader_daily_activity` | PostgreSQL 分析事实 | 复合键保留 | 日期时区、读者关联、去重 | 待 M4 设计 |
 
 ## 明确不迁移
@@ -54,6 +54,14 @@
 - 字数按 Unicode code point 排除空白重新计算；与旧 `word_count` 不一致时仍迁移，并记录 `WORD_COUNT_RECALCULATED`。书籍总字数和末章统计在章节与正文引用激活的同一事务内刷新。
 - 正文先写入 MinIO 并通过对象键、字节数、SHA-256 校验，再在单个 PostgreSQL 事务内写章节元数据、切换活动引用并更新书籍统计。事务失败的已验证对象转为无引用 `orphaned`，等待宽限期回收。
 - 旧来源指纹由章节 ID、更新时间和正文 SHA-256 生成；即使 checkpoint 丢失并使用新的 migration name 重跑，也复用已成功的 legacy 对象，不增加对象版本。目标中同 ID 的非 legacy 章节不会被覆盖。
+
+## M2 读者 SEO 字段规则
+
+- 目标表固定为单例 `novel_reader_seo_config(id=1)`；管理 JSON 的 `id` 输出字符串，PUT 只接受 12 个可编辑字段，不接受客户端提交 ID 或时间。
+- 旧 `seo_enabled`、`indexing_enabled`、`sitemap_enabled` 的 `0/1` 转为 PostgreSQL boolean；站点名称、根 URL、默认描述、首页文案、书库模板、书籍模板和创建/更新时间完整迁移。
+- 站点 URL 只能是无用户信息、路径、查询和片段的 HTTP/HTTPS 根地址；模板只允许各页面上下文声明的占位符，文本非空且遵守目标长度限制。
+- 旧表缺失记录 `SOURCE_TABLE_NOT_FOUND`，额外 ID 记录 `UNEXPECTED_CONFIG_ID`，字段无效记录 `INVALID_SEO_CONFIG`；这些业务错误保留新库默认单例并继续其他迁移，不发生部分覆盖。
+- `moonbook-legacy-migrate novel-reader-seo` 使用固定 ID 游标和同事务 checkpoint，重复执行不增加目标行。真实只读 MySQL 验证覆盖合法、无效、缺表、额外 ID 与幂等分支。
 
 ## M6 完整性门槛
 

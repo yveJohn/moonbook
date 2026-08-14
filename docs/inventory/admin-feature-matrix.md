@@ -28,7 +28,7 @@
 | 分类与子分类 | 书籍页面及相关 API/SQL | 分类筛选、方向、子分类关系 | `novel_categories`、`novel_book_sub_categories`、`/novel/categories`、`view/novel/metadata` | M2 分类管理与书籍副分类关系已实现 |
 | 小说分类 | 书籍领域、现行字典及历史分类表 | 一级/二级分类 CRUD、排序、启停、迁移 | `novel_categories`、`/novel/categories`、`view/novel/metadata`、`novel_book_sub_categories` | M2 元数据及书籍关联已实现 |
 | 作者信息 | 书籍领域及旧数据表 | 作者 CRUD、状态、作品方向、历史 ID 与迁移 | `novel_authors`、`/novel/authors`、`view/novel/authors`、`novel_books.author_id` | M2 元数据及书籍关联已实现 |
-| SEO 配置 | `novel/readerSeo` / `NovelReaderSeoController` | SEO 开关、站点信息、robots、sitemap | 待补 | 基线已盘点 |
+| SEO 配置 | `novel/readerSeo` / `NovelReaderSeoController` | SEO 开关、站点信息、robots、sitemap | `novel_reader_seo_config`、`/novel/readerSeo/config`、`view/novel/readerSeo`、`moonbook-legacy-migrate novel-reader-seo` | M2 管理配置、权限、审计和迁移已完成；公开 SEO、robots、sitemap 接口在 M3 接入冻结 Reader 契约 |
 | 书籍画像 | `novel/bookProfile` / `NovelBookProfileController` | AI 建议、采用、失败重试 | M5 补齐 | 基线已盘点 |
 
 ## 读者运营与交易（M3/M4）
