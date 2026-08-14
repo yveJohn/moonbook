@@ -20,8 +20,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books|novel-chapters]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-reader-seo") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [preflight|novel-metadata|novel-books|novel-chapters|novel-reader-seo]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -64,6 +64,9 @@ func run() int {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stages := []legacymigrate.Stage{legacymigrate.PreflightStage{}}
+	if flag.Arg(0) == "novel-reader-seo" {
+		stages = append(stages, legacymigrate.NovelReaderSEOStage{})
+	}
 	if flag.Arg(0) == "novel-metadata" || flag.Arg(0) == "novel-books" || flag.Arg(0) == "novel-chapters" {
 		stages = append(stages,
 			legacymigrate.NovelCategoryDictionaryStage{},
