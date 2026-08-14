@@ -3,8 +3,10 @@ package invite
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -64,8 +66,31 @@ func (r SQLRepository) RegisterWithInvite(ctx context.Context, req Registration)
 		return auth.ReaderAccount{}, err
 	}
 	if invite.InviterReaderID != 0 {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO reader_invite_relations(inviter_reader_id,invitee_reader_id,invite_code_id) VALUES($1,$2,$3) ON CONFLICT (invitee_reader_id) DO NOTHING`, invite.InviterReaderID, account.ID, invite.ID); err != nil {
+		var relationCreated bool
+		if err = tx.QueryRowContext(ctx, `INSERT INTO reader_invite_relations(inviter_reader_id,invitee_reader_id,invite_code_id) VALUES($1,$2,$3) ON CONFLICT (invitee_reader_id) DO NOTHING RETURNING true`, invite.InviterReaderID, account.ID, invite.ID).Scan(&relationCreated); err != nil && err != sql.ErrNoRows {
 			return auth.ReaderAccount{}, err
+		}
+		if relationCreated {
+			var enabled bool
+			var inviterReward, inviteeReward int64
+			if err = tx.QueryRowContext(ctx, `SELECT enabled,inviter_reward_coin,invitee_reward_coin FROM reader_invite_reward_config WHERE id=1`).Scan(&enabled, &inviterReward, &inviteeReward); err != nil {
+				return auth.ReaderAccount{}, err
+			}
+			if enabled {
+				biz := fmt.Sprintf("%d:%d", invite.ID, account.ID)
+				if inviterReward > 0 {
+					key := biz + ":inviter"
+					if _, err = wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: invite.InviterReaderID, BizType: "invite_reward", BizID: &biz, Direction: "income", CoinType: "bonus", Amount: inviterReward, LedgerNo: "INVI-" + biz, Remark: stringPtr("邀请奖励"), IdempotencyKey: &key}); err != nil {
+						return auth.ReaderAccount{}, err
+					}
+				}
+				if inviteeReward > 0 {
+					key := biz + ":invitee"
+					if _, err = wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: account.ID, BizType: "invite_reward", BizID: &biz, Direction: "income", CoinType: "bonus", Amount: inviteeReward, LedgerNo: "INVE-" + biz, Remark: stringPtr("注册奖励"), IdempotencyKey: &key}); err != nil {
+						return auth.ReaderAccount{}, err
+					}
+				}
+			}
 		}
 	}
 	if err = tx.Commit(); err != nil {
@@ -73,3 +98,5 @@ func (r SQLRepository) RegisterWithInvite(ctx context.Context, req Registration)
 	}
 	return account, nil
 }
+
+func stringPtr(v string) *string { return &v }

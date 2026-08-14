@@ -30,12 +30,18 @@ func TestReaderRegistrationConsumesInviteAndCreatesRelation(t *testing.T) {
 	if _, err = db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES($1,$2,'邀请人',$3,'enabled')`, inviter, inviterName, string(passwordHash)); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.ExecContext(ctx, `UPDATE reader_invite_reward_config SET enabled=true,inviter_reward_coin=13,invitee_reward_coin=7,remark='集成测试' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `UPDATE reader_invite_reward_config SET enabled=false,inviter_reward_coin=0,invitee_reward_coin=0,remark='' WHERE id=1`)
+	})
 	if _, err = db.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count) VALUES($1,$2,$3,'enabled',1)`, inviteCodeID, code, inviter); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		cleanup := context.Background()
-		for _, q := range []string{`DELETE FROM reader_sessions WHERE reader_id IN ($1,$2)`, `DELETE FROM reader_invite_relations WHERE inviter_reader_id IN ($1,$2) OR invitee_reader_id IN ($1,$2)`, `DELETE FROM reader_accounts WHERE id IN ($1,$2)`} {
+		for _, q := range []string{`DELETE FROM reader_sessions WHERE reader_id IN ($1,$2)`, `DELETE FROM reader_wallet_ledgers WHERE reader_id IN ($1,$2)`, `DELETE FROM reader_wallets WHERE reader_id IN ($1,$2)`, `DELETE FROM reader_invite_relations WHERE inviter_reader_id IN ($1,$2) OR invitee_reader_id IN ($1,$2)`, `DELETE FROM reader_accounts WHERE id IN ($1,$2)`} {
 			_, _ = db.ExecContext(cleanup, q, inviter, invitee)
 		}
 		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_invite_codes WHERE id=$3 OR inviter_reader_id IN ($1,$2)`, inviter, invitee, inviteCodeID)
@@ -65,5 +71,12 @@ func TestReaderRegistrationConsumesInviteAndCreatesRelation(t *testing.T) {
 	var autoCount int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_invite_codes WHERE inviter_reader_id=$1`, invitee).Scan(&autoCount); err != nil || autoCount != 1 {
 		t.Fatalf("automatic invite count=%d err=%v", autoCount, err)
+	}
+	var inviterBalance, inviteeBalance int64
+	if err := db.QueryRowContext(ctx, `SELECT bonus_coin_balance FROM reader_wallets WHERE reader_id=$1`, inviter).Scan(&inviterBalance); err != nil || inviterBalance != 13 {
+		t.Fatalf("inviter bonus=%d err=%v", inviterBalance, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT bonus_coin_balance FROM reader_wallets WHERE reader_id=$1`, invitee).Scan(&inviteeBalance); err != nil || inviteeBalance != 7 {
+		t.Fatalf("invitee bonus=%d err=%v", inviteeBalance, err)
 	}
 }
