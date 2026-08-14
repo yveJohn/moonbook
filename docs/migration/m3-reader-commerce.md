@@ -112,8 +112,10 @@ make test-reader-integration
 - 购买 HTTP 错误适配已恢复冻结行为：整本报价变化返回 `46106/作品报价已变化，请确认新价格`，余额不足返回 `500/余额不足`，并为无效购买参数和不可用商品提供稳定公开文案，所有错误显式 `data:null`。完整 Reader/Commerce 单元回归通过，`moonbook_browser` 真实 PostgreSQL 的会员/整本购买原子性与幂等集成测试再次 PASS。
 - 充值 HTTP 错误适配已固定无效参数、下架档位和订单不存在的中文业务响应，未知仓储错误继续脱敏且所有错误显式 `data:null`。完整 Reader/Commerce 回归通过，`moonbook_browser` 真实 PostgreSQL 的精确报价、订单幂等和读者范围查询集成测试再次 PASS。
 - 2026-08-15 在 `moonbook_browser` 隔离栈复跑 `reader/public` 真实依赖集成测试：基于真实 PostgreSQL 活动对象引用和 MinIO 正常对象，分别注入对象缺失、正文大小/SHA-256 不一致及读取超时；三条路径均返回 HTTP 200 + `500/读取章节正文失败/data:null`，且响应未泄漏 MinIO 错误码、内部端点或对象键。原有 8 条公开路由、4 条 SEO 路由和真实正文读取测试同时 PASS。
-- 冻结 Reader SSR/SEO 代理异常路径已补契约测试但未修改业务实现：12 秒上游超时映射为服务不可用，`200 + 非 JSON` 在公共页面安全失败为 503；robots 返回禁止抓取正文，根及分页 sitemap 返回带 `Retry-After: 60` 的 503，错误资源均为 `no-store`。目标测试 12 个、全量 45 个测试文件 543 个用例和生产 SSR 构建全部通过。
+- 冻结 Reader SSR/SEO 代理异常路径已由仓库级 `tests/reader-ui-contract` 的 6 个契约用例覆盖，不在 `reader-ui` 树内增改测试或业务实现：12 秒上游超时映射为服务不可用，`200 + 非 JSON` 在公共页面安全失败为 503；robots 返回禁止抓取正文，根及分页 sitemap 返回带 `Retry-After: 60` 的 503，错误资源均为 `no-store`。冻结 Reader 原有 44 个测试文件 536 个用例和生产 SSR 构建仍全部通过。
+- 异常契约测试外置后，暂存态 `reader-ui` Git tree 重新计算为 `ffbe7bb4c56792e94e160de86cc71bce0a6e0e5e`，与冻结基线的 138 个路径和 Blob 精确一致；目录级比较排除旧仓库未跟踪构建/系统文件后同样无差异。
 - 2026-08-15 在 `moonbook_browser` 隔离栈完成生产前缀与 CORS 验证：Nginx 配置测试和 Compose 模型校验通过，`/prod-api/health/live`、兼容 `/dev-api/health/live` 及 `/prod-api/reader/seo/config` 均返回 200；配置的 Reader Origin 返回精确 `Access-Control-Allow-Origin`，非白名单 Origin 返回 403。重建 Reader 镜像后在容器 bundle 中确认 `/prod-api` 已编译，Reader UI 与网关均保持 healthy。
+- 整书购买新增 8 路并发真实 PostgreSQL 验证：旧报价在事务前置路径返回 `ErrQuoteChanged` 且不产生扣款；同一 Reader、作品和报价的并发请求由 advisory lock 串行并复用唯一订单，最终只生成 1 个订单、1 个整书权益和 2 条币种流水，奖励币/充值币余额合计只扣减一次。
 - 新增安全门控命令 `moonbook-browser-fixture`，仅在显式确认值且 PostgreSQL/MinIO 均为回环地址时允许 `seed/cleanup`。本次 fixture 使用独立 `moonbook_browser` 数据库和 `moonbook-content` Bucket，正文通过 `UploadVerified/Activate` 写入；验收后清理 2 个 MinIO 对象，并核对测试书籍、章节、对象、读者和邀请码计数均为 0。
 - 浏览器栈重建后 readiness 检出数据库从迁移 41 落后到 53，已通过 Compose `migrate` 服务前向应用 12 个版本；随后 `/health/ready` 的 migrations、MinIO、PostgreSQL、Redis 全部恢复 `ok`。该动作只作用于隔离 `moonbook_browser` 卷。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。
