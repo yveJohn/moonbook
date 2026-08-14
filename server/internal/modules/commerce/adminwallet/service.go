@@ -35,3 +35,6 @@ func (s *Service) ListLedgers(ctx context.Context, id int64, c string, p, n int)
 	}
 	return s.Repo.ListLedgers(ctx, id, c, p, n)
 }
+func (s *Service) Adjust(ctx context.Context, in AdjustmentInput) (Adjustment, error) {
+	return s.Repo.Adjust(ctx, in)
+}

@@ -3,6 +3,7 @@ package adminwallet
 import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/managementresponse"
+	"github.com/flipped-aurora/gin-vue-admin/server/middleware"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
@@ -13,8 +14,24 @@ type Handler struct{ service *Service }
 func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	h := &Handler{service: service}
 	r := private.Group("reader")
+	w := private.Group("reader").Use(middleware.OperationRecord())
 	r.GET("wallets", h.wallets)
 	r.GET("wallets/:readerId/ledgers", h.ledgers)
+	w.POST("wallets/:readerId/adjust", h.adjust)
+}
+func (h *Handler) adjust(c *gin.Context) {
+	readerID := c.Param("readerId")
+	var req struct{ Amount, CoinType, Direction, Reason, RequestID string }
+	if c.ShouldBindJSON(&req) != nil {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "请求参数无效"))
+		return
+	}
+	v, err := h.service.Adjust(c, AdjustmentInput{ReaderID: readerID, Amount: req.Amount, CoinType: req.CoinType, Direction: req.Direction, Reason: req.Reason, RequestID: req.RequestID})
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, ledgerOut(v.Ledger), "调账成功")
 }
 func walletOut(v Wallet) map[string]any {
 	return map[string]any{"readerId": v.ReaderID, "readerUsername": v.ReaderUsername, "rechargeBalance": v.RechargeBalance, "bonusBalance": v.BonusBalance, "totalRechargeIncome": v.TotalRechargeIncome, "totalBonusIncome": v.TotalBonusIncome, "totalRechargeExpense": v.TotalRechargeExpense, "totalBonusExpense": v.TotalBonusExpense}

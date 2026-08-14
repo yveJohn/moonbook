@@ -3,9 +3,18 @@ package adminwallet
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 )
 
 type SQLRepository struct{ DB *sql.DB }
+
+var ErrInvalidAdjustment = errors.New("invalid wallet adjustment")
 
 func (r SQLRepository) ListWallets(ctx context.Context, keyword string, page, size int) ([]Wallet, int64, error) {
 	where := ` WHERE ($1='' OR a.username ILIKE '%'||$1||'%' OR a.nickname ILIKE '%'||$1||'%')`
@@ -47,4 +56,51 @@ func (r SQLRepository) ListLedgers(ctx context.Context, readerID int64, coin str
 		items = append(items, v)
 	}
 	return items, total, rows.Err()
+}
+
+func (r SQLRepository) Adjust(ctx context.Context, in AdjustmentInput) (Adjustment, error) {
+	in.ReaderID = strings.TrimSpace(in.ReaderID)
+	in.Amount = strings.TrimSpace(in.Amount)
+	in.CoinType = strings.TrimSpace(in.CoinType)
+	in.Direction = strings.TrimSpace(in.Direction)
+	in.Reason = strings.TrimSpace(in.Reason)
+	in.RequestID = strings.TrimSpace(in.RequestID)
+	readerID, err := strconv.ParseInt(in.ReaderID, 10, 64)
+	if err != nil || readerID <= 0 || in.CoinType != "recharge" && in.CoinType != "bonus" || in.Direction != "income" && in.Direction != "expense" || in.RequestID == "" || len(in.RequestID) > 64 || in.Reason == "" || len([]rune(in.Reason)) > 255 {
+		return Adjustment{}, ErrInvalidAdjustment
+	}
+	amount, err := strconv.ParseInt(in.Amount, 10, 64)
+	if err != nil || amount <= 0 {
+		return Adjustment{}, ErrInvalidAdjustment
+	}
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Adjustment{}, err
+	}
+	defer tx.Rollback()
+	var accountID int64
+	if err = tx.QueryRowContext(ctx, `SELECT id FROM reader_accounts WHERE id=$1 FOR UPDATE`, readerID).Scan(&accountID); err != nil {
+		return Adjustment{}, err
+	}
+	key := fmt.Sprintf("admin_wallet:%d:%s", readerID, in.RequestID)
+	ledgerNo := fmt.Sprintf("AW-%d-%d", readerID, time.Now().UnixNano())
+	ledger, err := wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: readerID, Amount: amount, CoinType: in.CoinType, Direction: in.Direction, LedgerNo: ledgerNo, BizType: "wallet_adjustment", BizID: &key, Remark: &in.Reason, IdempotencyKey: &key})
+	if err != nil {
+		return Adjustment{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Adjustment{}, err
+	}
+	return Adjustment{ReaderID: strconv.FormatInt(accountID, 10), RequestID: in.RequestID, Ledger: fromWalletLedger(ledger)}, nil
+}
+
+func fromWalletLedger(v wallet.Ledger) Ledger {
+	return Ledger{ID: strconv.FormatInt(v.ID, 10), ReaderID: strconv.FormatInt(v.ReaderID, 10), Amount: strconv.FormatInt(v.Amount, 10), BalanceBefore: strconv.FormatInt(v.BalanceBefore, 10), BalanceAfter: strconv.FormatInt(v.BalanceAfter, 10), LedgerNo: v.LedgerNo, BizType: v.BizType, Direction: v.Direction, CoinType: v.CoinType, BizID: valueOrEmpty(v.BizID), Remark: valueOrEmpty(v.Remark), CreatedAt: v.CreatedAt.Format(time.RFC3339Nano)}
+}
+
+func valueOrEmpty(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }
