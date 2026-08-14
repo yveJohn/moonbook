@@ -22,6 +22,7 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service, store FileStore)
 	read := private.Group("novel/txtImports")
 	write := private.Group("novel/txtImports").Use(middleware.OperationRecord())
 	read.GET("", h.list)
+	read.GET("/:id/preview", h.preview)
 	read.GET("/:id", h.get)
 	write.POST("", h.upload)
 	write.POST("/:id/retry", h.retry)
@@ -64,6 +65,19 @@ func (h *Handler) get(c *gin.Context) {
 			managementresponse.OK(c, render(item), "获取成功")
 			return
 		}
+	}
+	apperror.WriteManagement(c, err)
+}
+
+func (h *Handler) preview(c *gin.Context) {
+	id, err := parseID(c.Param("id"))
+	if err == nil {
+		item, previewErr := h.service.Preview(c, h.store, id)
+		if previewErr == nil {
+			managementresponse.OK(c, item, "预览成功")
+			return
+		}
+		err = previewErr
 	}
 	apperror.WriteManagement(c, err)
 }

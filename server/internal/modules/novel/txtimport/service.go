@@ -6,9 +6,29 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/importtask"
 )
 
 type Service struct{ Repo Repository }
+
+const (
+	maxPreviewChapters = 20
+	maxPreviewRunes    = 2000
+)
+
+type PreviewChapter struct {
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated"`
+}
+
+type Preview struct {
+	TaskID            string           `json:"taskId"`
+	OriginalFilename  string           `json:"originalFilename"`
+	TotalChapterCount int              `json:"totalChapterCount"`
+	Chapters          []PreviewChapter `json:"chapters"`
+}
 
 func NewService(repo Repository) *Service { return &Service{Repo: repo} }
 
@@ -70,6 +90,48 @@ func (s *Service) Get(ctx context.Context, id int64) (Task, error) {
 		return Task{}, errors.New("invalid TXT import task id")
 	}
 	return s.Repo.Get(ctx, id)
+}
+
+func (s *Service) Preview(ctx context.Context, store FileStore, id int64) (Preview, error) {
+	if id <= 0 {
+		return Preview{}, errors.New("invalid TXT import task id")
+	}
+	if store == nil {
+		return Preview{}, errors.New("TXT file store is not configured")
+	}
+	task, err := s.Repo.Get(ctx, id)
+	if err != nil {
+		return Preview{}, err
+	}
+	size, err := strconv.ParseInt(task.ObjectByteSize, 10, 64)
+	if err != nil || size <= 0 {
+		return Preview{}, errors.New("invalid TXT object size")
+	}
+	data, err := store.Get(ctx, ObjectMeta{Key: task.ObjectKey, SHA256: task.ObjectSHA256, ByteSize: size})
+	if err != nil {
+		return Preview{}, err
+	}
+	parsed := importtask.ParseTXTChapters(data, strings.TrimSuffix(task.OriginalFilename, filepath.Ext(task.OriginalFilename)))
+	preview := Preview{TaskID: task.ID, OriginalFilename: task.OriginalFilename, TotalChapterCount: len(parsed), Chapters: make([]PreviewChapter, 0, min(len(parsed), maxPreviewChapters))}
+	for _, chapter := range parsed {
+		if len(preview.Chapters) >= maxPreviewChapters {
+			break
+		}
+		content := []rune(chapter.Content)
+		truncated := len(content) > maxPreviewRunes
+		if truncated {
+			content = content[:maxPreviewRunes]
+		}
+		preview.Chapters = append(preview.Chapters, PreviewChapter{Title: chapter.Title, Content: string(content), Truncated: truncated})
+	}
+	return preview, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (s *Service) Retry(ctx context.Context, id int64) (Task, error) {

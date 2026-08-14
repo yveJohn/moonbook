@@ -35,11 +35,11 @@ INSERT INTO sys_base_menus(id,created_at,updated_at,menu_level,parent_id,path,na
 VALUES(1718,now(),now(),2,1000,'novelTxtImports','NovelTxtImports',false,'view/novel/txtImports/index.vue',64,'',true,false,'TXT导入','upload',false,'') ON CONFLICT DO NOTHING;
 INSERT INTO sys_authority_menus(sys_base_menu_id,sys_authority_authority_id) VALUES(1718,888) ON CONFLICT DO NOTHING;
 INSERT INTO sys_apis(id,created_at,updated_at,path,description,api_group,method) VALUES
-(1760,now(),now(),'/novel/txtImports','查询TXT导入任务','内容生产','GET'),(1761,now(),now(),'/novel/txtImports','上传TXT导入文件','内容生产','POST'),(1762,now(),now(),'/novel/txtImports/:id','查询TXT导入详情','内容生产','GET'),(1763,now(),now(),'/novel/txtImports/:id/retry','重试TXT导入','内容生产','POST'),(1764,now(),now(),'/novel/txtImports/:id/cancel','取消TXT导入','内容生产','POST') ON CONFLICT DO NOTHING;
+(1760,now(),now(),'/novel/txtImports','查询TXT导入任务','内容生产','GET'),(1761,now(),now(),'/novel/txtImports','上传TXT导入文件','内容生产','POST'),(1762,now(),now(),'/novel/txtImports/:id','查询TXT导入详情','内容生产','GET'),(1763,now(),now(),'/novel/txtImports/:id/preview','预览TXT导入内容','内容生产','GET'),(1764,now(),now(),'/novel/txtImports/:id/retry','重试TXT导入','内容生产','POST'),(1765,now(),now(),'/novel/txtImports/:id/cancel','取消TXT导入','内容生产','POST') ON CONFLICT DO NOTHING;
 INSERT INTO casbin_rule(ptype,v0,v1,v2,v3,v4,v5) VALUES
-('p','888','/novel/txtImports','GET','','',''),('p','888','/novel/txtImports','POST','','',''),('p','888','/novel/txtImports/:id','GET','','',''),('p','888','/novel/txtImports/:id/retry','POST','','',''),('p','888','/novel/txtImports/:id/cancel','POST','','','') ON CONFLICT DO NOTHING;
+('p','888','/novel/txtImports','GET','','',''),('p','888','/novel/txtImports','POST','','',''),('p','888','/novel/txtImports/:id','GET','','',''),('p','888','/novel/txtImports/:id/preview','GET','','',''),('p','888','/novel/txtImports/:id/retry','POST','','',''),('p','888','/novel/txtImports/:id/cancel','POST','','','') ON CONFLICT DO NOTHING;
 SELECT setval('sys_base_menus_id_seq',GREATEST((SELECT max(id) FROM sys_base_menus),1718),true);
-SELECT setval('sys_apis_id_seq',GREATEST((SELECT max(id) FROM sys_apis),1764),true);
+SELECT setval('sys_apis_id_seq',GREATEST((SELECT max(id) FROM sys_apis),1765),true);
 -- +goose StatementEnd
 -- +goose Down
 -- +goose StatementBegin

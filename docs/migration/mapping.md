@@ -21,7 +21,7 @@
 | 签到与邀请 | `reader_checkin_record`、奖励规则、邀请关系/奖励/邀请码 | PostgreSQL 运营域 | 原值保留 | 连续天数、唯一日期、奖励汇总 | 待 M4 设计 |
 | 充值与支付 | `reader_recharge_*`、`reader_payment_*`、历史 `order_pay` | PostgreSQL 支付域 | 原值保留 | 金额、状态、回调幂等、凭据不明文迁移 | 待 M4 设计 |
 | 采集 | `novel_crawl_*`、历史 `crawl_*` | PostgreSQL 内容生产域 | 原值保留 | 来源、游标、候选、任务与日志关联 | 待 M5 设计 |
-| TXT 导入 | `novel_txt_import_task`、原文件和失败修复记录 | PostgreSQL + MinIO | 原值保留 | 文件哈希、任务状态、章节结果 | `00042` 建立任务事实；上传对象先完成大小/SHA-256 校验，再写任务和 `txt_import` 队列；预览/失败修复仍待 M5 后续切片 |
+| TXT 导入 | `novel_txt_import_task`、原文件和失败修复记录 | PostgreSQL + MinIO | 原值保留 | 文件哈希、任务状态、章节结果 | `00042` 建立任务事实；上传对象先完成大小/SHA-256 校验，再写任务和 `txt_import` 队列；预览只读已校验对象并限制返回量，失败修复仍待 M5 后续切片 |
 | 书籍合并 | `novel_book_merge_*` | PostgreSQL 内容生产域 | 原值保留 | 源/目标书、章节映射、执行结果 | 待 M5 设计 |
 | AI 配置和模型 | `novel_ai_config*` | PostgreSQL 配置域 | 原值保留 | 非秘密参数；密钥改由 Secret 注入 | 待 M5 设计 |
 | AI 清洗/摘要/画像 | clean、summary、profile 配置/任务/结果表 | PostgreSQL 内容生产域 | 原值保留 | 任务结果、采用状态、失败重试 | 待 M5 设计 |
