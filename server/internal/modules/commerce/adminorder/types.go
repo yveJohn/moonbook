@@ -1,0 +1,18 @@
+package adminorder
+
+import (
+	"context"
+	"time"
+)
+
+type Order struct {
+	ID, ReaderID, ReaderUsername, OrderNo, OrderType, ProductID, ProductType, TargetID, BookIDSnapshot string
+	ProductName, PriceCoin, ChapterWordCount, PricingWordUnit, PricingCoinUnit                         string
+	RechargeCoinAmount, BonusCoinAmount, Status, IdempotencyKey, Remark                                string
+	PaidAt, CreatedAt, UpdatedAt                                                                       *time.Time
+}
+
+type Repository interface {
+	List(context.Context, string, string, string, int, int) ([]Order, int64, error)
+	Get(context.Context, int64) (Order, error)
+}
