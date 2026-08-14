@@ -54,7 +54,7 @@ func RequireDB(t *testing.T) (*sql.DB, Config) {
 		db.Close()
 		t.Fatalf("连接 PostgreSQL: %v", err)
 	}
-	for _, table := range []string{"reader_accounts", "reader_sessions", "reader_invite_codes", "reader_invite_relations", "reader_bookshelf_entries", "reader_book_likes", "reader_reading_history", "reader_reading_preferences", "reader_feedback", "commerce_products", "commerce_membership_grants", "commerce_entitlements", "novel_books", "novel_chapters", "novel_objects"} {
+	for _, table := range []string{"reader_accounts", "reader_sessions", "reader_invite_codes", "reader_invite_relations", "reader_bookshelf_entries", "reader_book_likes", "reader_reading_history", "reader_reading_preferences", "reader_feedback", "reader_wallets", "reader_wallet_ledgers", "reader_recharge_products", "reader_recharge_settings", "reader_payment_channels", "reader_recharge_orders", "reader_payment_callback_logs", "commerce_products", "commerce_membership_grants", "commerce_entitlements", "novel_books", "novel_chapters", "novel_objects"} {
 		var exists bool
 		if err := db.QueryRowContext(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+table).Scan(&exists); err != nil || !exists {
 			db.Close()
