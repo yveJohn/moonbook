@@ -111,6 +111,7 @@ make test-reader-integration
 - Reader 认证五路由的正常 HTTP 响应已全部固定：注册/登录保持冻结 UI 使用的 `accessToken/expireIn/reader` 嵌套结构，资料返回字符串 `readerId`，退出和修改密码显式返回 `data:null`。契约测试同时执行 BCrypt 改密和退出后的会话校验；`moonbook_browser` 的真实 PostgreSQL/Redis 认证集成套件再次全部 PASS。
 - 购买 HTTP 错误适配已恢复冻结行为：整本报价变化返回 `46106/作品报价已变化，请确认新价格`，余额不足返回 `500/余额不足`，并为无效购买参数和不可用商品提供稳定公开文案，所有错误显式 `data:null`。完整 Reader/Commerce 单元回归通过，`moonbook_browser` 真实 PostgreSQL 的会员/整本购买原子性与幂等集成测试再次 PASS。
 - 充值 HTTP 错误适配已固定无效参数、下架档位和订单不存在的中文业务响应，未知仓储错误继续脱敏且所有错误显式 `data:null`。完整 Reader/Commerce 回归通过，`moonbook_browser` 真实 PostgreSQL 的精确报价、订单幂等和读者范围查询集成测试再次 PASS。
+- 2026-08-15 在 `moonbook_browser` 隔离栈复跑 `reader/public` 真实依赖集成测试：基于真实 PostgreSQL 活动对象引用和 MinIO 正常对象，分别注入对象缺失、正文大小/SHA-256 不一致及读取超时；三条路径均返回 HTTP 200 + `500/读取章节正文失败/data:null`，且响应未泄漏 MinIO 错误码、内部端点或对象键。原有 8 条公开路由、4 条 SEO 路由和真实正文读取测试同时 PASS。
 - 新增安全门控命令 `moonbook-browser-fixture`，仅在显式确认值且 PostgreSQL/MinIO 均为回环地址时允许 `seed/cleanup`。本次 fixture 使用独立 `moonbook_browser` 数据库和 `moonbook-content` Bucket，正文通过 `UploadVerified/Activate` 写入；验收后清理 2 个 MinIO 对象，并核对测试书籍、章节、对象、读者和邀请码计数均为 0。
 - 浏览器栈重建后 readiness 检出数据库从迁移 41 落后到 53，已通过 Compose `migrate` 服务前向应用 12 个版本；随后 `/health/ready` 的 migrations、MinIO、PostgreSQL、Redis 全部恢复 `ok`。该动作只作用于隔离 `moonbook_browser` 卷。
 - `CGO_ENABLED=0 -tags=integration` 编译和无环境变量路径已验证：缺少 `MOONBOOK_READER_TEST_*` 时对应测试明确 `Skip`，不会伪造通过；配置完整依赖后必须保留 verbose 原始输出作为验收证据。

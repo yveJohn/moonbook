@@ -17,7 +17,7 @@ import (
 type response struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
-	Data any    `json:"data,omitempty"`
+	Data any    `json:"data"`
 }
 type pageResponse struct {
 	Code  int    `json:"code"`

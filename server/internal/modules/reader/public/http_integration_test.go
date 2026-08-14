@@ -5,7 +5,9 @@ package public
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +20,24 @@ import (
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	"github.com/gin-gonic/gin"
 )
+
+type readerFaultBlobStore struct {
+	objectstore.BlobStore
+	mode string
+}
+
+func (store readerFaultBlobStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	switch store.mode {
+	case "missing":
+		return nil, errors.New("open MinIO object: NoSuchKey at internal endpoint")
+	case "corrupt":
+		return io.NopCloser(strings.NewReader("corrupt chapter body")), nil
+	case "timeout":
+		return nil, context.DeadlineExceeded
+	default:
+		return store.BlobStore.Get(ctx, key)
+	}
+}
 
 func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 	db, cfg := integrationtest.RequireDB(t)
@@ -187,6 +207,30 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 	data, ok := chapterBody["data"].(map[string]any)
 	if !ok || data["content"] != string(content) {
 		t.Fatalf("chapter response=%v", chapterBody)
+	}
+	for _, mode := range []string{"missing", "corrupt", "timeout"} {
+		t.Run("chapter content "+mode, func(t *testing.T) {
+			faultRouter := gin.New()
+			faultObjects := objectstore.NewService(db, readerFaultBlobStore{BlobStore: minioTest.Store, mode: mode})
+			RegisterRoutes(faultRouter.Group("/"), db, faultObjects, auth, catalog.NewService(catalog.SQLRepository{DB: db}))
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/reader/chapters/%d", chapter), nil)
+			req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+			resp := httptest.NewRecorder()
+			faultRouter.ServeHTTP(resp, req)
+			var body map[string]any
+			if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			data, hasData := body["data"]
+			if resp.Code != http.StatusOK || body["code"] != float64(500) || body["msg"] != "读取章节正文失败" || !hasData || data != nil {
+				t.Fatalf("mode=%s status=%d body=%s", mode, resp.Code, resp.Body.String())
+			}
+			for _, secret := range []string{"NoSuchKey", "internal endpoint", "chapters/"} {
+				if strings.Contains(resp.Body.String(), secret) {
+					t.Fatalf("mode=%s leaked %q: %s", mode, secret, resp.Body.String())
+				}
+			}
+		})
 	}
 
 	seo := request(http.MethodGet, "/reader/seo/config", false)
