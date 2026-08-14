@@ -26,7 +26,7 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	base := time.Now().UnixNano()
-	reader, category, subCategory, author, book, chapter := base, base+1, base+2, base+3, base+4, base+5
+	reader, category, subCategory, author, book, chapter, emptyBook := base, base+1, base+2, base+3, base+4, base+5, base+6
 	code := integrationtest.Prefix()
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash,status) VALUES($1,$2,'x','enabled')`, reader, code+"-reader"); err != nil {
 		t.Fatal(err)
@@ -41,6 +41,9 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO novel_books(id,primary_category_id,category_code,category_name,book_name,author_id,author_name,publish_status,book_status,source_type,charge_mode,featured,featured_note) VALUES($1,$2,$3,$3,$3,$4,$3,'published','serializing','manual','login_free',true,'HTTP 集成推荐')`, book, category, code, author); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO novel_books(id,primary_category_id,category_code,category_name,book_name,author_id,author_name,publish_status,book_status,source_type,charge_mode) VALUES($1,$2,$3,$3,$4,$5,$3,'published','serializing','manual','login_free')`, emptyBook, category, code, code+"-empty", author); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO novel_book_sub_categories(book_id,category_id,category_code,category_name,sort) VALUES($1,$2,$3,$3,0)`, book, subCategory, code+"-sub"); err != nil {
@@ -68,7 +71,7 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_objects WHERE book_id=$1`, book)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_chapters WHERE id=$1`, chapter)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_book_sub_categories WHERE book_id=$1`, book)
-		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_books WHERE id=$1`, book)
+		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_books WHERE id IN ($1,$2)`, book, emptyBook)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_authors WHERE id=$1`, author)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_categories WHERE id IN ($1,$2)`, category, subCategory)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_sessions WHERE reader_id=$1`, reader)
@@ -138,7 +141,7 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 	if !ok || !containsBook(randomRows) {
 		t.Fatalf("random response=%v", random)
 	}
-	books := request(http.MethodGet, fmt.Sprintf("/reader/books?keyword=%s&pageNum=1&pageSize=10", code), false)
+	books := request(http.MethodGet, fmt.Sprintf("/reader/books?keyword=%s&subCategoryCode=%s-sub&pageNum=1&pageSize=10", code, code), false)
 	rows, ok := books["rows"].([]any)
 	if !ok || len(rows) != 1 || rows[0].(map[string]any)["bookId"] != fmt.Sprint(book) {
 		t.Fatalf("books response=%v", books)
@@ -171,6 +174,11 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 		t.Fatalf("chapters response=%v", chapters)
 	}
 	assertDateTime("chapter update", chapterRows[0].(map[string]any)["updateTime"])
+	emptyChapters := request(http.MethodGet, fmt.Sprintf("/reader/books/%d/chapters", emptyBook), false)
+	emptyChapterRows, ok := emptyChapters["data"].([]any)
+	if !ok || len(emptyChapterRows) != 0 {
+		t.Fatalf("empty chapters response=%v", emptyChapters)
+	}
 	anonymousChapter := request(http.MethodGet, fmt.Sprintf("/reader/chapters/%d", chapter), false)
 	if anonymousChapter["code"] != float64(46101) || anonymousChapter["msg"] != "请先登录后阅读" {
 		t.Fatalf("anonymous chapter response=%v", anonymousChapter)

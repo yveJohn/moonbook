@@ -101,7 +101,7 @@
 | 路由组 | 正常 JSON | 错误/鉴权 | 空值/分页/Long ID | 当前结论 |
 | --- | --- | --- | --- | --- |
 | `/reader/auth/*` 5 条 | `auth/http_contract_test.go` 逐条覆盖注册、登录、退出、资料和修改密码成功响应 | 无 Token、过期、撤销、封禁账号、管理员 Token 和非法认证参数统一 HTTP 200 + 业务 `401`；旧密码升级、改密和退出撤销已覆盖 | 空成功/错误显式 `data:null`；`9007199254740993`、`9223372036854775807` 均为字符串 | 正常与鉴权矩阵完成 |
-| `/reader/books*`、`/reader/chapters/*` 8 条 | `public/http_integration_test.go` 逐条覆盖精选、分页、随机、主/子分类、详情、目录和真实 MinIO 正文 | 匿名真实正文覆盖 `46101`；`public/http_test.go` 固定登录、会员、整本、章节和未知收费模式 `46101`-`46105` HTTP 契约 | 作品、章节、前后章 ID 均为字符串；空分页、日期和真实商品状态已覆盖，空目录待补 | 正常与收费错误矩阵完成 |
+| `/reader/books*`、`/reader/chapters/*` 8 条 | `public/http_integration_test.go` 逐条覆盖精选、分页、随机、主/子分类、详情、目录和真实 MinIO 正文 | 匿名真实正文覆盖 `46101`；`public/http_test.go` 固定登录、会员、整本、章节和未知收费模式 `46101`-`46105` HTTP 契约 | 作品、章节、前后章 ID 均为字符串；空分页、空章节目录 `data:[]`、日期和真实商品状态已覆盖 | 正常与收费错误矩阵完成 |
 | `/reader/seo/*` 4 条 | `public/http_integration_test.go` 覆盖配置 JSON、robots、根 sitemap 及分页 sitemap 边界 | 非法页 `0` 和小数据集分页 `1` 均为 HTTP 404；SSR 超时与上游非 JSON 待补 | SEO 配置 ID 为字符串；robots 为 `text/plain`，sitemap 为 XML | 正常响应与 Content-Type 完成 |
 | `/reader/me/bookshelf|likes|feedbacks|history|preference` 13 条 | `me/http_contract_test.go` 对全部路由执行 JSON 快照 | 共享 Reader 中间件的无 Token/失效 Token `401` 已由认证契约覆盖；服务测试覆盖非法 ID、进度和偏好 | 显式 `data:null`、空数组、空分页、分页归一化及两个 Long ID 边界已覆盖 | 正常响应矩阵完成 |
 | 钱包、流水、充值商品/报价/订单 6 条 | `wallet/http_contract_test.go`、`recharge/http_contract_test.go` 已逐条执行 JSON 快照 | 共享 Reader 鉴权已覆盖；无效充值参数、下架档位、订单不存在和未知仓储异常均已固定 HTTP 错误快照 | 余额、流水、钻石、USDT 金额、ID 均为字符串；分页归一化、订单及错误 `null` 已覆盖 | 正常与充值错误矩阵完成 |

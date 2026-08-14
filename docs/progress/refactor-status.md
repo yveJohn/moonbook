@@ -142,7 +142,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Reader/Commerce 的真实 PostgreSQL/Redis/MinIO 集成验收已通过（提交 `8a50008`，批量读者隔离修复提交 `725c5ad`）。认证 HTTP 包装契约测试提交 `cfcb2a9` 已验证 Long ID 字符串和未登录错误语义；public HTTP 集成契约测试覆盖匿名书库、Bearer 章节目录和 MinIO 正文。冻结 `reader-ui` 离线测试已通过 44 个测试文件/536 个用例，SSR 生产构建通过；隔离 Go API + Reader SSR 已使用真实书籍/章节 fixture 验证书籍详情、章节目录、匿名正文 46101、Book JSON-LD 和实际内容页面。
 - 2026-08-15 在隔离 Compose 项目 `moonbook_browser` 完成 Playwright 真实浏览器旅程：匿名目录/详情、匿名章节登录要求、邀请码注册、登录免费正文、加入书架、两章切换、第二章历史持久化、继续阅读恢复、UI 退出和旧 Token 401 全部通过，控制台 0 error。旅程发现并修复详情/章节列表空 `productStatus`、登录态详情状态写死以及正文前后章 ID 恒空三个同源后端兼容缺陷；冻结 Reader UI 业务代码未修改。
 - 新增仅允许本机回环 PostgreSQL/MinIO 且要求显式确认的 `moonbook-browser-fixture seed|cleanup`。正文经真实对象服务校验激活；验收后删除 2 个对象并核对书籍、章节、对象、读者、邀请码均为 0。隔离浏览器库由迁移 41 前向补齐 12 个版本到 53，readiness 四项依赖全部为 `ok`。
-- Reader 逐接口矩阵持续按路由组收敛：个人数据的书架、点赞、反馈、历史、偏好共 13 条路由已完成正常 JSON 快照，覆盖显式 `data:null`、空数组/分页归一化和两个 Long ID 边界；认证契约补齐过期、撤销、封禁账号的统一业务 `401`。全部 8 条公开作品路由和 4 条 SEO 路由现已由真实 PostgreSQL/Redis/MinIO HTTP 集成测试逐条覆盖，包含精选/随机、主/子分类、空分页、真实商品状态、匿名正文 `46101`、Reader 日期、SEO Content-Type 和 sitemap 404 边界；空目录、MinIO 故障和 SSR 异常仍待补，不能据此关闭 M3。
+- Reader 逐接口矩阵持续按路由组收敛：个人数据的书架、点赞、反馈、历史、偏好共 13 条路由已完成正常 JSON 快照，覆盖显式 `data:null`、空数组/分页归一化和两个 Long ID 边界；认证契约补齐过期、撤销、封禁账号的统一业务 `401`。全部 8 条公开作品路由和 4 条 SEO 路由现已由真实 PostgreSQL/Redis/MinIO HTTP 集成测试逐条覆盖，包含精选/随机、主/子分类、空分页、空章节目录 `data:[]`、真实商品状态、匿名正文 `46101`、Reader 日期、SEO Content-Type 和 sitemap 404 边界；MinIO 故障和 SSR 异常仍待补，不能据此关闭 M3。
 - Reader 认证注册、登录、退出、资料和修改密码五条路由的正常 HTTP 结构已全部固定，注册/登录使用冻结 UI 的嵌套 `reader`，退出与改密显式返回 `data:null`；两个 Long ID 边界、BCrypt 改密、会话撤销及真实 PostgreSQL/Redis 回归均通过。非法注册/登录/改密参数和独立签名的管理员 Token 均固定为 HTTP 200 + 业务 `401`，且不修改密码或撤销有效 Reader 会话。
 - Reader 章节访问的登录、会员、整本购买、章节购买和未知收费模式已逐项固定为 HTTP 200 + 业务 `46101`-`46105` 及兼容提示文案；匿名真实 MinIO 正文路径同时覆盖 `46101`。
 - 修复购买 HTTP 适配层把领域错误误脱敏为通用内部错误的问题：整本报价变化恢复 `46106/作品报价已变化，请确认新价格`，余额不足恢复业务 `500/余额不足`，无效参数和商品不可用使用稳定兼容文案；错误响应显式保留 `data:null`，未知基础设施错误仍不对外泄漏。
@@ -154,8 +154,8 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 
 下一步：
 
-1. 补齐 Reader 公开章节空目录和 MinIO 故障 HTTP 响应。
-2. 补齐 `docs/contracts/reader-api.md` 中空目录、MinIO 缺失/哈希/超时、SSR 超时/非 JSON 和反向代理前缀证据，执行 M3 退出审计。
+1. 补齐 Reader MinIO 缺失、哈希不一致和超时的 HTTP 错误响应。
+2. 补齐 `docs/contracts/reader-api.md` 中 MinIO 缺失/哈希/超时、SSR 超时/非 JSON 和反向代理前缀证据，执行 M3 退出审计。
 3. 使用受控 8GB MySQL 副本完成全量演练、行数/主键/关联/对象核对；该容量演练同时作为 M6 退出证据。
 
 ## M4 当前进度
