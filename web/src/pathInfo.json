@@ -56,6 +56,7 @@
   "/src/view/novel/metadata/index.vue": "NovelMetadata",
   "/src/view/novel/readerSeo/index.vue": "NovelReaderSeo",
   "/src/view/person/person.vue": "Person",
+  "/src/view/reader/feedback/index.vue": "ReaderFeedback",
   "/src/view/reader/payment/callbackLogs/index.vue": "ReaderPaymentCallbackLogs",
   "/src/view/reader/payment/channels/index.vue": "ReaderPaymentChannels",
   "/src/view/reader/payment/orders/index.vue": "ReaderRechargeOrders",
