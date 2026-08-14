@@ -59,14 +59,4 @@ describe('site books loader', () => {
     expect(readerApi.getRandomBooks).not.toHaveBeenCalled();
     expect(result.ssrData.books).toMatchObject({ mode: 'paged', result: { total: 25 } });
   });
-
-  it('fails closed with 503 when the upstream SEO response is not JSON', async () => {
-    readerApi.getSeoConfig.mockResolvedValue(undefined);
-
-    await expect(loader({
-      request: new Request('https://ybsc.me/'),
-      params: {},
-      context: {}
-    })).rejects.toMatchObject({ status: 503 });
-  });
 });

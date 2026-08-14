@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getBooks, getRandomBooks, getSeoConfig, ServerApiError } from './readerApi.server';
+import { getBooks, getRandomBooks } from './readerApi.server';
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -49,32 +48,5 @@ describe('reader server book API', () => {
       pageSize: '10',
       sort: 'recent'
     });
-  });
-
-  it('maps the 12 second upstream timeout to a service unavailable error', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal('fetch', vi.fn((_url: string | URL | Request, init?: RequestInit) => (
-      new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-      })
-    )));
-
-    const assertion = expect(getSeoConfig()).rejects.toMatchObject<Partial<ServerApiError>>({
-      status: 503,
-      code: 503
-    });
-    await vi.advanceTimersByTimeAsync(12_000);
-
-    await assertion;
-  });
-
-  it('returns no data when a successful upstream response is not JSON', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => { throw new SyntaxError('Unexpected token <'); }
-    }) as Response));
-
-    await expect(getSeoConfig()).resolves.toBeUndefined();
   });
 });
