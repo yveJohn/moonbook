@@ -55,7 +55,7 @@ func TestPaymentSyncSettlesVerifiedGatewayResponseAndIsIdempotent(t *testing.T) 
 	}))
 	defer server.Close()
 	t.Setenv("MOONBOOK_EPUSDT_SYNC_URL", server.URL)
-	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db)}
+	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}
 	o, err := r.Sync(ctx, orderID)
 	if err != nil || o.Status != "paid" || o.GatewayTradeID != "trade-1" {
 		t.Fatalf("order=%+v err=%v", o, err)

@@ -19,12 +19,20 @@ import (
 var ErrRejected = errors.New("payment callback rejected")
 
 type SQLRepository struct {
-	DB      *sql.DB
-	Invites readercontract.InviteRelationReader
+	DB       *sql.DB
+	Invites  readercontract.InviteRelationReader
+	Accounts readercontract.AccountLocker
 }
 
 func (r SQLRepository) Process(ctx context.Context, c Callback) error {
 	if c.Status != 2 || !strings.EqualFold(c.Token, "usdt") || c.OrderNo == "" || c.TransactionID == "" {
+		return ErrRejected
+	}
+	if r.Accounts == nil {
+		return readercontract.ErrUnavailable
+	}
+	var expectedReaderID int64
+	if e := r.DB.QueryRowContext(ctx, `SELECT reader_id FROM reader_recharge_orders WHERE order_no=$1`, c.OrderNo).Scan(&expectedReaderID); e != nil {
 		return ErrRejected
 	}
 	tx, e := r.DB.BeginTx(ctx, nil)
@@ -32,11 +40,20 @@ func (r SQLRepository) Process(ctx context.Context, c Callback) error {
 		return e
 	}
 	defer tx.Rollback()
+	if e = transaction.WithExisting(ctx, tx, func(txCtx context.Context) error {
+		_, lockErr := r.Accounts.LockAccount(txCtx, expectedReaderID)
+		return lockErr
+	}); e != nil {
+		return e
+	}
 	var orderID, readerID, diamonds int64
 	var price string
 	var status string
 	var oldTx sql.NullString
 	if e = tx.QueryRowContext(ctx, `SELECT id,reader_id,diamond_amount,price_usdt::text,status,block_transaction_id FROM reader_recharge_orders WHERE order_no=$1 FOR UPDATE`, c.OrderNo).Scan(&orderID, &readerID, &diamonds, &price, &status, &oldTx); e != nil {
+		return ErrRejected
+	}
+	if readerID != expectedReaderID {
 		return ErrRejected
 	}
 	if status == "paid" {

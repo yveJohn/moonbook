@@ -61,6 +61,17 @@ func (r SQLRepository) Get(ctx context.Context, id int64) (Order, error) {
 	return o, err
 }
 
+func (r SQLRepository) ReaderID(ctx context.Context, id int64) (int64, error) {
+	var readerID int64
+	if err := r.DB.QueryRowContext(ctx, `SELECT reader_id FROM reader_purchase_orders WHERE id=$1`, id).Scan(&readerID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "模拟充值订单不存在")
+		}
+		return 0, err
+	}
+	return readerID, nil
+}
+
 func (r SQLRepository) CreateMockRecharge(ctx context.Context, in MockRechargeInput, operatorID int64) (Order, error) {
 	readerID, err := strconv.ParseInt(in.ReaderID, 10, 64)
 	if err != nil {
@@ -85,14 +96,13 @@ func (r SQLRepository) CreateMockRecharge(ctx context.Context, in MockRechargeIn
 }
 
 func (r SQLRepository) ConfirmMockRecharge(ctx context.Context, orderID, operatorID int64) (Order, error) {
-	tx, err := r.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return Order{}, err
+	executor := transaction.Executor(ctx, r.DB)
+	if executor == r.DB {
+		return Order{}, transaction.ErrNoTransaction
 	}
-	defer tx.Rollback()
 	var readerID, amount int64
 	var orderNo, orderType, status, remark string
-	err = tx.QueryRowContext(ctx, `SELECT reader_id,order_no,order_type,recharge_coin_amount,status,COALESCE(remark,'') FROM reader_purchase_orders WHERE id=$1 FOR UPDATE`, orderID).Scan(&readerID, &orderNo, &orderType, &amount, &status, &remark)
+	err := executor.QueryRowContext(ctx, `SELECT reader_id,order_no,order_type,recharge_coin_amount,status,COALESCE(remark,'') FROM reader_purchase_orders WHERE id=$1 FOR UPDATE`, orderID).Scan(&readerID, &orderNo, &orderType, &amount, &status, &remark)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Order{}, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "模拟充值订单不存在")
 	}
@@ -103,9 +113,6 @@ func (r SQLRepository) ConfirmMockRecharge(ctx context.Context, orderID, operato
 		return Order{}, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "订单类型不支持模拟充值确认")
 	}
 	if status == "paid" {
-		if err = tx.Commit(); err != nil {
-			return Order{}, err
-		}
 		return r.Get(ctx, orderID)
 	}
 	if status != "pending" {
@@ -113,18 +120,13 @@ func (r SQLRepository) ConfirmMockRecharge(ctx context.Context, orderID, operato
 	}
 	orderIDText := strconv.FormatInt(orderID, 10)
 	confirmKey := "mock_recharge_confirm:" + orderNo
-	if _, err = wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: readerID, LedgerNo: "MR-" + orderIDText, BizType: "mock_recharge", BizID: &orderIDText, OrderNo: &orderNo, Direction: "income", CoinType: "recharge", Amount: amount, Remark: &remark, IdempotencyKey: &confirmKey}); err != nil {
+	if _, err = wallet.MutateTx(ctx, executor, wallet.Mutation{ReaderID: readerID, LedgerNo: "MR-" + orderIDText, BizType: "mock_recharge", BizID: &orderIDText, OrderNo: &orderNo, Direction: "income", CoinType: "recharge", Amount: amount, Remark: &remark, IdempotencyKey: &confirmKey}); err != nil {
 		return Order{}, err
 	}
-	if err = transaction.WithExisting(ctx, tx, func(txCtx context.Context) error {
-		return invitereward.GrantFirstRechargeTx(txCtx, tx, r.Invites, readerID)
-	}); err != nil {
+	if err = invitereward.GrantFirstRechargeTx(ctx, executor, r.Invites, readerID); err != nil {
 		return Order{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE reader_purchase_orders SET status='paid',operator_id=$2,paid_time=now(),updated_at=now() WHERE id=$1`, orderID, operatorID); err != nil {
-		return Order{}, err
-	}
-	if err = tx.Commit(); err != nil {
+	if _, err = executor.ExecContext(ctx, `UPDATE reader_purchase_orders SET status='paid',operator_id=$2,paid_time=now(),updated_at=now() WHERE id=$1`, orderID, operatorID); err != nil {
 		return Order{}, err
 	}
 	return r.Get(ctx, orderID)

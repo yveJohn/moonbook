@@ -19,6 +19,7 @@ type MockRechargeInput struct {
 type Repository interface {
 	List(context.Context, string, string, string, int, int) ([]Order, int64, error)
 	Get(context.Context, int64) (Order, error)
+	ReaderID(context.Context, int64) (int64, error)
 	CreateMockRecharge(context.Context, MockRechargeInput, int64) (Order, error)
 	ConfirmMockRecharge(context.Context, int64, int64) (Order, error)
 }

@@ -52,7 +52,7 @@ func TestCallbackCreditsRechargeExactlyOnce(t *testing.T) {
 	fields := map[string]string{"pid": "merchant", "trade_id": "trade-1", "order_id": orderNo, "amount": "2.00", "actual_amount": "2.00", "receive_address": "Taddress", "token": "USDT", "block_transaction_id": "tx-1", "status": "2"}
 	fields["signature"] = Sign(fields, "secret")
 	callback := Callback{PID: fields["pid"], TradeID: fields["trade_id"], OrderNo: orderNo, Amount: fields["amount"], ActualAmount: fields["actual_amount"], ReceiveAddress: fields["receive_address"], Token: fields["token"], TransactionID: fields["block_transaction_id"], Status: 2, Fields: fields}
-	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db)}
+	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}
 	if err := r.Process(ctx, callback); err != nil {
 		t.Fatal(err)
 	}
@@ -109,10 +109,10 @@ func TestCallbackRollsBackWhenInviteDependencyOrRewardWalletFails(t *testing.T) 
 		_, _ = db.ExecContext(q, `DELETE FROM reader_accounts WHERE id IN ($1,$2)`, inviterID, inviteeID)
 	})
 	callback := Callback{TradeID: "rollback-trade", OrderNo: orderNo, Amount: "2.00", ActualAmount: "2.00", ReceiveAddress: "T-rollback", Token: "usdt", TransactionID: "rollback-tx", Status: 2, Fields: map[string]string{"order_id": orderNo}}
-	if err := (SQLRepository{DB: db, Invites: failingInviteReader{err: readercontract.ErrUnavailable}}).Process(ctx, callback); !errors.Is(err, readercontract.ErrUnavailable) {
+	if err := (SQLRepository{DB: db, Invites: failingInviteReader{err: readercontract.ErrUnavailable}, Accounts: readerprovider.NewAccount(db)}).Process(ctx, callback); !errors.Is(err, readercontract.ErrUnavailable) {
 		t.Fatalf("invite dependency err=%v", err)
 	}
-	if err := (SQLRepository{DB: db, Invites: readerprovider.NewInvite(db)}).Process(ctx, callback); err == nil {
+	if err := (SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}).Process(ctx, callback); err == nil {
 		t.Fatal("expected inviter wallet overflow")
 	}
 	var status string

@@ -18,6 +18,10 @@ func GrantFirstRechargeTx(ctx context.Context, tx transaction.DBTX, invites read
 	if invites == nil {
 		return readercontract.ErrUnavailable
 	}
+	lockKey := fmt.Sprintf("commerce-invite-first-recharge:%d", inviteeID)
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, lockKey); err != nil {
+		return err
+	}
 	relation, err := invites.ActiveInviteRelation(ctx, inviteeID)
 	if errors.Is(err, readercontract.ErrInviteRelationNotFound) {
 		return nil

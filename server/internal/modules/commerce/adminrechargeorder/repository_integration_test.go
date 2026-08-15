@@ -109,7 +109,7 @@ func TestManualPayIsIdempotentAndProtectsGatewayTradeID(t *testing.T) {
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_accounts WHERE id=$1`, readerID)
 	})
 	readerAccounts := readerprovider.NewAccount(db)
-	service := NewService(SQLRepository{DB: db, Invites: readerprovider.NewInvite(db)}, transaction.New(db), readerAccounts)
+	service := NewService(SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerAccounts}, transaction.New(db), readerAccounts)
 	in := ManualPayInput{RequestID: "manual-request-1", GatewayTradeID: "manual-gateway-1", ActualAmount: "1.00", Remark: "核对后人工补单"}
 	first, err := service.ManualPay(ctx, orderID, in)
 	if err != nil || first.Status != "paid" || first.ID == "" {

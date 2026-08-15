@@ -71,7 +71,7 @@ func TestProductTargetsUseNovelProviderAndRejectUnavailableContent(t *testing.T)
 	publishedBookID, draftBookID := base+2, base+3
 	enabledChapterID, disabledChapterID := base+4, base+5
 	code := fmt.Sprintf("admin-product-target-%d", base)
-	if _, err := db.ExecContext(ctx, `INSERT INTO novel_categories(id,category_code,category_name) VALUES($1,$2,$2)`, categoryID, code); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO novel_categories(id,code,name,kind,source) VALUES($1,$2,$2,'primary','native')`, categoryID, code); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO novel_authors(id,pen_name,normalized_name,status,source) VALUES($1,$2,$2,'active','native')`, authorID, code); err != nil {

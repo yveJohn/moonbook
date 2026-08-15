@@ -92,7 +92,7 @@ func (r SQLRepository) Sync(ctx context.Context, id int64) (Order, error) {
 		}
 	}
 	callback := payment.Callback{PID: fields["pid"], TradeID: fields["trade_id"], OrderNo: fields["order_id"], Amount: fields["amount"], ActualAmount: fields["actual_amount"], ReceiveAddress: fields["receive_address"], Token: fields["token"], TransactionID: fields["block_transaction_id"], Status: status, Fields: fields}
-	if err = (payment.SQLRepository{DB: r.DB, Invites: r.Invites}).Process(ctx, callback); err != nil {
+	if err = (payment.SQLRepository{DB: r.DB, Invites: r.Invites, Accounts: r.Accounts}).Process(ctx, callback); err != nil {
 		_ = r.recordSyncFailure(ctx, id, payloadHash, "支付入账校验失败")
 		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusBadGateway, "支付同步入账失败")
 	}

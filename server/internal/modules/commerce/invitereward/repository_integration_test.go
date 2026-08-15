@@ -45,11 +45,24 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_recharge_orders(id,order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status) VALUES($1,$2,$3,$4,'custom',40,'2.00','epusdt','usd','usdt','tron','pending')`, paymentOrderID, paymentOrderNo, inviteeID, "cross-payment-"+suffix); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		q := context.Background()
+		_, _ = db.ExecContext(q, `DELETE FROM reader_payment_callback_logs WHERE recharge_order_id IN (SELECT id FROM reader_recharge_orders WHERE reader_id=$1)`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_invite_reward_records WHERE invitee_reader_id=$1`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_wallet_ledgers WHERE reader_id IN ($1,$2)`, inviterID, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_wallets WHERE reader_id IN ($1,$2)`, inviterID, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_purchase_orders WHERE reader_id=$1`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_recharge_orders WHERE reader_id=$1`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_invite_relations WHERE invitee_reader_id=$1`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_invite_codes WHERE id=$1`, inviteCodeID)
+		_, _ = db.ExecContext(q, `DELETE FROM commerce_reader_search_projection WHERE reader_id IN ($1,$2)`, inviterID, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_accounts WHERE id IN ($1,$2)`, inviterID, inviteeID)
+	})
 
 	transactor := transaction.New(db)
 	readerAccounts := readerprovider.NewAccount(db)
 	readerInvites := readerprovider.NewInvite(db)
-	manualService := adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts)
+	manualService := adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, transactor, readerAccounts)
 	mockService := adminorder.NewService(adminorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts)
 	mockOrder, err := mockService.CreateMockRecharge(ctx, adminorder.MockRechargeInput{
 		ReaderID:           fmt.Sprint(inviteeID),
@@ -65,7 +78,7 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	callback := payment.Callback{TradeID: "cross-payment-trade-" + suffix, OrderNo: paymentOrderNo, Amount: "2.00", ActualAmount: "2.00", ReceiveAddress: "T-cross", Token: "usdt", TransactionID: "cross-payment-tx-" + suffix, Status: 2, Fields: map[string]string{"order_id": paymentOrderNo}}
-	paymentRepository := payment.SQLRepository{DB: db, Invites: readerInvites}
+	paymentRepository := payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}
 	start := make(chan struct{})
 	errs := make(chan error, 3)
 	var workers sync.WaitGroup
@@ -74,18 +87,28 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 		defer workers.Done()
 		<-start
 		_, err := manualService.ManualPay(ctx, rechargeOrderID, adminrechargeorder.ManualPayInput{RequestID: "cross-manual-request-" + suffix, GatewayTradeID: "cross-manual-trade-" + suffix, ActualAmount: "1.00", Remark: "跨入口首充奖励测试"})
+		if err != nil {
+			err = fmt.Errorf("manual pay: %w", err)
+		}
 		errs <- err
 	}()
 	go func() {
 		defer workers.Done()
 		<-start
 		_, err := mockService.ConfirmMockRecharge(ctx, mockOrderID, 501)
+		if err != nil {
+			err = fmt.Errorf("mock recharge: %w", err)
+		}
 		errs <- err
 	}()
 	go func() {
 		defer workers.Done()
 		<-start
-		errs <- paymentRepository.Process(ctx, callback)
+		err := paymentRepository.Process(ctx, callback)
+		if err != nil {
+			err = fmt.Errorf("payment callback: %w", err)
+		}
+		errs <- err
 	}()
 	close(start)
 	workers.Wait()
