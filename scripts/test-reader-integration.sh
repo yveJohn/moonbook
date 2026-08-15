@@ -19,6 +19,6 @@ for name in "${required_vars[@]}"; do
   fi
 done
 
-GOCACHE="${GOCACHE:-/tmp/moonbook-go-cache}" CGO_ENABLED=0 go test -tags=integration -count=1 -v \
+GOCACHE="${GOCACHE:-/tmp/moonbook-go-cache}" CGO_ENABLED=0 go test -tags=integration -count=1 -p=1 -v \
   ./internal/modules/reader/... \
   ./internal/modules/commerce/...
