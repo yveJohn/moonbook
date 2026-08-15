@@ -195,9 +195,6 @@ importers:
       vite:
         specifier: ^8.0.10
         version: 8.2.1(jiti@2.7.0)(sass@1.102.0)
-      vite-check-multiple-dom:
-        specifier: 0.2.1
-        version: 0.2.1(vite@8.2.1(jiti@2.7.0)(sass@1.102.0))(vue@3.5.41)
       vite-plugin-banner:
         specifier: ^0.8.0
         version: 0.8.1
@@ -3105,12 +3102,6 @@ packages:
 
   vform3-builds@3.0.10:
     resolution: {integrity: sha512-sULNk72Z6NG94X9MMgpBwinaIOYjtl7Bn5jZbV9iZaglSYr2SHm/wpXPAjl8F8OW6SzOOJgIpRek+NvOvN7wsg==}
-
-  vite-check-multiple-dom@0.2.1:
-    resolution: {integrity: sha512-3UbOgHB7MKEHkxtrDKM0vamvW6155U1QvADbhc+l+AtrKdvyK8Dmx4/TFKkXu5d4lz5hgyacQqtjO9f9mteLqw==}
-    peerDependencies:
-      vite: '>=4.0.0'
-      vue: '>=3.0.0'
 
   vite-dev-rpc@2.0.0:
     resolution: {integrity: sha512-yKwbTwdHKSD2k/aGqyWpPHepo45OQc8lH3/6IfT4ZqeKE26ooKvi4WIEKzqWav8v+9Is8u1k8q54hvOmqASazA==}
@@ -6269,11 +6260,6 @@ snapshots:
       '@sphinxxxx/color-conversion': 2.2.2
 
   vform3-builds@3.0.10: {}
-
-  vite-check-multiple-dom@0.2.1(vite@8.2.1(jiti@2.7.0)(sass@1.102.0))(vue@3.5.41):
-    dependencies:
-      vite: 8.2.1(jiti@2.7.0)(sass@1.102.0)
-      vue: 3.5.41
 
   vite-dev-rpc@2.0.0(vite@8.2.1(jiti@2.7.0)(sass@1.102.0)):
     dependencies:

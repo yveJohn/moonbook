@@ -27,16 +27,21 @@ test('accepts trusted declarations, sources and a nonempty production bundle', a
 })
 
 test('rejects the malicious dependency in package declarations and the lockfile', async () => {
-  const rootDir = await fixture()
-  const packageName = ['vite', 'vue', 'path', 'map'].join('-')
-  await writeFile(path.join(rootDir, 'package.json'), JSON.stringify({ dependencies: { [packageName]: '1.0.2' } }))
-  await writeFile(path.join(rootDir, 'pnpm-lock.yaml'), `packages:\n  ${packageName}@1.0.2: {}\n`)
+  for (const packageName of [
+    ['vite', 'auto', 'import', 'svg'].join('-'),
+    ['vite', 'check', 'multiple', 'dom'].join('-'),
+    ['vite', 'vue', 'path', 'map'].join('-')
+  ]) {
+    const rootDir = await fixture()
+    await writeFile(path.join(rootDir, 'package.json'), JSON.stringify({ dependencies: { [packageName]: '1.0.2' } }))
+    await writeFile(path.join(rootDir, 'pnpm-lock.yaml'), `packages:\n  ${packageName}@1.0.2: {}\n`)
 
-  await assert.rejects(checkSupplyChain({ rootDir }), (error) => {
-    assert.match(error.message, /forbidden-package-dependencies/)
-    assert.match(error.message, /forbidden-package-lock-entry/)
-    return true
-  })
+    await assert.rejects(checkSupplyChain({ rootDir }), (error) => {
+      assert.match(error.message, /forbidden-package-dependencies/)
+      assert.match(error.message, /forbidden-package-lock-entry/)
+      return true
+    })
+  }
 })
 
 test('rejects hidden globals and plain or Base64 remote control fingerprints', async () => {

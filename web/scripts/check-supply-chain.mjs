@@ -2,7 +2,7 @@ import { lstat, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const forbiddenPackages = ['vite-auto-import-svg', 'vite-vue-path-map']
+const forbiddenPackages = ['vite-auto-import-svg', 'vite-check-multiple-dom', 'vite-vue-path-map']
 const sourceTargets = ['vite.config.js', 'vitePlugin', 'src']
 const sourceExtensions = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.vue', '.json'])
 const base64Candidate = /[A-Za-z0-9+/]{32,}={0,2}/g

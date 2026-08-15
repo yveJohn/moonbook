@@ -4,7 +4,6 @@ import * as path from 'path'
 import { loadEnv } from 'vite'
 import vuePlugin from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import vueRootValidator from 'vite-check-multiple-dom'
 import PathMapPlugin from './vitePlugin/pathMap/index.js'
 import SvgSpritePlugin from './vitePlugin/svgSprite/index.js'
 import UnoCSS from '@unocss/vite'
@@ -82,8 +81,7 @@ export default ({ mode }) => {
       SvgSpritePlugin,
       [Banner(`\n Build based on gin-vue-admin \n Time : ${timestamp}`)],
       PathMapPlugin,
-      UnoCSS(),
-      vueRootValidator()
+      UnoCSS()
     ]
   }
   return config
