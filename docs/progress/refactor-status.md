@@ -33,6 +33,7 @@
 - 旧仓库存在约 8 GB 数据库备份，但新仓库未复制该敏感/大体积文件；完整数据副本演练将在 M6 使用受控来源执行。
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
 - M4 退出审计确认 Reader 创建充值订单当前只写本地 `pending`，未调用 EPUSDT 创建交易，无法产生支付地址；拒绝回调不会完整落审计日志，Compose 也未注入已声明的 EPUSDT 变量。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
+- M5/M6 审计确认内容生产旧表尚未进入 `moonbook-legacy-migrate all`，目标表缺少通用 legacy 幂等来源键，TXT/清洗/合并对象迁移及核对器未实现；论坛 Cookie 当前仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
 
 ## M1 已验证单元
 
@@ -216,3 +217,4 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 新增章节简介补全闭环（迁移 `00050`、`00052`、`/novel/chapterSummary`、`view/novel/chapterClean` 简介补全页签）：候选固定为 active+success、摘要为空且存在清洗稿对象的清洗结果，Worker 从 MinIO 校验读取清洗稿，按 `maxInputChars` 截断后调用 OpenAI 兼容 JSON/SSE，摘要最长 1000 字符并通过条件更新写回。任务使用 `platform_jobs` 持久化、租约心跳和过期恢复，支持手动/启用后自动批处理、单项失败继续、停止/续跑、主模型轮换和拒答备用 AI；任务列表隐藏大字段，详情接口展示当前位置、成功/失败计数和保留 7 天的最近诊断。测试同时发现 `00049` 未放宽 `novel_objects` 类型约束，已新增前向迁移 `00051` 修复。全新隔离 PostgreSQL 从空库执行为 `applied=52`，真实 PostgreSQL + MinIO 集成测试验证清洗稿读取、输入截断、摘要落库及任务/Job 成功状态；重复迁移为 `applied=0`。定向 Go test/vet、HTTP 替身、ESLint 和管理前端生产构建通过。全量重启恢复演练仍待完成。
 - 新增作品资料 AI 补全闭环（迁移 `00053`、`/novel/bookProfile`、`view/novel/bookProfile`）：单例配置复用统一 AI 配置和环境 Secret，输入优先读取 MinIO 已校验清洗正文，超出字符预算后依次降级到章节简介和分段简介并保存 SHA-256 摘要。建议以原始、AI 建议、审核结果三份独立 JSONB 快照持久化，每本作品通过部分唯一索引只允许一个 running/pending 建议；Worker 使用 `platform_jobs` 领取、租约恢复和有限重试，兼容 OpenAI 普通 JSON/SSE、模型失败轮换、拒答备用 AI、自动扫描、自动应用和 7 天原始诊断清理。人工采用在 PostgreSQL 事务中锁定建议、校验书名/简介及启用分类，并对比书名、主分类、简介和副分类原始快照，作品被并发修改时拒绝覆盖；批量失败重试保留来源/目标建议血缘。全新隔离 PostgreSQL 首次迁移 `applied=53`、重复迁移 `applied=0`、状态 `current=53 target=53 pending=false`；真实 PostgreSQL + MinIO 集成测试通过清洗稿读取、pending 建议、主/副分类事务更新和陈旧快照拒绝，定向 Go test/vet、ESLint 与管理前端生产构建通过。全量重启恢复演练仍待完成。
 - 五类内容生产 Worker 已统一使用平台 `KeepAlive` 租约心跳和 `Finalize` 终态提交：续租失败会取消业务上下文，论坛抓取、TXT 文件读取、章节写入和 AI 处理均受租约上下文约束；终态提交期间保持续租并由 PostgreSQL 再校验所有权，消除业务结果已落库但 Job 完成前租约过期的窗口。TXT、章节清洗和论坛对已领取任务的业务失败会继续轮询，不再永久退出 Worker。真实 PostgreSQL 以 300ms 租约验证心跳跨越两倍租期后仍可完成，强制失租会取消上下文并返回 `ErrLeaseLost`；真实 PostgreSQL/MinIO 进一步覆盖论坛、TXT、章节清洗、章节摘要和作品画像五类场景的“旧 Worker 领取后消失、租约恢复、新 Worker 接管”，最终平台任务尝试次数为 2，且章节、对象、清洗结果、摘要计数和画像建议均保持唯一。M5 的长任务恢复与幂等退出条件已有直接证据，但内容生产旧数据迁移映射尚未纳入 `moonbook-legacy-migrate all`，因此 M5 仍保持实施中。
+- 完成 M5/M6 内容生产迁移审计：当前 `all` 编排没有任何论坛、TXT、合并或 AI stage，相关目标表也缺少统一 legacy 来源键；旧清洗正文、TXT 文件和合并对象引用需要经 MinIO 大小/SHA-256 校验转换。审计同时确认论坛 Cookie 明文落库违反 Secret 注入约束，`autoFollowEnabled` 没有运行时调度。M5/M6 保持实施中，详见 `docs/verification/m5-m6-content-migration-audit.md`。

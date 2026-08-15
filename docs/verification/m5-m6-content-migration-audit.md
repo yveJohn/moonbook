@@ -1,0 +1,97 @@
+# M5/M6 内容生产迁移审计
+
+审计日期：2026-08-15
+
+## 结论
+
+M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章节清洗、章节摘要和作品画像，但旧内容生产数据尚未进入迁移工具。`moonbook-legacy-migrate all` 当前在 `reader-activity` 结束，既没有内容生产 stage，也没有对应双库迁移测试、对象迁移报告或全域核对器。因此 M5 和 M6 均不能因目标表已经建立而判定旧数据迁移完成。
+
+## 旧数据范围
+
+冻结旧库至少包含以下当前业务事实：
+
+- 论坛采集：`novel_crawl_forum_source`、`novel_crawl_forum_board`、`novel_crawl_thread_candidate`、`novel_crawl_import_task`、`novel_crawl_fetch_log`；
+- 旧运行开关：`novel_crawl_runtime_task`；
+- TXT 导入：`novel_txt_import_task` 及上传原文件或失败修复文件；
+- 书籍合并：`novel_book_merge_task`、`novel_book_merge_source`、`novel_book_merge_chapter`；
+- AI 配置：`novel_ai_config`、`novel_ai_config_model`；
+- 章节清洗：`novel_chapter_clean_config`、`novel_chapter_clean_task`、`novel_chapter_clean_result`；
+- 章节摘要：`novel_chapter_summary_config`、`novel_chapter_summary_task_log`；
+- 作品画像：`novel_book_profile_config`、`novel_book_profile_suggestion`。
+
+更早的 `crawl_source`、`crawl_single_task`、`crawl_batch_task`、`crawl_board`、`crawl_board_thread`、`crawl_forum_source_state` 和 `ai_chapter_clean_*` 仍需由 M6 完整副本盘点确定行数和启用状态，再逐表给出迁移目标或“不迁移”理由。不得仅凭当前 Java 模块未引用就静默忽略。
+
+## 当前编排缺口
+
+`server/cmd/moonbook-legacy-migrate/main.go` 只接受以下业务命令：
+
+`novel-metadata`、`novel-books`、`novel-chapters`、`novel-reader-seo`、`reader-identity`、`reader-commerce`、`reader-finance`、`reader-activity`。
+
+`all` 也只组合这些 stage。当前没有任何内容生产迁移实现，`server/internal/platform/legacymigrate` 中也不存在论坛、TXT、合并或 AI stage。
+
+内容生产迁移必须在已有小说、章节和 Reader stage 之后按外键依赖执行，并至少拆为可独立重跑的阶段。建议依赖顺序由后续设计确定，但必须满足：
+
+1. 来源和板块先于候选、导入任务和抓取日志；
+2. AI 配置和模型先于清洗、摘要和画像配置；
+3. 清洗正文完成 MinIO 写入和对象激活后，才能写清洗结果引用；
+4. 论坛导入任务、章节及清洗结果均可引用后，才能迁移书籍合并血缘；
+5. 每个阶段具有独立 checkpoint、错误清单、源表计数和目标核对。
+
+## 幂等与 ID 支持缺口
+
+现有内容生产目标表大多没有 `source_type`、`source_ref` 或等价 legacy 唯一键。直接按旧 ID 插入虽然可保留 bigint，但无法安全区分迁移事实与运行时新建事实，也不能在 checkpoint 丢失或更换 migration name 后证明幂等。
+
+实施前需要新增前向迁移，为要迁移的表建立确定的 legacy 来源键、唯一约束和序列推进规则。冲突必须进入结构化错误清单，禁止覆盖运行时已存在的不同事实。
+
+## 对象迁移缺口
+
+以下旧数据不能直接复制到 PostgreSQL：
+
+- 旧 `novel_chapter_clean_result.cleaned_text` 是数据库大文本；目标要求写入 MinIO `chapter-clean` 对象并在大小和 SHA-256 校验后激活引用；
+- TXT 目标任务要求 `object_key`、`object_sha256` 和 `object_byte_size`，但旧任务表只保存文件名和大小等元数据，没有稳定对象键；必须通过受控文件盘点找到原文件，找不到时写错误清单，不能伪造对象；
+- 书籍合并目标血缘引用原始或清洗对象 ID，必须解析已经迁移并激活的章节/清洗对象，不能沿用旧库不存在的对象 ID；
+- 旧 AI `raw_response` 和输入快照可能包含大段正文或敏感诊断，迁移时必须遵守 7 天保留策略和报告脱敏要求。
+
+每个对象 stage 必须核对源对象数、成功数、缺失数、总字节数和逐对象哈希；PostgreSQL 事务失败后的已上传对象必须保持无活动引用并进入孤立对象回收流程。
+
+## 第三方秘密缺口
+
+批准设计要求第三方凭据只通过环境变量或 Secret 注入。AI 迁移映射已明确旧 `api_key` 不写入 PostgreSQL，而是生成环境变量引用和待注入清单。
+
+论坛 Cookie 当前不满足同一约束：`novel_crawl_forum_source.cookie_text` 在 PostgreSQL 中保存明文，管理页面也允许直接提交 Cookie，Worker 从数据库读取并发送。迁移旧 `cookie_text` 会把第三方会话凭据继续写入目标库。
+
+在内容迁移前必须完成论坛凭据存储设计：目标表只保存 Secret 引用和配置状态，旧 Cookie 值不进入 PostgreSQL、日志、测试快照或迁移报告。真实值只能由受控环境在部署时注入。
+
+## 运行任务能力缺口
+
+旧 `novel_crawl_runtime_task` 提供 `forumDiscover` 和 `forumImport` 运行开关、状态、计数和停止请求。新平台 Worker 已替代论坛导入的领取、租约、恢复和停止语义，但没有与旧 `forumDiscover` 等价的持续自动发现调度器。
+
+`novel_crawl_forum_board.auto_follow_enabled`、`follow_interval_minutes` 和 `follow_import_limit` 当前只被管理 CRUD 保存，运行时代码没有调度扫描。管理功能矩阵中的“运行任务”不能标记为被 `platform_jobs` 完整替代，自动发现/自动跟进仍是 M5 运行能力缺口。
+
+旧 runtime 行本身不应按 `running=true` 原样恢复。运行中或待执行任务迁移后必须进入明确的中断/待人工重试状态，避免切换时未经审核访问外部论坛或重复导入。
+
+## 状态转换与核对
+
+旧库使用的 `success`、`pending`、`running`、`failed`、`stopped` 等状态与新库的 `succeeded`、`cancelled`、`completed`、`pending_review` 等枚举并不完全一致。每张表都需要显式转换表和非法值错误码。
+
+最终核对至少覆盖：
+
+- 每张旧表的总行数、成功数、错误数和明确跳过数守恒；
+- 所有旧 bigint 主键原值保留且新序列大于迁移最大值；
+- 来源、板块、候选、任务、日志、书籍和章节关联无孤儿；
+- 每个目标业务任务与 `platform_jobs` 的状态和尝试次数一致；
+- 清洗/摘要/画像的活动唯一约束、审核状态和重试血缘一致；
+- TXT、清洗和合并对象数量、字节数、SHA-256 及活动引用零差异；
+- 旧 AI Key、论坛 Cookie 和完整敏感正文不出现在 PostgreSQL 非对象列、日志或报告中。
+
+## 退出门
+
+M5/M6 的内容生产迁移部分只有在以下证据齐全后才能关闭：
+
+1. 内容生产 stage 纳入独立命令和 `all` 编排；
+2. 前向迁移提供 legacy 来源键、唯一约束和序列推进能力；
+3. 隔离只读 MySQL、真实 PostgreSQL 和 MinIO 集成测试覆盖中断恢复与幂等重跑；
+4. 旧数据库正文和文件全部通过对象大小与哈希校验，缺失项进入错误清单；
+5. 自动发现/自动跟进能力完成或经用户确认从有效范围移除；
+6. 第三方 Secret 不写入数据库和仓库；
+7. 完整约 8 GB 副本演练给出行数、对象、耗时和差异报告。
