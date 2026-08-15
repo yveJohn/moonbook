@@ -122,7 +122,7 @@ disk-list:
 cors:
   mode: strict-whitelist
   whitelist:
-    - allow-origin: http://localhost:8080
+    - allow-origin: ${MOONBOOK_ADMIN_ORIGIN}
       allow-headers: Content-Type,Authorization,X-Token,X-User-Id
       allow-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
       expose-headers: Content-Length,Content-Type

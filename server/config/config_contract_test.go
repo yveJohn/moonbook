@@ -35,6 +35,7 @@ func TestShippedServerConfigsMatchSchema(t *testing.T) {
 				"MINIO_ROOT_USER":          "moonbook",
 				"MINIO_ROOT_PASSWORD":      "test-minio-password",
 				"MINIO_BUCKET":             "moonbook-content",
+				"MOONBOOK_ADMIN_ORIGIN":    "http://localhost:8080",
 				"MOONBOOK_READER_ORIGIN":   "http://localhost:8081",
 			},
 		},
@@ -60,6 +61,17 @@ func TestShippedServerConfigsMatchSchema(t *testing.T) {
 			var cfg Server
 			if err := decoder.Decode(&cfg); err != nil {
 				t.Fatalf("配置模板与 config.Server 不一致: %v", err)
+			}
+			if tt.name == "moonbook" {
+				origins := make(map[string]bool, len(cfg.Cors.Whitelist))
+				for _, rule := range cfg.Cors.Whitelist {
+					origins[rule.AllowOrigin] = true
+				}
+				for _, origin := range []string{tt.env["MOONBOOK_ADMIN_ORIGIN"], tt.env["MOONBOOK_READER_ORIGIN"]} {
+					if !origins[origin] {
+						t.Errorf("CORS 白名单缺少运行时 Origin %s", origin)
+					}
+				}
 			}
 		})
 	}

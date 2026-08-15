@@ -54,6 +54,7 @@ MOONBOOK_JWT_SIGNING_KEY=m1-verify-local-jwt-signing-key
 MOONBOOK_METRICS_TOKEN=$metrics_token
 MOONBOOK_ADMIN_HOST_PORT=$admin_port
 MOONBOOK_READER_HOST_PORT=$reader_port
+MOONBOOK_ADMIN_ORIGIN=http://localhost:$admin_port
 MOONBOOK_READER_ORIGIN=http://localhost:$reader_port
 VITE_READER_API_BASE=/prod-api
 MOONBOOK_ADMIN_USERNAME=$admin_username

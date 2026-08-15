@@ -19,6 +19,8 @@ docker compose --env-file .env --profile bootstrap run --rm admin-bootstrap
 
 `migrate` 会在 API 前运行并只执行待处理迁移；`minio-init` 幂等创建私有 Bucket。API 容器以非 root 用户运行，启动时从环境变量安全生成权限为 `0600` 的配置文件。API、管理静态站和读者 SSR 不直接绑定公网地址，统一经 `gateway` 暴露。
 
+严格 CORS 白名单分别由 `MOONBOOK_ADMIN_ORIGIN` 和 `MOONBOOK_READER_ORIGIN` 注入。部署到域名时必须填写浏览器地址的完整 Origin（协议、主机和端口），不能沿用 `.env.example` 的本地值；否则管理登录、写操作或读者请求会被 403 拒绝。
+
 只在宿主机直接运行 Go 服务时，才需要生成本地配置：
 
 ```bash
