@@ -127,7 +127,8 @@ func TestReaderMeHTTPContractSnapshotsAndBoundaries(t *testing.T) {
 		}
 		return batch
 	}}
-	handler := NewHandler(NewService(repo, display))
+	likes := &fakeLikes{}
+	handler := NewHandler(NewService(repo, display, immediateTransactor{}, likes, likes))
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("reader.identity", readerauth.Identity{ReaderID: contractMaxID, SessionID: contractSafeID})

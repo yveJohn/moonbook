@@ -2,6 +2,7 @@ package me
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,10 @@ type fakeRepo struct {
 	input                      PreferenceInput
 	feedbackPage, feedbackSize int
 	historyInput               HistoryInput
+	likeResult                 BookLike
+	likeErr                    error
+	unlikeResult               BookLike
+	unlikeErr                  error
 }
 
 type fakeDisplay struct {
@@ -48,8 +53,12 @@ func (f *fakeRepo) AddBookshelf(context.Context, int64, int64) (Bookshelf, error
 }
 func (f *fakeRepo) RemoveBookshelf(context.Context, int64, int64) (bool, error) { return true, nil }
 func (f *fakeRepo) ListLikes(context.Context, int64) ([]LikedBook, error)       { return nil, nil }
-func (f *fakeRepo) Like(context.Context, int64, int64) (BookLike, error)        { return BookLike{}, nil }
-func (f *fakeRepo) Unlike(context.Context, int64, int64) (BookLike, error)      { return BookLike{}, nil }
+func (f *fakeRepo) Like(context.Context, int64, int64) (BookLike, error) {
+	return f.likeResult, f.likeErr
+}
+func (f *fakeRepo) Unlike(context.Context, int64, int64) (BookLike, error) {
+	return f.unlikeResult, f.unlikeErr
+}
 func (f *fakeRepo) CreateFeedback(context.Context, int64, string) (Feedback, error) {
 	return Feedback{ID: 1, CreatedAt: time.Now()}, nil
 }
@@ -70,6 +79,41 @@ func (f *fakeRepo) UpdatePreference(_ context.Context, _ int64, in PreferenceInp
 	return Preference{ID: 2, FontSize: *in.FontSize, LineHeight: in.LineHeight, Theme: in.Theme, ReadingMode: in.ReadingMode}, nil
 }
 
+type immediateTransactor struct {
+	err error
+}
+
+func (tx immediateTransactor) Within(ctx context.Context, fn func(context.Context) error) error {
+	if tx.err != nil {
+		return tx.err
+	}
+	return fn(ctx)
+}
+
+type fakeLikes struct {
+	lockErr       error
+	summaryErr    error
+	lockedBookID  int64
+	summaryBookID int64
+	summaryCount  int64
+}
+
+func (likes *fakeLikes) LockPublishedBook(_ context.Context, bookID int64) error {
+	likes.lockedBookID = bookID
+	return likes.lockErr
+}
+
+func (likes *fakeLikes) SetLikeCount(_ context.Context, bookID, count int64) error {
+	likes.summaryBookID = bookID
+	likes.summaryCount = count
+	return likes.summaryErr
+}
+
+func newTestService(repo Repository, display novelcontract.DisplayReader) *Service {
+	likes := &fakeLikes{}
+	return NewService(repo, display, immediateTransactor{}, likes, likes)
+}
+
 func TestParseIDKeepsMaxInt64(t *testing.T) {
 	v, e := ParseID("9223372036854775807")
 	if e != nil || v != 9223372036854775807 {
@@ -84,7 +128,7 @@ func TestParseIDKeepsMaxInt64(t *testing.T) {
 }
 func TestPreferenceDefaultsAndNormalization(t *testing.T) {
 	f := &fakeRepo{}
-	s := NewService(f, &fakeDisplay{})
+	s := newTestService(f, &fakeDisplay{})
 	v, e := s.GetPreference(context.Background(), 1)
 	if e != nil || v.FontSize != 20 || v.LineHeight != "1.80" || v.Theme != "cream" || v.ReadingMode != "page" {
 		t.Fatalf("default=%+v err=%v", v, e)
@@ -96,7 +140,7 @@ func TestPreferenceDefaultsAndNormalization(t *testing.T) {
 }
 func TestHistoryRejectsInvalidProgressAndDefaultsMode(t *testing.T) {
 	f := &fakeRepo{}
-	s := NewService(f, &fakeDisplay{})
+	s := newTestService(f, &fakeDisplay{})
 	_, e := s.UpdateHistory(context.Background(), 1, 2, HistoryInput{ChapterID: 3, PositionType: "scroll", ProgressPercent: "100.01"})
 	if e == nil {
 		t.Fatal("out-of-range progress accepted")
@@ -108,7 +152,7 @@ func TestHistoryRejectsInvalidProgressAndDefaultsMode(t *testing.T) {
 }
 func TestFeedbackPaginationBounds(t *testing.T) {
 	f := &fakeRepo{}
-	s := NewService(f, &fakeDisplay{})
+	s := newTestService(f, &fakeDisplay{})
 	_, _, e := s.ListFeedbacks(context.Background(), 1, 0, 1000)
 	if e != nil || f.feedbackPage != 1 || f.feedbackSize != 100 {
 		t.Fatalf("page=%d size=%d err=%v", f.feedbackPage, f.feedbackSize, e)
@@ -133,18 +177,18 @@ func TestPersonalContentUsesOneDisplayBatchAndFiltersUnavailableTargets(t *testi
 			{ID: 32, BookID: 12, Name: "草稿章节", Found: true, Enabled: true},
 		},
 	}}
-	items, err := NewService(repo, display).ListBookshelf(context.Background(), 1)
+	items, err := newTestService(repo, display).ListBookshelf(context.Background(), 1)
 	if err != nil || len(items) != 1 || items[0].BookName != "可见作品" || items[0].LastChapterName == nil || *items[0].LastChapterName != "末章" {
 		t.Fatalf("shelf=%+v err=%v", items, err)
 	}
 	if display.calls != 1 {
 		t.Fatalf("display calls=%d, want 1", display.calls)
 	}
-	likes, err := NewService(repo, display).ListLikes(context.Background(), 1)
+	likes, err := newTestService(repo, display).ListLikes(context.Background(), 1)
 	if err != nil || len(likes) != 1 || likes[0].BookID != 11 || display.calls != 2 {
 		t.Fatalf("likes=%+v calls=%d err=%v", likes, display.calls, err)
 	}
-	history, err := NewService(repo, display).ListHistory(context.Background(), 1)
+	history, err := newTestService(repo, display).ListHistory(context.Background(), 1)
 	if err != nil || len(history) != 1 || history[0].ChapterName != "末章" || display.calls != 3 {
 		t.Fatalf("history=%+v calls=%d err=%v", history, display.calls, err)
 	}
@@ -184,12 +228,51 @@ func TestDisplayCallCountDoesNotGrowWithPageSize(t *testing.T) {
 		}
 		return novelcontract.DisplayBatch{Books: books, Chapters: []novelcontract.ChapterDisplay{}}
 	}}
-	items, err := NewService(repo, display).ListLikes(context.Background(), 1)
+	items, err := newTestService(repo, display).ListLikes(context.Background(), 1)
 	if err != nil || len(items) != len(likes) {
 		t.Fatalf("items=%d err=%v", len(items), err)
 	}
 	if display.calls != 1 || requested != len(likes) {
 		t.Fatalf("display calls=%d requested=%d", display.calls, requested)
+	}
+}
+
+func TestLikeTransactionOrchestrationAndFailures(t *testing.T) {
+	forced := errors.New("forced failure")
+	tests := []struct {
+		name       string
+		repo       *fakeRepo
+		likes      *fakeLikes
+		tx         immediateTransactor
+		wantResult BookLike
+	}{
+		{name: "like", repo: &fakeRepo{likeResult: BookLike{ID: 7, BookID: 11, Liked: true, LikeCount: 3}}, likes: &fakeLikes{}, wantResult: BookLike{ID: 7, BookID: 11, Liked: true, LikeCount: 3}},
+		{name: "unlike", repo: &fakeRepo{unlikeResult: BookLike{BookID: 11, LikeCount: 2}}, likes: &fakeLikes{}, wantResult: BookLike{BookID: 11, LikeCount: 2}},
+		{name: "book failure", repo: &fakeRepo{likeResult: BookLike{ID: 7}}, likes: &fakeLikes{lockErr: forced}},
+		{name: "reader failure", repo: &fakeRepo{likeErr: forced}, likes: &fakeLikes{}},
+		{name: "summary failure", repo: &fakeRepo{likeResult: BookLike{ID: 7, BookID: 11, Liked: true, LikeCount: 3}}, likes: &fakeLikes{summaryErr: forced}},
+		{name: "transaction failure", repo: &fakeRepo{}, likes: &fakeLikes{}, tx: immediateTransactor{err: forced}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := NewService(test.repo, &fakeDisplay{}, test.tx, test.likes, test.likes)
+			var result BookLike
+			var err error
+			if test.name == "unlike" {
+				result, err = service.Unlike(context.Background(), 5, 11)
+			} else {
+				result, err = service.Like(context.Background(), 5, 11)
+			}
+			if test.wantResult.BookID != 0 {
+				if err != nil || result != test.wantResult || test.likes.lockedBookID != 11 || test.likes.summaryBookID != 11 || test.likes.summaryCount != int64(test.wantResult.LikeCount) {
+					t.Fatalf("result=%+v likes=%+v err=%v", result, test.likes, err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrBookUnavailable) {
+				t.Fatalf("err=%v", err)
+			}
+		})
 	}
 }
 func ptr(v int) *int { return &v }

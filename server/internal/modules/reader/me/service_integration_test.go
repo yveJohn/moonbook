@@ -4,13 +4,33 @@ package me
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
 	novelprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/provider"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
+
+type failingLikeSummary struct{ err error }
+
+func (writer failingLikeSummary) SetLikeCount(context.Context, int64, int64) error {
+	return writer.err
+}
+
+type swallowedNestedLikeSummary struct {
+	tx  Transactor
+	err error
+}
+
+func (writer swallowedNestedLikeSummary) SetLikeCount(ctx context.Context, _ int64, _ int64) error {
+	_ = writer.tx.Within(ctx, func(context.Context) error { return writer.err })
+	return nil
+}
 
 func TestReaderMePostgresReaderIsolation(t *testing.T) {
 	db, _ := integrationtest.RequireDB(t)
@@ -50,7 +70,8 @@ func TestReaderMePostgresReaderIsolation(t *testing.T) {
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_authors WHERE id=$1`, author)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_categories WHERE id=$1`, category)
 	})
-	service := NewService(SQLRepository{DB: db}, novelprovider.NewDisplay(db))
+	likesProvider := novelprovider.NewLikes(db)
+	service := NewService(SQLRepository{DB: db}, novelprovider.NewDisplay(db), transaction.New(db), likesProvider, likesProvider)
 	if _, err := service.AddBookshelf(ctx, reader1, book); err != nil {
 		t.Fatalf("add bookshelf: %v", err)
 	}
@@ -90,5 +111,131 @@ func TestReaderMePostgresReaderIsolation(t *testing.T) {
 	otherFeedback, total, _ := service.ListFeedbacks(ctx, reader2, 1, 10)
 	if len(otherShelf) != 0 || len(otherLikes) != 0 || len(otherHistory) != 0 || len(otherFeedback) != 0 || total != 0 {
 		t.Fatalf("reader data leaked across IDs: shelf=%v likes=%v history=%v feedback=%v/%d", otherShelf, otherLikes, otherHistory, otherFeedback, total)
+	}
+}
+
+func TestReaderMeLikesAreAtomicIdempotentAndConcurrentWithPostgres(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	base := time.Now().UnixNano()
+	category, author, book, draftBook := base, base+1, base+2, base+3
+	readers := make([]int64, 8)
+	for index := range readers {
+		readers[index] = base + 10 + int64(index)
+	}
+	code := fmt.Sprintf("reader-like-it-%d", base)
+	t.Cleanup(func() {
+		cleanup := context.Background()
+		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_book_likes WHERE book_id IN ($1,$2)`, book, draftBook)
+		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_accounts WHERE id >= $1 AND id <= $2`, readers[0], readers[len(readers)-1])
+		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_books WHERE id IN ($1,$2)`, book, draftBook)
+		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_authors WHERE id=$1`, author)
+		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_categories WHERE id=$1`, category)
+	})
+	if _, err := db.ExecContext(ctx, `INSERT INTO novel_categories(id,code,name,kind,source) VALUES($1,$2,$2,'primary','native')`, category, code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO novel_authors(id,pen_name,normalized_name,status,source) VALUES($1,$2,$2,'active','native')`, author, code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO novel_books(id,primary_category_id,category_code,category_name,book_name,author_id,author_name,publish_status) VALUES($1,$2,$3,$3,$3,$4,$3,'published'),($5,$2,$3,$3,$6,$4,$3,'draft')`, book, category, code, author, draftBook, code+"-draft"); err != nil {
+		t.Fatal(err)
+	}
+	for index, readerID := range readers {
+		if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES($1,$2,$2,'x','enabled')`, readerID, fmt.Sprintf("%s-%d", code, index)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tx := transaction.New(db)
+	provider := novelprovider.NewLikes(db)
+	service := NewService(SQLRepository{DB: db}, novelprovider.NewDisplay(db), tx, provider, provider)
+
+	if _, err := service.Like(ctx, readers[0], draftBook); !errors.Is(err, ErrBookUnavailable) {
+		t.Fatalf("draft like err=%v", err)
+	}
+	if _, err := service.Like(ctx, readers[0], base+999); !errors.Is(err, ErrBookUnavailable) {
+		t.Fatalf("missing book like err=%v", err)
+	}
+	first, err := service.Like(ctx, readers[0], book)
+	if err != nil || !first.Liked || first.LikeCount != 1 || first.ID == 0 {
+		t.Fatalf("first like=%+v err=%v", first, err)
+	}
+	repeated, err := service.Like(ctx, readers[0], book)
+	if err != nil || repeated.ID != first.ID || repeated.LikeCount != 1 {
+		t.Fatalf("repeated like=%+v err=%v", repeated, err)
+	}
+	if _, err := service.Unlike(ctx, readers[0], book); err != nil {
+		t.Fatalf("unlike: %v", err)
+	}
+	repeatedUnlike, err := service.Unlike(ctx, readers[0], book)
+	if err != nil || repeatedUnlike.Liked || repeatedUnlike.LikeCount != 0 {
+		t.Fatalf("repeated unlike=%+v err=%v", repeatedUnlike, err)
+	}
+
+	if _, err := service.Like(ctx, base+9999, book); !errors.Is(err, ErrBookUnavailable) {
+		t.Fatalf("reader relation failure err=%v", err)
+	}
+	assertLikeFacts(t, ctx, db, book, 0)
+
+	forced := errors.New("forced summary failure")
+	failingService := NewService(SQLRepository{DB: db}, novelprovider.NewDisplay(db), tx, provider, failingLikeSummary{err: forced})
+	if _, err := failingService.Like(ctx, readers[0], book); !errors.Is(err, ErrBookUnavailable) {
+		t.Fatalf("summary failure err=%v", err)
+	}
+	assertLikeFacts(t, ctx, db, book, 0)
+
+	swallowingService := NewService(SQLRepository{DB: db}, novelprovider.NewDisplay(db), tx, provider, swallowedNestedLikeSummary{tx: tx, err: forced})
+	if _, err := swallowingService.Like(ctx, readers[0], book); !errors.Is(err, ErrBookUnavailable) {
+		t.Fatalf("rollback-only err=%v", err)
+	}
+	assertLikeFacts(t, ctx, db, book, 0)
+
+	runConcurrentLikes(t, ctx, readers, func(readerID int64) error {
+		_, err := service.Like(ctx, readerID, book)
+		return err
+	})
+	assertLikeFacts(t, ctx, db, book, int64(len(readers)))
+	runConcurrentLikes(t, ctx, readers, func(readerID int64) error {
+		_, err := service.Unlike(ctx, readerID, book)
+		return err
+	})
+	assertLikeFacts(t, ctx, db, book, 0)
+}
+
+func runConcurrentLikes(t *testing.T, ctx context.Context, readerIDs []int64, operation func(int64) error) {
+	t.Helper()
+	errorsByReader := make(chan error, len(readerIDs))
+	var workers sync.WaitGroup
+	for _, readerID := range readerIDs {
+		id := readerID
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			errorsByReader <- operation(id)
+		}()
+	}
+	workers.Wait()
+	close(errorsByReader)
+	for err := range errorsByReader {
+		if err != nil {
+			t.Fatalf("concurrent like operation: %v", err)
+		}
+	}
+}
+
+func assertLikeFacts(t *testing.T, ctx context.Context, db interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, bookID, want int64) {
+	t.Helper()
+	var summary, relations int64
+	if err := db.QueryRowContext(ctx, `SELECT like_count FROM novel_books WHERE id=$1`, bookID).Scan(&summary); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_book_likes WHERE book_id=$1`, bookID).Scan(&relations); err != nil {
+		t.Fatal(err)
+	}
+	if summary != want || relations != want || summary != relations {
+		t.Fatalf("like facts summary=%d relations=%d want=%d", summary, relations, want)
 	}
 }

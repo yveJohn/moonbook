@@ -3,6 +3,8 @@ package me
 import (
 	"context"
 	"database/sql"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
 func (r SQLRepository) ListBookshelf(ctx context.Context, readerID int64) ([]Bookshelf, error) {
@@ -92,57 +94,31 @@ func (r SQLRepository) ListLikes(ctx context.Context, readerID int64) ([]LikedBo
 	return out, rows.Err()
 }
 func (r SQLRepository) Like(ctx context.Context, readerID, bookID int64) (BookLike, error) {
-	tx, e := r.DB.BeginTx(ctx, nil)
-	if e != nil {
-		return BookLike{}, e
+	executor := transaction.Executor(ctx, r.DB)
+	if executor == r.DB {
+		return BookLike{}, transaction.ErrNoTransaction
 	}
-	defer tx.Rollback()
 	var id int64
 	var count int
-	e = tx.QueryRowContext(ctx, `SELECT like_count FROM novel_books WHERE id=$1 AND publish_status='published' AND deleted_at IS NULL FOR UPDATE`, bookID).Scan(&count)
-	if e != nil {
-		return BookLike{}, e
+	if err := executor.QueryRowContext(ctx, `INSERT INTO reader_book_likes(reader_id,book_id) VALUES($1,$2) ON CONFLICT(reader_id,book_id) DO UPDATE SET book_id=EXCLUDED.book_id RETURNING id`, readerID, bookID).Scan(&id); err != nil {
+		return BookLike{}, err
 	}
-	e = tx.QueryRowContext(ctx, `INSERT INTO reader_book_likes(reader_id,book_id) VALUES($1,$2) ON CONFLICT(reader_id,book_id) DO UPDATE SET book_id=EXCLUDED.book_id RETURNING id`, readerID, bookID).Scan(&id)
-	if e != nil {
-		return BookLike{}, e
-	}
-	// Count is derived from the row transition under the book lock, so retries do not double increment.
-	// Reconcile from the relation rows while the book lock is held. This makes
-	// retries and concurrent like/unlike operations converge to the exact count.
-	if _, e = tx.ExecContext(ctx, `UPDATE novel_books SET like_count=(SELECT count(*) FROM reader_book_likes WHERE book_id=$1),updated_at=now() WHERE id=$1`, bookID); e != nil {
-		return BookLike{}, e
-	}
-	e = tx.QueryRowContext(ctx, `SELECT like_count FROM novel_books WHERE id=$1`, bookID).Scan(&count)
-	if e != nil {
-		return BookLike{}, e
-	}
-	if e = tx.Commit(); e != nil {
-		return BookLike{}, e
+	if err := executor.QueryRowContext(ctx, `SELECT count(*) FROM reader_book_likes WHERE book_id=$1`, bookID).Scan(&count); err != nil {
+		return BookLike{}, err
 	}
 	return BookLike{ID: id, BookID: bookID, Liked: true, LikeCount: count}, nil
 }
 func (r SQLRepository) Unlike(ctx context.Context, readerID, bookID int64) (BookLike, error) {
-	tx, e := r.DB.BeginTx(ctx, nil)
-	if e != nil {
-		return BookLike{}, e
+	executor := transaction.Executor(ctx, r.DB)
+	if executor == r.DB {
+		return BookLike{}, transaction.ErrNoTransaction
 	}
-	defer tx.Rollback()
 	var count int
-	if e = tx.QueryRowContext(ctx, `SELECT like_count FROM novel_books WHERE id=$1 AND publish_status='published' AND deleted_at IS NULL FOR UPDATE`, bookID).Scan(&count); e != nil {
-		return BookLike{}, e
+	if _, err := executor.ExecContext(ctx, `DELETE FROM reader_book_likes WHERE reader_id=$1 AND book_id=$2`, readerID, bookID); err != nil {
+		return BookLike{}, err
 	}
-	if _, e = tx.ExecContext(ctx, `DELETE FROM reader_book_likes WHERE reader_id=$1 AND book_id=$2`, readerID, bookID); e != nil {
-		return BookLike{}, e
-	}
-	if _, e = tx.ExecContext(ctx, `UPDATE novel_books SET like_count=(SELECT count(*) FROM reader_book_likes WHERE book_id=$1),updated_at=now() WHERE id=$1`, bookID); e != nil {
-		return BookLike{}, e
-	}
-	if e = tx.QueryRowContext(ctx, `SELECT like_count FROM novel_books WHERE id=$1`, bookID).Scan(&count); e != nil {
-		return BookLike{}, e
-	}
-	if e = tx.Commit(); e != nil {
-		return BookLike{}, e
+	if err := executor.QueryRowContext(ctx, `SELECT count(*) FROM reader_book_likes WHERE book_id=$1`, bookID).Scan(&count); err != nil {
+		return BookLike{}, err
 	}
 	return BookLike{BookID: bookID, Liked: false, LikeCount: count}, nil
 }

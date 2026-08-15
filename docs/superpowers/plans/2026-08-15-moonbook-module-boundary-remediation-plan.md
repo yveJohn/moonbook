@@ -197,11 +197,11 @@
 - Modify: `server/internal/modules/reader/me/service_integration_test.go`
 - Create: `server/internal/modules/novel/provider/likes.go`
 
-- [ ] **Step 1：编写失败与并发测试。** 覆盖无效书籍、重复点赞、重复取消、Reader 关系失败、Novel 汇总失败、并发点赞/取消和 rollback-only。
-- [ ] **Step 2：实现合同事务。** Novel 合同锁定有效书籍；Reader 幂等改关系并计算精确关系数；Novel 合同更新 `like_count`，双方加入同一 Context 事务。
-- [ ] **Step 3：移除 Reader 对 Novel 表 SQL。** Reader 只访问点赞关系和其他 Reader 表。
-- [ ] **Step 4：真实 PostgreSQL 验证。** 并发完成后 `like_count` 必须等于关系行数，不接受最终一致窗口。
-- [ ] **Step 5：提交。** 提交信息：`重构读者点赞汇总事务`。
+- [x] **Step 1：编写失败与并发测试。** 覆盖无效书籍、重复点赞、重复取消、Reader 关系失败、Novel 汇总失败、并发点赞/取消和 rollback-only。
+- [x] **Step 2：实现合同事务。** Novel 合同锁定有效书籍；Reader 幂等改关系并计算精确关系数；Novel 合同更新 `like_count`，双方加入同一 Context 事务。
+- [x] **Step 3：移除 Reader 对 Novel 表 SQL。** Reader 只访问点赞关系和其他 Reader 表。
+- [x] **Step 4：真实 PostgreSQL 验证。** 并发完成后 `like_count` 必须等于关系行数，不接受最终一致窗口。
+- [x] **Step 5：提交。** 提交信息：`重构读者点赞汇总事务`。
 
 ## Task 10：改造 Commerce 管理端 Reader 查询
 

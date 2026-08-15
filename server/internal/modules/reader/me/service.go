@@ -22,12 +22,15 @@ var (
 )
 
 type Service struct {
-	repo    Repository
-	display novelcontract.DisplayReader
+	repo        Repository
+	display     novelcontract.DisplayReader
+	tx          Transactor
+	likeLocker  novelcontract.LikeBookLocker
+	likeSummary novelcontract.LikeSummaryWriter
 }
 
-func NewService(repo Repository, display novelcontract.DisplayReader) *Service {
-	return &Service{repo: repo, display: display}
+func NewService(repo Repository, display novelcontract.DisplayReader, transactor Transactor, likeLocker novelcontract.LikeBookLocker, likeSummary novelcontract.LikeSummaryWriter) *Service {
+	return &Service{repo: repo, display: display, tx: transactor, likeLocker: likeLocker, likeSummary: likeSummary}
 }
 func (s *Service) ListBookshelf(ctx context.Context, id int64) ([]Bookshelf, error) {
 	items, err := s.repo.ListBookshelf(ctx, id)
@@ -128,18 +131,36 @@ func (s *Service) ListLikes(ctx context.Context, id int64) ([]LikedBook, error) 
 	return out, nil
 }
 func (s *Service) Like(ctx context.Context, id, b int64) (BookLike, error) {
-	v, e := s.repo.Like(ctx, id, b)
-	if e != nil {
-		return v, ErrBookUnavailable
-	}
-	return v, nil
+	return s.setLike(ctx, id, b, true)
 }
 func (s *Service) Unlike(ctx context.Context, id, b int64) (BookLike, error) {
-	v, e := s.repo.Unlike(ctx, id, b)
-	if e != nil {
-		return v, ErrBookUnavailable
+	return s.setLike(ctx, id, b, false)
+}
+
+func (s *Service) setLike(ctx context.Context, readerID, bookID int64, liked bool) (BookLike, error) {
+	if s == nil || s.repo == nil || s.tx == nil || s.likeLocker == nil || s.likeSummary == nil {
+		return BookLike{}, ErrMeUnavailable
 	}
-	return v, nil
+	var result BookLike
+	err := s.tx.Within(ctx, func(txCtx context.Context) error {
+		if err := s.likeLocker.LockPublishedBook(txCtx, bookID); err != nil {
+			return err
+		}
+		var err error
+		if liked {
+			result, err = s.repo.Like(txCtx, readerID, bookID)
+		} else {
+			result, err = s.repo.Unlike(txCtx, readerID, bookID)
+		}
+		if err != nil {
+			return err
+		}
+		return s.likeSummary.SetLikeCount(txCtx, bookID, int64(result.LikeCount))
+	})
+	if err != nil {
+		return BookLike{}, ErrBookUnavailable
+	}
+	return result, nil
 }
 func (s *Service) CreateFeedback(ctx context.Context, id int64, content string) (Feedback, error) {
 	content = strings.TrimSpace(content)
