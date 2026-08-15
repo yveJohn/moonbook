@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
@@ -29,6 +30,10 @@ func (provider *RegistrationReward) GrantRegistrationRewards(ctx context.Context
 	if executor == provider.db {
 		return contract.Wrap(contract.ErrUnavailable, transaction.ErrNoTransaction)
 	}
+	businessID := fmt.Sprintf("%d:%d", request.RelationID, request.InviteeID)
+	if _, err := executor.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "commerce-registration-reward:"+businessID); err != nil {
+		return contract.Wrap(contract.ErrUnavailable, err)
+	}
 	var enabled bool
 	var inviterReward, inviteeReward int64
 	if err := executor.QueryRowContext(ctx, `
@@ -40,18 +45,20 @@ WHERE id=1`).Scan(&enabled, &inviterReward, &inviteeReward); err != nil {
 	if !enabled {
 		return nil
 	}
-	businessID := fmt.Sprintf("%d:%d", request.RelationID, request.InviteeID)
+	mutations := make([]wallet.Mutation, 0, 2)
 	if inviterReward > 0 {
 		key := businessID + ":inviter"
 		remark := "邀请奖励"
-		if _, err := wallet.MutateTx(ctx, executor, wallet.Mutation{ReaderID: request.InviterID, BizType: "invite_reward", BizID: &businessID, Direction: "income", CoinType: "bonus", Amount: inviterReward, LedgerNo: "INVI-" + businessID, Remark: &remark, IdempotencyKey: &key}); err != nil {
-			return contract.Wrap(contract.ErrUnavailable, err)
-		}
+		mutations = append(mutations, wallet.Mutation{ReaderID: request.InviterID, BizType: "invite_reward", BizID: &businessID, Direction: "income", CoinType: "bonus", Amount: inviterReward, LedgerNo: "INVI-" + businessID, Remark: &remark, IdempotencyKey: &key})
 	}
 	if inviteeReward > 0 {
 		key := businessID + ":invitee"
 		remark := "注册奖励"
-		if _, err := wallet.MutateTx(ctx, executor, wallet.Mutation{ReaderID: request.InviteeID, BizType: "invite_reward", BizID: &businessID, Direction: "income", CoinType: "bonus", Amount: inviteeReward, LedgerNo: "INVE-" + businessID, Remark: &remark, IdempotencyKey: &key}); err != nil {
+		mutations = append(mutations, wallet.Mutation{ReaderID: request.InviteeID, BizType: "invite_reward", BizID: &businessID, Direction: "income", CoinType: "bonus", Amount: inviteeReward, LedgerNo: "INVE-" + businessID, Remark: &remark, IdempotencyKey: &key})
+	}
+	sort.Slice(mutations, func(left, right int) bool { return mutations[left].ReaderID < mutations[right].ReaderID })
+	for _, mutation := range mutations {
+		if _, err := wallet.MutateTx(ctx, executor, mutation); err != nil {
 			return contract.Wrap(contract.ErrUnavailable, err)
 		}
 	}

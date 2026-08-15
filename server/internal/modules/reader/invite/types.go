@@ -12,16 +12,14 @@ var (
 	ErrInviteRequired = auth.ErrInvalidCredentials
 )
 
-// Repository owns the registration transaction. Implementations must lock the
-// invite row before validating or incrementing its usage count.
+// Repository owns only Reader registration facts. Every method must join the
+// transaction bound to the context and must not commit independently.
 type Repository interface {
-	RegisterWithInvite(context.Context, Registration) (RegistrationResult, error)
-}
-
-type RegistrationResult struct {
-	Account    auth.ReaderAccount
-	RelationID int64
-	InviterID  int64
+	LockInvite(context.Context, string) (InviteCode, error)
+	CreateAccount(context.Context, Registration, int64) (auth.ReaderAccount, error)
+	IncrementInviteUsage(context.Context, int64) error
+	CreateAutomaticInviteCode(context.Context, int64) error
+	CreateInviteRelation(context.Context, int64, int64, int64) (int64, error)
 }
 
 type Transactor interface {

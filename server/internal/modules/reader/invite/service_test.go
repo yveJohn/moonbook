@@ -14,20 +14,17 @@ import (
 
 type transactionContextKey struct{}
 
-type directTransactor struct{}
-
-func (directTransactor) Within(ctx context.Context, fn func(context.Context) error) error {
-	return fn(context.WithValue(ctx, transactionContextKey{}, true))
-}
-
 type projectionWriter struct {
 	projections []commercecontract.ReaderSearchProjection
 	err         error
+	failStage   string
 }
 
 type rewardGranter struct {
-	requests []commercecontract.RegistrationRewardRequest
-	err      error
+	requests                       []commercecontract.RegistrationRewardRequest
+	err                            error
+	failStage                      string
+	inviterRewards, inviteeRewards int
 }
 
 func (granter *rewardGranter) GrantRegistrationRewards(ctx context.Context, request commercecontract.RegistrationRewardRequest) error {
@@ -35,6 +32,14 @@ func (granter *rewardGranter) GrantRegistrationRewards(ctx context.Context, requ
 		return errors.New("reward did not receive transaction context")
 	}
 	granter.requests = append(granter.requests, request)
+	granter.inviterRewards++
+	if granter.failStage == "inviter_reward" {
+		return errors.New("forced inviter reward failure")
+	}
+	granter.inviteeRewards++
+	if granter.failStage == "invitee_reward" {
+		return errors.New("forced invitee reward failure")
+	}
 	return granter.err
 }
 
@@ -43,6 +48,9 @@ func (writer *projectionWriter) UpsertReaderSearchProjection(ctx context.Context
 		return errors.New("projection did not receive transaction context")
 	}
 	writer.projections = append(writer.projections, projection)
+	if writer.failStage == "projection" {
+		return errors.New("forced projection failure")
+	}
 	return writer.err
 }
 
@@ -51,28 +59,85 @@ func (*projectionWriter) DeleteReaderSearchProjection(context.Context, int64) er
 }
 
 type registrationRepo struct {
-	mu                                                sync.Mutex
 	remaining                                         int
 	accountCount, usedCount, codeCount, relationCount int
 	err                                               error
+	failStage                                         string
+	calls                                             []string
 }
 
-func (r *registrationRepo) RegisterWithInvite(_ context.Context, req Registration) (RegistrationResult, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *registrationRepo) LockInvite(_ context.Context, code string) (InviteCode, error) {
+	r.calls = append(r.calls, "invite")
 	if r.err != nil {
-		return RegistrationResult{}, r.err
+		return InviteCode{}, r.err
 	}
-	if req.InviteCode != "VALID" || r.remaining == 0 {
-		return RegistrationResult{}, ErrInviteUsed
+	if code != "VALID" || r.remaining == 0 {
+		return InviteCode{}, ErrInviteUsed
 	}
-	r.remaining--
+	maximum := 1
+	return InviteCode{ID: 10, InviterReaderID: 99, Code: code, Status: "enabled", MaxUseCount: &maximum}, nil
+}
+
+func (r *registrationRepo) CreateAccount(_ context.Context, req Registration, inviteCodeID int64) (auth.ReaderAccount, error) {
+	r.calls = append(r.calls, "account")
 	r.accountCount++
+	if r.failStage == "account" {
+		return auth.ReaderAccount{}, errors.New("forced account failure")
+	}
+	return auth.ReaderAccount{ID: int64(r.accountCount + 100), Username: req.Username, Nickname: req.Nickname, Status: auth.AccountStatusEnabled}, nil
+}
+
+func (r *registrationRepo) IncrementInviteUsage(context.Context, int64) error {
+	r.calls = append(r.calls, "invite_usage")
+	r.remaining--
 	r.usedCount++
+	if r.failStage == "invite_usage" {
+		return errors.New("forced invite usage failure")
+	}
+	return nil
+}
+
+func (r *registrationRepo) CreateAutomaticInviteCode(context.Context, int64) error {
+	r.calls = append(r.calls, "automatic_code")
 	r.codeCount++
+	if r.failStage == "automatic_code" {
+		return errors.New("forced automatic code failure")
+	}
+	return nil
+}
+
+func (r *registrationRepo) CreateInviteRelation(context.Context, int64, int64, int64) (int64, error) {
+	r.calls = append(r.calls, "relation")
 	r.relationCount++
-	account := auth.ReaderAccount{ID: int64(r.accountCount + 100), Username: req.Username, Nickname: req.Nickname, Status: auth.AccountStatusEnabled}
-	return RegistrationResult{Account: account, RelationID: int64(r.relationCount + 200), InviterID: 99}, nil
+	if r.failStage == "relation" {
+		return 0, errors.New("forced relation failure")
+	}
+	return int64(r.relationCount + 200), nil
+}
+
+type rollbackTransactor struct {
+	mu          sync.Mutex
+	repo        *registrationRepo
+	projections *projectionWriter
+	rewards     *rewardGranter
+}
+
+func (tx *rollbackTransactor) Within(ctx context.Context, fn func(context.Context) error) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	repoSnapshot := *tx.repo
+	projectionCount := len(tx.projections.projections)
+	rewardCount := len(tx.rewards.requests)
+	inviterRewards, inviteeRewards := tx.rewards.inviterRewards, tx.rewards.inviteeRewards
+	err := fn(context.WithValue(ctx, transactionContextKey{}, true))
+	if err != nil {
+		*tx.repo = repoSnapshot
+		tx.projections.projections = tx.projections.projections[:projectionCount]
+		tx.rewards.requests = tx.rewards.requests[:rewardCount]
+		tx.rewards.inviterRewards = inviterRewards
+		tx.rewards.inviteeRewards = inviteeRewards
+	}
+	return err
 }
 
 type sessionRepo struct{ next atomic.Int64 }
@@ -105,7 +170,12 @@ func testService(repo Repository) (*Service, *sessionRepo, *projectionWriter, *r
 	authService := auth.NewService(sessions, nil, auth.TokenConfig{Secret: []byte("reader-invite-test-signing-key"), TTL: time.Hour})
 	projections := &projectionWriter{}
 	rewards := &rewardGranter{}
-	return NewService(repo, authService, directTransactor{}, projections, rewards), sessions, projections, rewards
+	registration, ok := repo.(*registrationRepo)
+	if !ok {
+		panic("testService requires registrationRepo")
+	}
+	transactor := &rollbackTransactor{repo: registration, projections: projections, rewards: rewards}
+	return NewService(repo, authService, transactor, projections, rewards), sessions, projections, rewards
 }
 
 func TestRegisterRequiresInviteCode(t *testing.T) {
@@ -138,7 +208,8 @@ func TestRegisterCreatesAccountCodeAndRelation(t *testing.T) {
 }
 
 func TestRegisterDoesNotCreateSessionWhenProjectionFails(t *testing.T) {
-	service, sessions, projections, rewards := testService(&registrationRepo{remaining: 1})
+	repo := &registrationRepo{remaining: 1}
+	service, sessions, projections, rewards := testService(repo)
 	projections.err = errors.New("projection unavailable")
 
 	_, token, err := service.Register(context.Background(), auth.RegisterRequest{Username: "reader", Password: "password", InviteCode: "VALID"})
@@ -150,6 +221,29 @@ func TestRegisterDoesNotCreateSessionWhenProjectionFails(t *testing.T) {
 	}
 	if len(rewards.requests) != 0 {
 		t.Fatalf("reward ran after projection failure: %+v", rewards.requests)
+	}
+	if repo.accountCount != 0 || repo.usedCount != 0 || repo.codeCount != 0 || repo.relationCount != 0 || repo.remaining != 1 {
+		t.Fatalf("Reader facts were not rolled back: %+v", repo)
+	}
+}
+
+func TestRegistrationFailureMatrixRollsBackEveryFact(t *testing.T) {
+	for _, stage := range []string{"account", "invite_usage", "automatic_code", "relation", "projection", "inviter_reward", "invitee_reward"} {
+		t.Run(stage, func(t *testing.T) {
+			repo := &registrationRepo{remaining: 1, failStage: stage}
+			service, sessions, projections, rewards := testService(repo)
+			projections.failStage = stage
+			rewards.failStage = stage
+			if _, _, err := service.Register(context.Background(), auth.RegisterRequest{Username: "reader", Password: "password", InviteCode: "VALID"}); err == nil {
+				t.Fatal("expected registration failure")
+			}
+			if repo.remaining != 1 || repo.accountCount != 0 || repo.usedCount != 0 || repo.codeCount != 0 || repo.relationCount != 0 {
+				t.Fatalf("Reader facts remained after %s: %+v", stage, repo)
+			}
+			if len(projections.projections) != 0 || len(rewards.requests) != 0 || rewards.inviterRewards != 0 || rewards.inviteeRewards != 0 || sessions.next.Load() != 0 {
+				t.Fatalf("cross-domain facts remained after %s: projections=%v rewards=%v/%d/%d sessions=%d", stage, projections.projections, rewards.requests, rewards.inviterRewards, rewards.inviteeRewards, sessions.next.Load())
+			}
+		})
 	}
 }
 

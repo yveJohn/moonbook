@@ -31,9 +31,8 @@ func NewService(repo Repository, authService *auth.Service, transactor Transacto
 	return &Service{repo: repo, auth: authService, tx: transactor, sync: projectionSync, reward: rewardGranter}
 }
 
-// Register consumes the invitation and creates the account and relation in
-// one repository transaction. Token/session creation happens only after that
-// transaction commits and does not create any wallet or reward fact.
+// Register creates Reader and Commerce facts in one context-bound transaction.
+// Token/session creation starts only after every business fact commits.
 func (s *Service) Register(ctx context.Context, req auth.RegisterRequest) (auth.ReaderAccount, auth.AccessToken, error) {
 	if strings.TrimSpace(req.Username) == "" || req.Password == "" || strings.TrimSpace(req.InviteCode) == "" {
 		return auth.ReaderAccount{}, auth.AccessToken{}, auth.ErrInvalidCredentials
@@ -43,28 +42,45 @@ func (s *Service) Register(ctx context.Context, req auth.RegisterRequest) (auth.
 	}
 	var account auth.ReaderAccount
 	err := s.tx.Within(ctx, func(txCtx context.Context) error {
-		created, err := s.repo.RegisterWithInvite(txCtx, Registration{Username: strings.TrimSpace(req.Username), Password: req.Password, Nickname: strings.TrimSpace(req.Nickname), InviteCode: strings.TrimSpace(req.InviteCode)})
+		registration := Registration{Username: strings.TrimSpace(req.Username), Password: req.Password, Nickname: strings.TrimSpace(req.Nickname), InviteCode: strings.TrimSpace(req.InviteCode)}
+		invite, err := s.repo.LockInvite(txCtx, registration.InviteCode)
 		if err != nil {
 			return err
 		}
+		account, err = s.repo.CreateAccount(txCtx, registration, invite.ID)
+		if err != nil {
+			return err
+		}
+		if err := s.repo.IncrementInviteUsage(txCtx, invite.ID); err != nil {
+			return err
+		}
+		if err := s.repo.CreateAutomaticInviteCode(txCtx, account.ID); err != nil {
+			return err
+		}
+		var relationID int64
+		if invite.InviterReaderID != 0 {
+			relationID, err = s.repo.CreateInviteRelation(txCtx, invite.InviterReaderID, account.ID, invite.ID)
+			if err != nil {
+				return err
+			}
+		}
 		if err := s.sync.UpsertReaderSearchProjection(txCtx, commercecontract.ReaderSearchProjection{
-			ReaderID: created.Account.ID,
-			Username: created.Account.Username,
-			Nickname: created.Account.Nickname,
-			Status:   created.Account.Status,
+			ReaderID: account.ID,
+			Username: account.Username,
+			Nickname: account.Nickname,
+			Status:   account.Status,
 		}); err != nil {
 			return err
 		}
-		if created.RelationID != 0 {
+		if relationID != 0 {
 			if err := s.reward.GrantRegistrationRewards(txCtx, commercecontract.RegistrationRewardRequest{
-				RelationID: created.RelationID,
-				InviterID:  created.InviterID,
-				InviteeID:  created.Account.ID,
+				RelationID: relationID,
+				InviterID:  invite.InviterReaderID,
+				InviteeID:  account.ID,
 			}); err != nil {
 				return err
 			}
 		}
-		account = created.Account
 		return nil
 	})
 	if err != nil {

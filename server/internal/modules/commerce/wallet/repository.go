@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 )
 
 var ErrInsufficientBalance = errors.New("wallet balance is insufficient")
@@ -71,6 +72,10 @@ func MutateTx(ctx context.Context, tx DBTX, m Mutation) (Ledger, error) {
 		return Ledger{}, errors.New("invalid wallet mutation")
 	}
 	if m.IdempotencyKey != nil {
+		lockKey := fmt.Sprintf("commerce-wallet:%d:%s", m.ReaderID, *m.IdempotencyKey)
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, lockKey); err != nil {
+			return Ledger{}, err
+		}
 		var v Ledger
 		err := scanLedger(tx.QueryRowContext(ctx, `SELECT id,reader_id,ledger_no,biz_type,biz_id,order_no,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key,created_at FROM reader_wallet_ledgers WHERE reader_id=$1 AND idempotency_key=$2`, m.ReaderID, *m.IdempotencyKey), &v)
 		if err == nil {

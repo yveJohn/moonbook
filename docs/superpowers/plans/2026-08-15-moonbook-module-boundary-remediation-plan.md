@@ -182,11 +182,11 @@
 - Modify: `server/internal/modules/commerce/wallet/repository.go`
 - Create: `server/internal/modules/commerce/provider/reward.go`
 
-- [ ] **Step 1：编写故障矩阵。** 在账号、投影、邀请码计数、关系、邀请人奖励、受邀人奖励各阶段注入失败，断言全部事实回滚。
-- [ ] **Step 2：使用 Platform Transactor。** Reader 编排锁定邀请码、创建账号/自动码/关系/投影，再调用 Commerce 奖励合同；Provider 参与现有事务，不自行提交。
-- [ ] **Step 3：保持幂等与锁序。** advisory lock 后依次锁 Reader 事实、Commerce 奖励事实和钱包；重复注册或奖励请求不能重复流水。
-- [ ] **Step 4：真实并发验证。** 覆盖同一邀请码并发、奖励冲突、嵌套错误被误吞及无半注册/单边奖励。
-- [ ] **Step 5：提交。** 提交信息：`重构邀请注册奖励事务`。
+- [x] **Step 1：编写故障矩阵。** 在账号、投影、邀请码计数、关系、邀请人奖励、受邀人奖励各阶段注入失败，断言全部事实回滚。
+- [x] **Step 2：使用 Platform Transactor。** Reader 编排锁定邀请码、创建账号/自动码/关系/投影，再调用 Commerce 奖励合同；Provider 参与现有事务，不自行提交。
+- [x] **Step 3：保持幂等与锁序。** advisory lock 后依次锁 Reader 事实、Commerce 奖励事实和钱包；重复注册或奖励请求不能重复流水。
+- [x] **Step 4：真实并发验证。** 覆盖同一邀请码并发、奖励冲突、嵌套错误被误吞及无半注册/单边奖励。
+- [x] **Step 5：提交。** 提交信息：`重构邀请注册奖励事务`。
 
 ## Task 9：重构点赞关系与 Novel 汇总原子事务
 
