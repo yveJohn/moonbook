@@ -41,6 +41,7 @@
 - M7 依赖与供应链审计确认当前三个应用镜像均为生产 No-Go：管理端 `vite-vue-path-map@1.0.2` 是已公告的 critical 恶意包且注入逻辑实际进入生产构建产物；Server 镜像由 Go 1.24.2 构建，`moonbook-server` 为 34 high/3 critical；管理端 Alpine 层为 30 high/2 critical；Reader 的 Alpine 层为 17 high/2 critical、Node 层为 32 high/3 critical。冻结 Reader 锁文件当前 npm audit 为 5 high，均可由 React Router 7.18.2 修复。恶意插件替换、依赖/基础镜像升级、SBOM、许可证和 CI 安全门仍待实施，详见 `docs/verification/m7-security-supply-chain-audit.md`。
 - M7 已在独立空库 Compose 项目建立公开读取入口的本地短时性能基线：网关 health 为 9859.95 RPS，API readiness 为 3924.92 RPS，Reader 书籍列表为 7984.91 RPS，Reader SSR 为 546.54 RPS，纳入报告的请求全部零失败，负载后依赖 readiness 和容器健康不变。该环境无业务数据、资源限额、鉴权路径、MinIO 正文、支付、Worker、持续压测或约 8 GB 副本，不能外推生产容量或关闭 M7 性能门，详见 `docs/verification/m7-performance-baseline.md`。
 - M7 后端质量基线在固定提交 `c88052f` 验证格式、Go 模块和 vet 通过，本地监听相关测试在允许回环监听后通过；但 `TestModuleDependencyRules` 确定发现 Reader、Commerce 与 Novel 之间 15 处跨域实现引用，扩展审计还确认至少 11 个实现文件直接读写其他模块拥有的数据，当前 CI 后端测试应失败。该缺口必须通过领域契约、组合根和跨域事务设计关闭，禁止跳过或放宽边界测试，详见 `docs/verification/m7-backend-quality-baseline.md`。
+- M7 已把上述违规归并为 9 类跨域工作流，固定 Reader 路由兼容、公开内容投影、账号商业视图、邀请注册奖励、个人内容投影、点赞汇总、Commerce 读者校验、首充奖励及购买报价的所有权和回归不变量；注册奖励、点赞、购买和首充奖励的同库事务语义不得在整改中弱化。该事实清单不批准实现方案，详见 `docs/verification/m7-module-boundary-workflow-inventory.md`。
 
 ## M1 已验证单元
 
