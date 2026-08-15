@@ -13,7 +13,7 @@
 | M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览及当前财务表迁移已实现；审计确认 Reader 真实支付创建、完整回调审计、财务全域核对和两个只读运营页签仍待补齐 |
 | M5 内容生产与长任务 | 实施中 | 论坛、TXT、清洗、摘要和画像 Worker 的租约续期、失租停止、重启接管与结果唯一性已通过真实 PostgreSQL/MinIO 验证；内容生产旧数据迁移映射仍待补齐 |
 | M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；新增 `moonbook-legacy-migrate all` 全量编排入口，真实 8GB 副本演练和完整差异报告仍待完成 |
-| M7 生产切换就绪验收 | 审计中 | 备份恢复与 Compose 升级已有命令级隔离演练；真实数据、监控告警、性能、安全、统一 CI 和最终报告仍存在明确缺口 |
+| M7 生产切换就绪验收 | 审计中 | 备份恢复、Compose 升级和空库短时性能基线已有隔离证据；真实数据容量、监控告警、安全、统一 CI 和最终报告仍存在明确缺口 |
 
 ## M0 已完成
 
@@ -39,6 +39,7 @@
 - M7 已完成一次双项目、独立命名卷的本地合成备份恢复演练，修正 MinIO 客户端挂载、稳定 SHA-256 清单、空库恢复顺序、一次性迁移调用和版本表名，并把财务核对命令纳入 Server 镜像；恢复后 106 张表、版本 58/59 条记录、1 个 43 字节对象与源端一致，迁移 `applied=0`、基础设施 healthy、财务 `mismatches=0`，完整 Compose 栈及三项健康入口通过。该证据只关闭命令级可执行性和基础启动冒烟，真实业务数据、协调停写、支付回调和认证业务旅程仍待完成，详见 `docs/verification/m7-backup-restore-rehearsal.md`。
 - M7 已新增固定 commit/tag/digest、配置与 Secret 门禁、升级前备份、一次性迁移、应用替换、冒烟和回退兼容边界明确的 Compose 升级 Runbook，并在 `3058fee` 到 `a8c209d` 两个固定 Server 镜像间完成隔离演练。升级迁移 `applied=0`，版本 58/59 条记录和 `sys_params` 夹具保持不变，目标镜像新增财务核对返回 `mismatches=0`，升级及应用镜像回退后的 gateway/API/Reader 健康均通过。该版本对无迁移差异，只关闭命令级升级和特定兼容回退缺口；真实业务、含迁移版本兼容、TLS/可信代理、资源限制和生产观察阈值仍待完成，详见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
 - M7 依赖与供应链审计确认当前三个应用镜像均为生产 No-Go：管理端 `vite-vue-path-map@1.0.2` 是已公告的 critical 恶意包且注入逻辑实际进入生产构建产物；Server 镜像由 Go 1.24.2 构建，`moonbook-server` 为 34 high/3 critical；管理端 Alpine 层为 30 high/2 critical；Reader 的 Alpine 层为 17 high/2 critical、Node 层为 32 high/3 critical。冻结 Reader 锁文件当前 npm audit 为 5 high，均可由 React Router 7.18.2 修复。恶意插件替换、依赖/基础镜像升级、SBOM、许可证和 CI 安全门仍待实施，详见 `docs/verification/m7-security-supply-chain-audit.md`。
+- M7 已在独立空库 Compose 项目建立公开读取入口的本地短时性能基线：网关 health 为 9859.95 RPS，API readiness 为 3924.92 RPS，Reader 书籍列表为 7984.91 RPS，Reader SSR 为 546.54 RPS，纳入报告的请求全部零失败，负载后依赖 readiness 和容器健康不变。该环境无业务数据、资源限额、鉴权路径、MinIO 正文、支付、Worker、持续压测或约 8 GB 副本，不能外推生产容量或关闭 M7 性能门，详见 `docs/verification/m7-performance-baseline.md`。
 
 ## M1 已验证单元
 

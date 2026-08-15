@@ -101,6 +101,8 @@ Compose 当前适合作为本地和单机基础，但尚没有经过升级/降�
 
 M7 必须基于目标容量建立可重复场景、阈值和报告，不能只用单请求功能测试推断生产性能。
 
+审计后进展：2026-08-15 已在隔离空库 Compose 项目建立四个公开读取入口的本地短时基线，网关 health、API readiness、Reader 书籍列表和 Reader SSR 均为零失败，负载后容器继续 healthy，详见 `docs/verification/m7-performance-baseline.md`。该基线没有鉴权、业务数据、MinIO 正文、支付、Worker、持续负载、资源限额或约 8 GB 数据副本，因此只能作为后续回归起点，不能关闭 M7 性能与容量退出门。
+
 ## 安全与合规缺口
 
 已有 Gitleaks、鉴权、CORS、回调验签和部分秘密脱敏证据，但最终安全门仍缺少：
