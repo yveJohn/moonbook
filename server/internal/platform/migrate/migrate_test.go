@@ -104,9 +104,54 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00056_reader_mock_recharge.sql",
 		"00057_reader_invite_edit.sql",
 		"00058_casbin_policy_unique.sql",
+		"00059_commerce_reader_search_projection.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestCommerceReaderSearchProjectionMigrationBoundary(t *testing.T) {
+	data, err := migrationFS.ReadFile("migrations/00059_commerce_reader_search_projection.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migration := string(data)
+
+	createTable := regexp.MustCompile(`(?is)CREATE\s+TABLE\s+commerce_reader_search_projection\s*\((.*?)\);`).FindStringSubmatch(migration)
+	if len(createTable) != 2 {
+		t.Fatal("commerce reader search projection table definition not found")
+	}
+	columnPattern := regexp.MustCompile(`(?m)^\s{4}([a-z][a-z0-9_]*)\s+(?:bigint|varchar\((?:16|64)\)|timestamptz)(?:\s|$)`)
+	matches := columnPattern.FindAllStringSubmatch(createTable[1], -1)
+	columns := make([]string, 0, len(matches))
+	for _, match := range matches {
+		columns = append(columns, match[1])
+	}
+	wantColumns := []string{"reader_id", "username", "nickname", "status", "created_at", "updated_at"}
+	if strings.Join(columns, ",") != strings.Join(wantColumns, ",") {
+		t.Fatalf("projection columns = %v, want %v", columns, wantColumns)
+	}
+
+	lower := strings.ToLower(migration)
+	for _, required := range []string{
+		"reader_id bigint primary key",
+		"commerce_reader_search_projection_username_not_blank",
+		"commerce_reader_search_projection_status_check",
+		"commerce_reader_search_projection_username_idx",
+		"commerce_reader_search_projection_nickname_idx",
+		"commerce_reader_search_projection_status_idx",
+		"insert into commerce_reader_search_projection",
+		"from reader_accounts",
+		"on conflict (reader_id) do update",
+		"moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(lower, required) {
+			t.Errorf("migration missing %q", required)
+		}
+	}
+	if strings.Contains(lower, "references reader_accounts") {
+		t.Fatal("projection must not create a cross-domain foreign key")
 	}
 }
 

@@ -77,12 +77,12 @@
 - Create: `server/internal/modules/commerce/readersearch/repository_integration_test.go`
 - Create: `server/internal/modules/commerce/provider/reader_search.go`
 
-- [ ] **Step 1：确认迁移最高版本。** 再次检查迁移目录最高版本仍为 `00058`；若已有更高迁移，停止并按真实最高版本顺延，禁止版本重复或倒序。
-- [ ] **Step 2：编写失败测试。** 静态测试要求表字段只含 `reader_id/username/nickname/status/created_at/updated_at`，无跨域外键，具备约束、查询索引和 forward-only 保护。
-- [ ] **Step 3：实现 `00059`。** 创建 `commerce_reader_search_projection` 并用 `INSERT ... SELECT ... ON CONFLICT DO UPDATE` 从 `reader_accounts` 幂等回填；迁移是唯一允许直接读取源表完成初始投影的边界。
-- [ ] **Step 4：实现 Commerce 自有仓储与 Adapter。** 提供幂等 upsert、按 ID 删除、分页快照、字段漂移比较所需读法；`commerce/provider/reader_search.go` 实现合同并添加编译期断言，运行时代码不得查询 `reader_accounts`。
-- [ ] **Step 5：真实迁移验证。** 分别验证空库迁移、已有账号升级、重复执行 `applied=0`、账号行数不减少、投影字段零差异。
-- [ ] **Step 6：验证并提交。** 运行迁移清单测试和 `go test ./internal/modules/commerce/readersearch -v`；提交信息：`新增交易域读者搜索投影`。
+- [x] **Step 1：确认迁移最高版本。** 再次检查迁移目录最高版本仍为 `00058`；若已有更高迁移，停止并按真实最高版本顺延，禁止版本重复或倒序。
+- [x] **Step 2：编写失败测试。** 静态测试要求表字段只含 `reader_id/username/nickname/status/created_at/updated_at`，无跨域外键，具备约束、查询索引和 forward-only 保护。
+- [x] **Step 3：实现 `00059`。** 创建 `commerce_reader_search_projection` 并用 `INSERT ... SELECT ... ON CONFLICT DO UPDATE` 从 `reader_accounts` 幂等回填；迁移是唯一允许直接读取源表完成初始投影的边界。
+- [x] **Step 4：实现 Commerce 自有仓储与 Adapter。** 提供幂等 upsert、按 ID 删除、分页快照、字段漂移比较所需读法；`commerce/provider/reader_search.go` 实现合同并添加编译期断言，运行时代码不得查询 `reader_accounts`。
+- [x] **Step 5：真实迁移验证。** 分别验证空库迁移、已有账号升级、重复执行 `applied=0`、账号行数不减少、投影字段零差异。
+- [x] **Step 6：验证并提交。** 运行迁移清单测试和 `go test ./internal/modules/commerce/readersearch -v`；提交信息：`新增交易域读者搜索投影`。
 
 ## Task 4：账号写流程与旧迁移同步投影
 
