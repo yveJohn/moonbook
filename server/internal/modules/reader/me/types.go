@@ -60,6 +60,7 @@ type PreferenceInput struct {
 
 type Repository interface {
 	ListBookshelf(context.Context, int64) ([]Bookshelf, error)
+	GetBookshelf(context.Context, int64, int64) (*Bookshelf, error)
 	AddBookshelf(context.Context, int64, int64) (Bookshelf, error)
 	RemoveBookshelf(context.Context, int64, int64) (bool, error)
 	ListLikes(context.Context, int64) ([]LikedBook, error)

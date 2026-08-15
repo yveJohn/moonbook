@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	novelcontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/contract"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -24,12 +25,20 @@ var contractTime = time.Date(2026, 8, 15, 1, 2, 3, 0, time.UTC)
 type contractRepo struct {
 	feedbackPage int
 	feedbackSize int
+	chapterName  string
 }
 
 func (r *contractRepo) ListBookshelf(context.Context, int64) ([]Bookshelf, error) {
+	r.chapterName = "最后一章"
 	return []Bookshelf{{
 		ID: contractMaxID, BookID: contractSafeID, BookName: "边界作品", AuthorName: "边界作者",
 	}}, nil
+}
+
+func (r *contractRepo) GetBookshelf(_ context.Context, _ int64, bookID int64) (*Bookshelf, error) {
+	r.chapterName = "最后一章"
+	chapterID, readAt := contractMaxID-1, contractTime
+	return &Bookshelf{ID: contractMaxID, BookID: bookID, LastChapterID: &chapterID, LastReadAt: &readAt}, nil
 }
 
 func (r *contractRepo) AddBookshelf(_ context.Context, _ int64, bookID int64) (Bookshelf, error) {
@@ -70,6 +79,7 @@ func (r *contractRepo) ListFeedbacks(_ context.Context, _ int64, page, size int)
 }
 
 func (r *contractRepo) ListHistory(context.Context, int64) ([]History, error) {
+	r.chapterName = "第二章"
 	return []History{{
 		ID: contractMaxID, BookID: contractSafeID, ChapterID: contractMaxID - 1, ChapterNo: 2,
 		ChapterName: "第二章", PositionType: "page", PositionValue: 3, ProgressPercent: "50.00",
@@ -103,7 +113,21 @@ func (r *contractRepo) UpdatePreference(_ context.Context, _ int64, input Prefer
 func TestReaderMeHTTPContractSnapshotsAndBoundaries(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &contractRepo{}
-	handler := NewHandler(NewService(repo))
+	display := &fakeDisplay{fn: func(request novelcontract.DisplayRequest) novelcontract.DisplayBatch {
+		batch := novelcontract.DisplayBatch{Books: make([]novelcontract.BookDisplay, len(request.BookIDs)), Chapters: make([]novelcontract.ChapterDisplay, len(request.ChapterIDs))}
+		for index, id := range request.BookIDs {
+			batch.Books[index] = novelcontract.BookDisplay{ID: id, Name: "边界作品", Author: "边界作者", Description: "简介", CategoryCode: "fantasy", CategoryName: "奇幻", WordCount: 123, LikeCount: 7, Found: true, Published: true}
+		}
+		for index, id := range request.ChapterIDs {
+			name := "第二章"
+			if id == contractMaxID-1 && repo.chapterName != "" {
+				name = repo.chapterName
+			}
+			batch.Chapters[index] = novelcontract.ChapterDisplay{ID: id, BookID: contractSafeID, Number: 2, Name: name, Found: true, Enabled: true}
+		}
+		return batch
+	}}
+	handler := NewHandler(NewService(repo, display))
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("reader.identity", readerauth.Identity{ReaderID: contractMaxID, SessionID: contractSafeID})

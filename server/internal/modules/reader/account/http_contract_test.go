@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -36,6 +37,21 @@ type accountContractRows struct {
 	index   int
 }
 
+type accountContractSummary struct{ fixed time.Time }
+
+func (stub accountContractSummary) Entitlements(_ context.Context, readerID int64) (commercecontract.EntitlementSummary, error) {
+	return commercecontract.EntitlementSummary{ReaderID: readerID, BookIDs: []int64{accountSafeID}, MembershipActive: true, MembershipPermanent: true}, nil
+}
+
+func (stub accountContractSummary) MembershipProducts(context.Context) ([]commercecontract.MembershipProduct, error) {
+	days := 30
+	return []commercecontract.MembershipProduct{{ID: accountMaxID, Name: "永久会员", PriceCoin: accountSafeID, AllowBonusCoin: true, DurationDays: &days, SaleStatus: "on_sale", SortOrder: 1, CreatedAt: stub.fixed, UpdatedAt: stub.fixed}}, nil
+}
+
+func (accountContractSummary) InviteRewardSummary(context.Context, int64) (commercecontract.InviteRewardSummary, error) {
+	return commercecontract.InviteRewardSummary{RegisterRewardCoin: accountSafeID, FirstRechargeRewardCoin: 100, TotalRewardCoin: accountMaxID}, nil
+}
+
 func (accountContractDriver) Open(string) (driver.Conn, error)  { return accountContractConn{}, nil }
 func (accountContractConn) Prepare(string) (driver.Stmt, error) { return nil, driver.ErrSkip }
 func (accountContractConn) Close() error                        { return nil }
@@ -47,27 +63,13 @@ func (accountContractTx) Commit() error   { return nil }
 func (accountContractTx) Rollback() error { return nil }
 
 func (accountContractConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
-	fixed := time.Date(2026, 8, 15, 5, 6, 7, 0, time.UTC)
 	switch {
-	case strings.Contains(query, "SELECT target_id FROM commerce_entitlements"):
-		return contractRows([]string{"target_id"}, []driver.Value{accountSafeID}), nil
-	case strings.Contains(query, "COALESCE(bool_or(permanent)"):
-		return contractRows([]string{"permanent", "expires_at"}, []driver.Value{true, nil}), nil
-	case strings.Contains(query, "SELECT id,product_type"):
-		return contractRows(
-			[]string{"id", "product_type", "target_id", "product_name", "price_coin", "allow_bonus_coin", "duration_days", "sale_status", "sort_order", "created_at", "updated_at"},
-			[]driver.Value{accountMaxID, "membership", int64(0), "永久会员", accountSafeID, true, int64(30), "on_sale", int64(1), fixed, fixed},
-		), nil
 	case strings.Contains(query, "SELECT code FROM reader_invite_codes"):
 		return contractRows([]string{"code"}, []driver.Value{"ACCOUNT-CONTRACT"}), nil
-	case strings.Contains(query, "SELECT invitee_reward_coin"):
-		return contractRows([]string{"invitee_reward_coin"}, []driver.Value{accountSafeID}), nil
 	case strings.Contains(query, "SELECT count(*) FROM reader_invite_relations"):
 		return contractRows([]string{"count"}, []driver.Value{accountSafeID}), nil
-	case strings.Contains(query, "SELECT COALESCE(sum(amount)"):
-		return contractRows([]string{"sum"}, []driver.Value{accountMaxID}), nil
 	default:
-		return nil, fmt.Errorf("unexpected account contract query: %s", query)
+		return nil, fmt.Errorf("unexpected Reader account query: %s", query)
 	}
 }
 
@@ -95,7 +97,8 @@ func TestAccountHTTPContractKeepsEntitlementProductAndInviteLongValues(t *testin
 	}
 	defer db.Close()
 	gin.SetMode(gin.TestMode)
-	handler := &Handler{db: db}
+	summary := accountContractSummary{fixed: time.Date(2026, 8, 15, 5, 6, 7, 0, time.UTC)}
+	handler := &Handler{db: db, summary: summary, rewards: summary}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("reader.identity", readerauth.Identity{ReaderID: accountMaxID, SessionID: accountSafeID})

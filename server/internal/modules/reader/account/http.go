@@ -4,9 +4,8 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
-	"time"
 
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
@@ -19,10 +18,14 @@ type response struct {
 	Data any    `json:"data,omitempty"`
 }
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db      *sql.DB
+	summary commercecontract.ReaderAccountSummary
+	rewards commercecontract.InviteRewardReader
+}
 
-func RegisterRoutes(group *gin.RouterGroup, db *sql.DB, auth *readerauth.Service) {
-	h := &Handler{db: db}
+func RegisterRoutes(group *gin.RouterGroup, db *sql.DB, auth *readerauth.Service, summary commercecontract.ReaderAccountSummary, rewards commercecontract.InviteRewardReader) {
+	h := &Handler{db: db, summary: summary, rewards: rewards}
 	r := group.Group("/reader").Use(readerauth.RequireReader(auth))
 	r.GET("/me/entitlements", h.entitlements)
 	r.GET("/products/membership", h.membershipProducts)
@@ -48,70 +51,35 @@ func (h *Handler) entitlements(c *gin.Context) {
 		accountError(c, nil)
 		return
 	}
-	out := map[string]any{"readerId": strconv.FormatInt(rid, 10), "bookIds": []string{}, "membershipActive": false, "membershipPermanent": false, "membershipExpireTime": nil}
-	rows, err := h.db.QueryContext(c, `SELECT target_id FROM commerce_entitlements WHERE reader_id=$1 AND entitlement_type='book' AND status='active' AND starts_at<=now() AND (permanent OR expires_at>now()) ORDER BY target_id`, rid)
+	summary, err := h.summary.Entitlements(c, rid)
 	if err != nil {
 		accountError(c, err)
 		return
 	}
-	defer rows.Close()
-	books := make([]string, 0)
-	for rows.Next() {
-		var id int64
-		if err = rows.Scan(&id); err != nil {
-			accountError(c, err)
-			return
-		}
+	books := make([]string, 0, len(summary.BookIDs))
+	for _, id := range summary.BookIDs {
 		books = append(books, strconv.FormatInt(id, 10))
 	}
-	if err = rows.Err(); err != nil {
-		accountError(c, err)
-		return
-	}
-	out["bookIds"] = books
-	var permanent bool
-	var expire sql.NullTime
-	err = h.db.QueryRowContext(c, `SELECT COALESCE(bool_or(permanent),false), max(expires_at) FROM commerce_membership_grants WHERE reader_id=$1 AND status='active' AND starts_at<=now() AND (permanent OR expires_at>now())`, rid).Scan(&permanent, &expire)
-	if err != nil {
-		accountError(c, err)
-		return
-	}
-	out["membershipPermanent"] = permanent
-	out["membershipActive"] = permanent || expire.Valid
-	if expire.Valid {
-		out["membershipExpireTime"] = readerwire.DateTime(expire.Time)
+	out := map[string]any{"readerId": strconv.FormatInt(summary.ReaderID, 10), "bookIds": books, "membershipActive": summary.MembershipActive, "membershipPermanent": summary.MembershipPermanent, "membershipExpireTime": nil}
+	if summary.MembershipExpiresAt != nil {
+		out["membershipExpireTime"] = readerwire.DateTime(*summary.MembershipExpiresAt)
 	}
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: out})
 }
 
 func (h *Handler) membershipProducts(c *gin.Context) {
-	rows, err := h.db.QueryContext(c, `SELECT id,product_type,COALESCE(target_id,0),product_name,price_coin,allow_bonus_coin,duration_days,sale_status,sort_order,created_at,updated_at FROM commerce_products WHERE product_type='membership' AND sale_status='on_sale' ORDER BY sort_order,id`)
+	products, err := h.summary.MembershipProducts(c)
 	if err != nil {
 		accountError(c, err)
 		return
 	}
-	defer rows.Close()
-	out := make([]map[string]any, 0)
-	for rows.Next() {
-		var id, target, price int64
-		var typ, name, status string
-		var bonus bool
-		var days sql.NullInt64
-		var sort int
-		var created, updated time.Time
-		if err = rows.Scan(&id, &typ, &target, &name, &price, &bonus, &days, &status, &sort, &created, &updated); err != nil {
-			accountError(c, err)
-			return
-		}
+	out := make([]map[string]any, 0, len(products))
+	for _, product := range products {
 		var duration any
-		if days.Valid {
-			duration = int(days.Int64)
+		if product.DurationDays != nil {
+			duration = *product.DurationDays
 		}
-		out = append(out, map[string]any{"id": strconv.FormatInt(id, 10), "productType": typ, "targetId": nil, "productName": name, "priceCoin": strconv.FormatInt(price, 10), "allowBonusCoin": bonus, "durationDays": duration, "saleStatus": status, "sortOrder": sort, "remark": "", "createTime": readerwire.DateTime(created), "updateTime": readerwire.DateTime(updated)})
-	}
-	if err = rows.Err(); err != nil {
-		accountError(c, err)
-		return
+		out = append(out, map[string]any{"id": strconv.FormatInt(product.ID, 10), "productType": "membership", "targetId": nil, "productName": product.Name, "priceCoin": strconv.FormatInt(product.PriceCoin, 10), "allowBonusCoin": product.AllowBonusCoin, "durationDays": duration, "saleStatus": product.SaleStatus, "sortOrder": product.SortOrder, "remark": "", "createTime": readerwire.DateTime(product.CreatedAt), "updateTime": readerwire.DateTime(product.UpdatedAt)})
 	}
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: out})
 }
@@ -141,13 +109,16 @@ func (h *Handler) inviteDashboard(c *gin.Context) {
 		accountError(c, err)
 		return
 	}
-	var registerReward int64
-	firstRecharge := invitereward.FirstRechargeRewardCoin
-	_ = h.db.QueryRowContext(c, `SELECT invitee_reward_coin FROM reader_invite_reward_config WHERE id=1 AND enabled`).Scan(&registerReward)
+	rewards, err := h.rewards.InviteRewardSummary(c, rid)
+	if err != nil {
+		accountError(c, err)
+		return
+	}
 	var invited int64
-	_ = h.db.QueryRowContext(c, `SELECT count(*) FROM reader_invite_relations WHERE inviter_reader_id=$1 AND status='active'`, rid).Scan(&invited)
-	var total int64
-	_ = h.db.QueryRowContext(c, `SELECT COALESCE(sum(amount),0) FROM reader_wallet_ledgers WHERE reader_id=$1 AND biz_type IN ('invite_reward','invite_first_recharge_reward') AND coin_type='bonus' AND direction='income'`, rid).Scan(&total)
-	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": "邀请你加入月白书城，点击 {{link}} 注册", "registerRewardCoin": strconv.FormatInt(registerReward, 10), "firstRechargeRewardCoin": strconv.FormatInt(firstRecharge, 10), "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(total, 10), "rewards": []any{}}
+	if err := h.db.QueryRowContext(c, `SELECT count(*) FROM reader_invite_relations WHERE inviter_reader_id=$1 AND status='active'`, rid).Scan(&invited); err != nil {
+		accountError(c, err)
+		return
+	}
+	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": "邀请你加入月白书城，点击 {{link}} 注册", "registerRewardCoin": strconv.FormatInt(rewards.RegisterRewardCoin, 10), "firstRechargeRewardCoin": strconv.FormatInt(rewards.FirstRechargeRewardCoin, 10), "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(rewards.TotalRewardCoin, 10), "rewards": []any{}}
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: data})
 }

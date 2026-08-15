@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
+	novelprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/provider"
 )
 
 func TestReaderMePostgresReaderIsolation(t *testing.T) {
@@ -49,7 +50,7 @@ func TestReaderMePostgresReaderIsolation(t *testing.T) {
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_authors WHERE id=$1`, author)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_categories WHERE id=$1`, category)
 	})
-	service := NewService(SQLRepository{DB: db})
+	service := NewService(SQLRepository{DB: db}, novelprovider.NewDisplay(db))
 	if _, err := service.AddBookshelf(ctx, reader1, book); err != nil {
 		t.Fatalf("add bookshelf: %v", err)
 	}
