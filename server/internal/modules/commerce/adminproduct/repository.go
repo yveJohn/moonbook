@@ -79,9 +79,6 @@ func (r SQLRepository) Create(ctx context.Context, in Input) (Product, error) {
 	if err != nil {
 		return Product{}, err
 	}
-	if err := r.validateTarget(ctx, in); err != nil {
-		return Product{}, err
-	}
 	var p Product
 	err = scan(r.DB.QueryRowContext(ctx, `INSERT INTO commerce_products(product_type,target_id,product_name,price_coin,allow_bonus_coin,duration_days,sale_status,sort_order,source_type,source_ref) VALUES($1,NULLIF($2,'')::bigint,$3,$4,$5,$6,$7,$8,'manual','admin') RETURNING id::text,product_type,COALESCE(target_id::text,''),product_name,price_coin::text,allow_bonus_coin,duration_days,sale_status,sort_order,source_type,source_ref`, in.ProductType, in.TargetID, in.ProductName, in.PriceCoin, in.AllowBonusCoin, in.DurationDays, in.SaleStatus, in.SortOrder), &p)
 	return p, err
@@ -111,34 +108,12 @@ func (r SQLRepository) Update(ctx context.Context, id int64, in Input) (Product,
 			return Product{}, apperror.New(apperror.CodeConflict, http.StatusConflict, "已有消费订单引用该商品，不能修改商品类型或目标")
 		}
 	}
-	if err := r.validateTarget(ctx, in); err != nil {
-		return Product{}, err
-	}
 	var p Product
 	err = scan(r.DB.QueryRowContext(ctx, `UPDATE commerce_products SET product_type=$1,target_id=NULLIF($2,'')::bigint,product_name=$3,price_coin=$4,allow_bonus_coin=$5,duration_days=$6,sale_status=$7,sort_order=$8,updated_at=now() WHERE id=$9 RETURNING id::text,product_type,COALESCE(target_id::text,''),product_name,price_coin::text,allow_bonus_coin,duration_days,sale_status,sort_order,source_type,source_ref`, in.ProductType, in.TargetID, in.ProductName, in.PriceCoin, in.AllowBonusCoin, in.DurationDays, in.SaleStatus, in.SortOrder, id), &p)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Product{}, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "商品不存在")
 	}
 	return p, err
-}
-
-func (r SQLRepository) validateTarget(ctx context.Context, in Input) error {
-	if in.ProductType != "book" && in.ProductType != "chapter" {
-		return nil
-	}
-	target, _ := strconv.ParseInt(in.TargetID, 10, 64)
-	table := "novel_books"
-	if in.ProductType == "chapter" {
-		table = "novel_chapters"
-	}
-	var exists bool
-	if err := r.DB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+table+` WHERE id=$1 AND deleted_at IS NULL)`, target).Scan(&exists); err != nil {
-		return err
-	}
-	if !exists {
-		return apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "商品目标不存在")
-	}
-	return nil
 }
 
 func (r SQLRepository) Delete(ctx context.Context, id int64) error {

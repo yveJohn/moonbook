@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/purchase"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/recharge"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
+	novelcontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/contract"
+	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
 )
 
 type checkinRepositoryStub struct{ err error }
@@ -65,23 +68,49 @@ type purchaseRepositoryStub struct {
 	product, chapter, price, book string
 }
 
-func (stub *purchaseRepositoryStub) BuyMembership(_ context.Context, _ int64, product, _ string) (purchase.Order, error) {
-	stub.product = product
-	return purchase.Order{ID: "11", ReaderID: "7", ProductID: product, PriceCoin: "9"}, stub.err
+func (stub *purchaseRepositoryStub) LockIdempotency(context.Context, int64) error { return nil }
+func (stub *purchaseRepositoryStub) FindOrder(context.Context, int64, string) (purchase.Order, error) {
+	return purchase.Order{}, sql.ErrNoRows
 }
-func (stub *purchaseRepositoryStub) BuyChapter(_ context.Context, _ int64, chapter, price, _ string) (purchase.ChapterResult, error) {
-	stub.chapter, stub.price = chapter, price
-	order := purchase.Order{ID: "12", ReaderID: "7", TargetID: chapter, PriceCoin: price}
-	return purchase.ChapterResult{PurchaseStatus: "paid", Quote: purchase.ChapterQuote{ChapterID: chapter, BookID: "5", CoinUnit: "2", PriceCoin: price}, Order: &order}, stub.err
+func (stub *purchaseRepositoryStub) BuyMembership(_ context.Context, _ int64, product int64, _ string) (purchase.Order, error) {
+	stub.product = strconv.FormatInt(product, 10)
+	return purchase.Order{ID: "11", ReaderID: "7", ProductID: stub.product, PriceCoin: "9"}, stub.err
 }
-func (stub *purchaseRepositoryStub) BuyBook(_ context.Context, _ int64, book, price string) (purchase.Order, error) {
-	stub.book, stub.price = book, price
+func (stub *purchaseRepositoryStub) BuyChapter(_ context.Context, _ int64, snapshot novelcontract.PurchaseSnapshot, price int64, _ string) (purchase.ChapterResult, error) {
+	stub.chapter, stub.price = strconv.FormatInt(snapshot.TargetID, 10), strconv.FormatInt(price, 10)
+	order := purchase.Order{ID: "12", ReaderID: "7", TargetID: stub.chapter, PriceCoin: stub.price}
+	return purchase.ChapterResult{PurchaseStatus: "paid", Quote: purchase.ChapterQuote{ChapterID: stub.chapter, BookID: "5", CoinUnit: "2", PriceCoin: stub.price}, Order: &order}, stub.err
+}
+func (stub *purchaseRepositoryStub) BuyBook(_ context.Context, _ int64, snapshot novelcontract.PurchaseSnapshot, price int64, _ string) (purchase.Order, error) {
+	stub.book, stub.price = strconv.FormatInt(snapshot.TargetID, 10), strconv.FormatInt(price, 10)
 	return purchase.Order{}, stub.err
+}
+
+type purchaseTransactor struct{}
+
+func (purchaseTransactor) Within(ctx context.Context, callback func(context.Context) error) error {
+	return callback(ctx)
+}
+
+type purchaseReader struct{}
+
+func (purchaseReader) LockAccount(_ context.Context, readerID int64) (readercontract.Account, error) {
+	return readercontract.Account{ID: readerID, Status: "enabled"}, nil
+}
+
+type purchaseNovel struct{}
+
+func (purchaseNovel) LockPurchaseSnapshot(_ context.Context, targetType string, targetID int64) (novelcontract.PurchaseSnapshot, error) {
+	bookID := targetID
+	if targetType == "chapter" {
+		bookID = 5
+	}
+	return novelcontract.PurchaseSnapshot{Type: targetType, TargetID: targetID, BookID: bookID, Enabled: true}, nil
 }
 
 func TestPurchaseProviderConvertsLongValuesAndErrors(t *testing.T) {
 	repository := &purchaseRepositoryStub{}
-	provider := NewPurchase(purchase.NewService(repository))
+	provider := NewPurchase(purchase.NewService(repository, purchaseTransactor{}, purchaseReader{}, purchaseNovel{}))
 	order, err := provider.BuyMembership(context.Background(), 7, 9007199254740993, "request")
 	if err != nil || repository.product != "9007199254740993" || order.ID != 11 || order.ProductID == nil || *order.ProductID != 9007199254740993 {
 		t.Fatalf("order=%+v repository=%+v err=%v", order, repository, err)
