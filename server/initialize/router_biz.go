@@ -45,6 +45,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/commercecompat"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	readerme "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/me"
+	readerprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/provider"
 	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
@@ -81,6 +82,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	readerme.RegisterRoutes(publicGroup, readerme.NewService(readerme.SQLRepository{DB: db}, display, transactor, likes, likes), readerService)
 	accountSummary := commerceprovider.NewAccountSummary(db)
 	readeraccount.RegisterRoutes(publicGroup, db, readerService, accountSummary, accountSummary)
+	readerAccounts := readerprovider.NewAccount(db)
 	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
 	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewService(recharge.SQLRepository{DB: db})), readerService)
 	commercecompat.RegisterCheckinRoutes(publicGroup, commerceprovider.NewCheckin(checkin.NewService(checkin.SQLRepository{DB: db})), readerService)
@@ -88,12 +90,12 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	payment.RegisterRoutes(publicGroup, payment.NewService(payment.SQLRepository{DB: db}, os.Getenv("MOONBOOK_EPUSDT_PID"), os.Getenv("MOONBOOK_EPUSDT_SECRET")))
 	adminrecharge.RegisterRoutes(privateGroup, adminrecharge.NewService(adminrecharge.SQLRepository{DB: db}))
 	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))
-	adminorder.RegisterRoutes(privateGroup, adminorder.NewService(adminorder.SQLRepository{DB: db}))
-	adminmembership.RegisterRoutes(privateGroup, adminmembership.NewService(adminmembership.SQLRepository{DB: db}))
+	adminorder.RegisterRoutes(privateGroup, adminorder.NewService(adminorder.SQLRepository{DB: db}, transactor, readerAccounts))
+	adminmembership.RegisterRoutes(privateGroup, adminmembership.NewService(adminmembership.SQLRepository{DB: db}, transactor, readerAccounts))
 	admininvitereward.RegisterRoutes(privateGroup, admininvitereward.NewService(admininvitereward.SQLRepository{DB: db}))
 	adminproduct.RegisterRoutes(privateGroup, adminproduct.NewService(adminproduct.SQLRepository{DB: db}))
-	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db}))
-	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}))
+	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db}, transactor, readerAccounts))
+	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}, transactor, readerAccounts))
 	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}, transactor, readerSearch, accountConsistency))
 	adminfeedback.RegisterRoutes(privateGroup, adminfeedback.NewService(adminfeedback.SQLRepository{DB: db}))
 	admininvite.RegisterRoutes(privateGroup, admininvite.NewService(admininvite.SQLRepository{DB: db}))

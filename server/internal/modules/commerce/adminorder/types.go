@@ -22,3 +22,7 @@ type Repository interface {
 	CreateMockRecharge(context.Context, MockRechargeInput, int64) (Order, error)
 	ConfirmMockRecharge(context.Context, int64, int64) (Order, error)
 }
+
+type Transactor interface {
+	Within(context.Context, func(context.Context) error) error
+}

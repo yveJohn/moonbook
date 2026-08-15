@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
 type SQLRepository struct{ DB *sql.DB }
@@ -17,12 +18,12 @@ type SQLRepository struct{ DB *sql.DB }
 var ErrInvalidAdjustment = errors.New("invalid wallet adjustment")
 
 func (r SQLRepository) ListWallets(ctx context.Context, keyword string, page, size int) ([]Wallet, int64, error) {
-	where := ` WHERE ($1='' OR a.username ILIKE '%'||$1||'%' OR a.nickname ILIKE '%'||$1||'%')`
+	where := ` WHERE ($1='' OR p.username ILIKE '%'||$1||'%' OR p.nickname ILIKE '%'||$1||'%')`
 	var total int64
-	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM reader_accounts a LEFT JOIN reader_wallets w ON w.reader_id=a.id`+where, keyword).Scan(&total); err != nil {
+	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM commerce_reader_search_projection p LEFT JOIN reader_wallets w ON w.reader_id=p.reader_id`+where, keyword).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := r.DB.QueryContext(ctx, `SELECT a.id::text,a.username,COALESCE(w.recharge_coin_balance,0)::text,COALESCE(w.bonus_coin_balance,0)::text,COALESCE(w.total_recharge_coin_income,0)::text,COALESCE(w.total_bonus_coin_income,0)::text,COALESCE(w.total_recharge_coin_expense,0)::text,COALESCE(w.total_bonus_coin_expense,0)::text FROM reader_accounts a LEFT JOIN reader_wallets w ON w.reader_id=a.id`+where+` ORDER BY a.id DESC LIMIT $2 OFFSET $3`, keyword, size, (page-1)*size)
+	rows, err := r.DB.QueryContext(ctx, `SELECT p.reader_id::text,p.username,COALESCE(w.recharge_coin_balance,0)::text,COALESCE(w.bonus_coin_balance,0)::text,COALESCE(w.total_recharge_coin_income,0)::text,COALESCE(w.total_bonus_coin_income,0)::text,COALESCE(w.total_recharge_coin_expense,0)::text,COALESCE(w.total_bonus_coin_expense,0)::text FROM commerce_reader_search_projection p LEFT JOIN reader_wallets w ON w.reader_id=p.reader_id`+where+` ORDER BY p.reader_id DESC LIMIT $2 OFFSET $3`, keyword, size, (page-1)*size)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -73,25 +74,17 @@ func (r SQLRepository) Adjust(ctx context.Context, in AdjustmentInput) (Adjustme
 	if err != nil || amount <= 0 {
 		return Adjustment{}, ErrInvalidAdjustment
 	}
-	tx, err := r.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return Adjustment{}, err
-	}
-	defer tx.Rollback()
-	var accountID int64
-	if err = tx.QueryRowContext(ctx, `SELECT id FROM reader_accounts WHERE id=$1 FOR UPDATE`, readerID).Scan(&accountID); err != nil {
-		return Adjustment{}, err
+	executor := transaction.Executor(ctx, r.DB)
+	if executor == r.DB {
+		return Adjustment{}, transaction.ErrNoTransaction
 	}
 	key := fmt.Sprintf("admin_wallet:%d:%s", readerID, in.RequestID)
 	ledgerNo := fmt.Sprintf("AW-%d-%d", readerID, time.Now().UnixNano())
-	ledger, err := wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: readerID, Amount: amount, CoinType: in.CoinType, Direction: in.Direction, LedgerNo: ledgerNo, BizType: "wallet_adjustment", BizID: &key, Remark: &in.Reason, IdempotencyKey: &key})
+	ledger, err := wallet.MutateTx(ctx, executor, wallet.Mutation{ReaderID: readerID, Amount: amount, CoinType: in.CoinType, Direction: in.Direction, LedgerNo: ledgerNo, BizType: "wallet_adjustment", BizID: &key, Remark: &in.Reason, IdempotencyKey: &key})
 	if err != nil {
 		return Adjustment{}, err
 	}
-	if err = tx.Commit(); err != nil {
-		return Adjustment{}, err
-	}
-	return Adjustment{ReaderID: strconv.FormatInt(accountID, 10), RequestID: in.RequestID, Ledger: fromWalletLedger(ledger)}, nil
+	return Adjustment{ReaderID: strconv.FormatInt(readerID, 10), RequestID: in.RequestID, Ledger: fromWalletLedger(ledger)}, nil
 }
 
 func fromWalletLedger(v wallet.Ledger) Ledger {

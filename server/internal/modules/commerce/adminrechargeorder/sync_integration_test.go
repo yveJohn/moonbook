@@ -21,7 +21,11 @@ func TestPaymentSyncSettlesVerifiedGatewayResponseAndIsIdempotent(t *testing.T) 
 	base := time.Now().UnixNano()
 	readerID, orderID := base, base+1
 	orderNo := "SYNC-" + integrationtest.Prefix()
-	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash,status) VALUES($1,$2,'fixture','enabled')`, readerID, "sync-"+integrationtest.Prefix()); err != nil {
+	username := "sync-" + integrationtest.Prefix()
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash,status) VALUES($1,$2,'fixture','enabled')`, readerID, username); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO commerce_reader_search_projection(reader_id,username,nickname,status) VALUES($1,$2,'','enabled')`, readerID, username); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_recharge_orders(id,order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status) VALUES($1,$2,$3,$4,'custom',19,'2.00','epusdt','usd','usdt','tron','pending')`, orderID, orderNo, readerID, "request-"+integrationtest.Prefix()); err != nil {

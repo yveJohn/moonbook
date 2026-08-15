@@ -26,3 +26,7 @@ type Repository interface {
 	ListLedgers(context.Context, int64, string, int, int) ([]Ledger, int64, error)
 	Adjust(context.Context, AdjustmentInput) (Adjustment, error)
 }
+
+type Transactor interface {
+	Within(context.Context, func(context.Context) error) error
+}

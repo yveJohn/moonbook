@@ -12,6 +12,8 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminorder"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminrechargeorder"
+	readerprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/provider"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
 func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
@@ -25,6 +27,9 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash) VALUES($1,$2,'fixture'),($3,$4,'fixture')`, inviterID, "cross-inviter-"+suffix, inviteeID, "cross-invitee-"+suffix); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO commerce_reader_search_projection(reader_id,username,nickname,status) VALUES($1,$2,'','enabled'),($3,$4,'','enabled')`, inviterID, "cross-inviter-"+suffix, inviteeID, "cross-invitee-"+suffix); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status) VALUES($1,$2,$3,'enabled')`, inviteCodeID, "CROSS-"+suffix, inviterID); err != nil {
 		t.Fatal(err)
 	}
@@ -35,8 +40,10 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manualRepo := adminrechargeorder.SQLRepository{DB: db}
-	if _, err := manualRepo.ManualPay(ctx, rechargeOrderID, adminrechargeorder.ManualPayInput{
+	transactor := transaction.New(db)
+	readerAccounts := readerprovider.NewAccount(db)
+	manualService := adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db}, transactor, readerAccounts)
+	if _, err := manualService.ManualPay(ctx, rechargeOrderID, adminrechargeorder.ManualPayInput{
 		RequestID:      "cross-manual-request-" + suffix,
 		GatewayTradeID: "cross-manual-trade-" + suffix,
 		ActualAmount:   "1.00",
@@ -45,7 +52,7 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mockService := adminorder.NewService(adminorder.SQLRepository{DB: db})
+	mockService := adminorder.NewService(adminorder.SQLRepository{DB: db}, transactor, readerAccounts)
 	mockOrder, err := mockService.CreateMockRecharge(ctx, adminorder.MockRechargeInput{
 		ReaderID:           fmt.Sprint(inviteeID),
 		RechargeCoinAmount: "25",

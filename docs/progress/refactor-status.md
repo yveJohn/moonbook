@@ -218,6 +218,7 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 修复严格 CORS 管理端白名单配置：新增必填 `MOONBOOK_ADMIN_ORIGIN`，与 `MOONBOOK_READER_ORIGIN` 一并注入配置模板和 Compose；配置合同、运行时 CORS 测试、Shell 语法和 Compose 模型通过，可信管理 Origin 验证码接口返回 200，非白名单 Origin 返回 403。部署文档明确要求填写协议、主机和端口完整一致的浏览器 Origin。
 - 新增前向迁移 `00058` 清理历史迁移 `00042`/`00043` 产生的完全重复 Casbin 策略，并建立覆盖 `ptype,v0-v5` 的唯一索引，避免 Gorm Casbin 适配器初始化索引失败后导致鉴权 500。真实 PostgreSQL 验证重复策略组为 0、唯一索引存在、首次迁移成功且重跑 `applied=0`；迁移清单测试通过。该修复不修改任何已执行历史迁移。
 - 完成 M4 退出证据审计：现有支付测试仅证明成功回调幂等，Reader 下单没有网关创建调用，`creating/create_failed/gateway_unknown/superseded/expired/callback_exception` 状态路径及并发回调尚无完整证据；`commerce/reconcile.Wallets` 只核对钱包而非订单、支付和权益全域。旧管理 API 中两个未被旧页面调用的签到/邀请奖励记录查询已由用户选择补为可见审计页签，仍需按设计门槛实施。M4 保持实施中，详见 `docs/verification/m4-exit-audit.md`。
+- 完成 Commerce 管理端 Reader 查询边界整改：消费订单、充值订单和钱包列表全部改读 `commerce_reader_search_projection`，钱包列表可显示尚无钱包事实的读者；会员发放、模拟充值、人工补单和钱包调账通过实时 Reader Provider 加入平台事务并按统一锁序校验账号。真实 PostgreSQL 已覆盖筛选分页、幂等、余额保护、禁用/删除账号拒绝和失败无业务事实，Reader/Commerce 定向测试、模块宽范围测试、`go vet` 与依赖静态门均通过。
 
 ## M5 当前进度
 

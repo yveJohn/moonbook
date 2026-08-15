@@ -16,3 +16,7 @@ type Input struct {
 type Repository interface {
 	Grant(context.Context, int64, Input) (Grant, error)
 }
+
+type Transactor interface {
+	Within(context.Context, func(context.Context) error) error
+}

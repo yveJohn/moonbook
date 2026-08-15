@@ -12,20 +12,21 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
 type SQLRepository struct{ DB *sql.DB }
 
-const orderSelect = `SELECT o.id::text,o.reader_id::text,a.username,o.order_no,o.order_type,COALESCE(o.product_id::text,''),o.product_type,COALESCE(o.target_id::text,''),COALESCE(o.book_id_snapshot::text,''),o.product_name_snapshot,o.price_coin_snapshot::text,COALESCE(o.chapter_word_count_snapshot::text,''),COALESCE(o.pricing_word_unit_snapshot::text,''),COALESCE(o.pricing_coin_unit_snapshot::text,''),o.recharge_coin_amount::text,o.bonus_coin_amount::text,o.status,o.idempotency_key,COALESCE(o.remark,''),o.paid_time,o.created_at,o.updated_at FROM reader_purchase_orders o JOIN reader_accounts a ON a.id=o.reader_id`
+const orderSelect = `SELECT o.id::text,o.reader_id::text,p.username,o.order_no,o.order_type,COALESCE(o.product_id::text,''),o.product_type,COALESCE(o.target_id::text,''),COALESCE(o.book_id_snapshot::text,''),o.product_name_snapshot,o.price_coin_snapshot::text,COALESCE(o.chapter_word_count_snapshot::text,''),COALESCE(o.pricing_word_unit_snapshot::text,''),COALESCE(o.pricing_coin_unit_snapshot::text,''),o.recharge_coin_amount::text,o.bonus_coin_amount::text,o.status,o.idempotency_key,COALESCE(o.remark,''),o.paid_time,o.created_at,o.updated_at FROM reader_purchase_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`
 
 func scan(row interface{ Scan(...any) error }, o *Order) error {
 	return row.Scan(&o.ID, &o.ReaderID, &o.ReaderUsername, &o.OrderNo, &o.OrderType, &o.ProductID, &o.ProductType, &o.TargetID, &o.BookIDSnapshot, &o.ProductName, &o.PriceCoin, &o.ChapterWordCount, &o.PricingWordUnit, &o.PricingCoinUnit, &o.RechargeCoinAmount, &o.BonusCoinAmount, &o.Status, &o.IdempotencyKey, &o.Remark, &o.PaidAt, &o.CreatedAt, &o.UpdatedAt)
 }
 
 func (r SQLRepository) List(ctx context.Context, keyword, orderType, status string, page, size int) ([]Order, int64, error) {
-	where := ` WHERE ($1='' OR o.order_no ILIKE '%'||$1||'%' OR a.username ILIKE '%'||$1||'%') AND ($2='' OR o.order_type=$2) AND ($3='' OR o.status=$3)`
+	where := ` WHERE ($1='' OR o.order_no ILIKE '%'||$1||'%' OR p.username ILIKE '%'||$1||'%') AND ($2='' OR o.order_type=$2) AND ($3='' OR o.status=$3)`
 	var total int64
-	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM reader_purchase_orders o JOIN reader_accounts a ON a.id=o.reader_id`+where, keyword, orderType, status).Scan(&total); err != nil {
+	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM reader_purchase_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`+where, keyword, orderType, status).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := r.DB.QueryContext(ctx, orderSelect+where+` ORDER BY o.created_at DESC,o.id DESC LIMIT $4 OFFSET $5`, keyword, orderType, status, size, (page-1)*size)
@@ -49,7 +50,7 @@ func (r SQLRepository) Get(ctx context.Context, id int64) (Order, error) {
 		return Order{}, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串")
 	}
 	var o Order
-	err := scan(r.DB.QueryRowContext(ctx, orderSelect+` WHERE o.id=$1`, id), &o)
+	err := scan(transaction.Executor(ctx, r.DB).QueryRowContext(ctx, orderSelect+` WHERE o.id=$1`, id), &o)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Order{}, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "消费订单不存在")
 	}
@@ -65,25 +66,15 @@ func (r SQLRepository) CreateMockRecharge(ctx context.Context, in MockRechargeIn
 	if err != nil {
 		return Order{}, err
 	}
-	tx, err := r.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return Order{}, err
-	}
-	defer tx.Rollback()
-	var exists bool
-	if err = tx.QueryRowContext(ctx, `SELECT true FROM reader_accounts WHERE id=$1 FOR KEY SHARE`, readerID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
-		return Order{}, apperror.New(apperror.CodeNotFound, http.StatusNotFound, "读者不存在")
-	} else if err != nil {
-		return Order{}, err
+	executor := transaction.Executor(ctx, r.DB)
+	if executor == r.DB {
+		return Order{}, transaction.ErrNoTransaction
 	}
 	key := "mock_recharge_create:" + in.RequestID
 	orderNo := fmt.Sprintf("MR-%d-%d", readerID, time.Now().UnixNano())
 	var orderID int64
-	err = tx.QueryRowContext(ctx, `INSERT INTO reader_purchase_orders(order_no,reader_id,order_type,product_type,product_name_snapshot,price_coin_snapshot,recharge_coin_amount,bonus_coin_amount,status,idempotency_key,remark,operator_id) VALUES($1,$2,'mock_recharge','recharge','模拟充值',$3,$3,0,'pending',$4,$5,$6) ON CONFLICT(reader_id,idempotency_key) DO UPDATE SET updated_at=reader_purchase_orders.updated_at RETURNING id`, orderNo, readerID, amount, key, in.Remark, operatorID).Scan(&orderID)
+	err = executor.QueryRowContext(ctx, `INSERT INTO reader_purchase_orders(order_no,reader_id,order_type,product_type,product_name_snapshot,price_coin_snapshot,recharge_coin_amount,bonus_coin_amount,status,idempotency_key,remark,operator_id) VALUES($1,$2,'mock_recharge','recharge','模拟充值',$3,$3,0,'pending',$4,$5,$6) ON CONFLICT(reader_id,idempotency_key) DO UPDATE SET updated_at=reader_purchase_orders.updated_at RETURNING id`, orderNo, readerID, amount, key, in.Remark, operatorID).Scan(&orderID)
 	if err != nil {
-		return Order{}, err
-	}
-	if err = tx.Commit(); err != nil {
 		return Order{}, err
 	}
 	return r.Get(ctx, orderID)

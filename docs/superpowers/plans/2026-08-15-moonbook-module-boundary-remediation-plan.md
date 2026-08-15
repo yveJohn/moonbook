@@ -219,11 +219,11 @@
 - Modify: `server/initialize/router_biz.go`
 - Create: `server/internal/modules/reader/provider/account.go`
 
-- [ ] **Step 1：补筛选分页失败测试。** 订单和充值订单按订单号或用户名搜索时总数、稳定排序和分页准确；钱包按用户名或昵称搜索，并显示没有钱包事实的账号。
-- [ ] **Step 2：列表查询使用自有投影。** 订单/充值订单 JOIN `commerce_reader_search_projection`；钱包以投影为驱动表 LEFT JOIN `reader_wallets`。不得读取 `reader_accounts`。
-- [ ] **Step 3：写操作使用实时 Reader 合同。** 会员发放、人工补单、钱包调账继续实时校验并按统一锁序锁定 Reader，不能使用投影判断账号状态。
-- [ ] **Step 4：错误语义回归。** 保持不存在、禁用、余额不足、幂等冲突和管理端 GVA 错误映射。
-- [ ] **Step 5：真实 PostgreSQL 验证并提交。** 提交信息：`整改交易管理读者查询`。
+- [x] **Step 1：补筛选分页失败测试。** 订单和充值订单按订单号或用户名搜索时总数、稳定排序和分页准确；钱包按用户名或昵称搜索，并显示没有钱包事实的账号。
+- [x] **Step 2：列表查询使用自有投影。** 订单/充值订单 JOIN `commerce_reader_search_projection`；钱包以投影为驱动表 LEFT JOIN `reader_wallets`。不得读取 `reader_accounts`。
+- [x] **Step 3：写操作使用实时 Reader 合同。** 会员发放、人工补单、钱包调账继续实时校验并按统一锁序锁定 Reader，不能使用投影判断账号状态。
+- [x] **Step 4：错误语义回归。** 保持不存在、禁用、余额不足、幂等冲突和管理端 GVA 错误映射。
+- [x] **Step 5：真实 PostgreSQL 验证并提交。** 提交信息：`整改交易管理读者查询`。
 
 ## Task 11：重构商品目标与购买报价
 
