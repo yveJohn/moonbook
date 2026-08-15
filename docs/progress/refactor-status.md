@@ -1,6 +1,6 @@
 # Moonbook 重构进度
 
-更新时间：2026-08-15
+更新时间：2026-08-16
 
 ## 总览
 
@@ -38,12 +38,12 @@
 - M7 GVA 基座审计确认通用 `/system/getSystemConfig` 会回显 JWT、Redis、数据库、邮件和 MinIO 等 Secret，`setSystemConfig` 还能改写运行配置，生产前必须关闭或白名单化；平台任务无统一只读监控，旧在线状态和通知公告也没有确定等价结论。详细证据见 `docs/verification/m7-gva-foundation-audit.md`。
 - M7 已完成一次双项目、独立命名卷的本地合成备份恢复演练，修正 MinIO 客户端挂载、稳定 SHA-256 清单、空库恢复顺序、一次性迁移调用和版本表名，并把财务核对命令纳入 Server 镜像；恢复后 106 张表、版本 58/59 条记录、1 个 43 字节对象与源端一致，迁移 `applied=0`、基础设施 healthy、财务 `mismatches=0`，完整 Compose 栈及三项健康入口通过。该证据只关闭命令级可执行性和基础启动冒烟，真实业务数据、协调停写、支付回调和认证业务旅程仍待完成，详见 `docs/verification/m7-backup-restore-rehearsal.md`。
 - M7 已新增固定 commit/tag/digest、配置与 Secret 门禁、升级前备份、一次性迁移、应用替换、冒烟和回退兼容边界明确的 Compose 升级 Runbook，并在 `3058fee` 到 `a8c209d` 两个固定 Server 镜像间完成隔离演练。升级迁移 `applied=0`，版本 58/59 条记录和 `sys_params` 夹具保持不变，目标镜像新增财务核对返回 `mismatches=0`，升级及应用镜像回退后的 gateway/API/Reader 健康均通过。该版本对无迁移差异，只关闭命令级升级和特定兼容回退缺口；真实业务、含迁移版本兼容、TLS/可信代理、资源限制和生产观察阈值仍待完成，详见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
-- M7 依赖与供应链审计确认当前三个应用镜像均为生产 No-Go：管理端 `vite-vue-path-map@1.0.2` 是已公告的 critical 恶意包且注入逻辑实际进入生产构建产物；Server 镜像由 Go 1.24.2 构建，`moonbook-server` 为 34 high/3 critical；管理端 Alpine 层为 30 high/2 critical；Reader 的 Alpine 层为 17 high/2 critical、Node 层为 32 high/3 critical。冻结 Reader 锁文件当前 npm audit 为 5 high，均可由 React Router 7.18.2 修复。恶意插件替换、依赖/基础镜像升级、SBOM、许可证和 CI 安全门仍待实施，详见 `docs/verification/m7-security-supply-chain-audit.md`。
+- M7 管理端供应链专项整改已删除 `vite-vue-path-map@1.0.2`、`vite-auto-import-svg@2.9.8` 和 `vite-check-multiple-dom@0.2.1` 三个确定的恶意/破坏性直接构建依赖，以仓库内路径映射和 SVG sprite 插件替代，并增加覆盖声明、锁文件、源码、安装树和生产产物的 CI 安全门。固定 `8fd98ac` 下 28 个测试、ESLint、生产构建和供应链检查通过；最终容器产物 223 个 JS 文件通过独立扫描，镜像 ID 为 `ec3121be...`。Trivy 仍报告管理端 Alpine 3.21.5 为 30 high/2 critical，Server/Reader 漏洞、管理端其余依赖、SBOM、许可证和 GVA 商业授权仍待处理，生产继续 No-Go，详见 `docs/verification/m7-security-supply-chain-audit.md`。
 - M7 已在独立空库 Compose 项目建立公开读取入口的本地短时性能基线：网关 health 为 9859.95 RPS，API readiness 为 3924.92 RPS，Reader 书籍列表为 7984.91 RPS，Reader SSR 为 546.54 RPS，纳入报告的请求全部零失败，负载后依赖 readiness 和容器健康不变。该环境无业务数据、资源限额、鉴权路径、MinIO 正文、支付、Worker、持续压测或约 8 GB 副本，不能外推生产容量或关闭 M7 性能门，详见 `docs/verification/m7-performance-baseline.md`。
 - M7 后端质量基线在固定提交 `c88052f` 验证格式、Go 模块和 vet 通过，本地监听相关测试在允许回环监听后通过；但 `TestModuleDependencyRules` 确定发现 Reader、Commerce 与 Novel 之间 15 处跨域实现引用，扩展审计还确认至少 11 个实现文件直接读写其他模块拥有的数据，当前 CI 后端测试应失败。该缺口必须通过领域契约、组合根和跨域事务设计关闭，禁止跳过或放宽边界测试，详见 `docs/verification/m7-backend-quality-baseline.md`。
 - M7 已把上述违规归并为 9 类跨域工作流，固定 Reader 路由兼容、公开内容投影、账号商业视图、邀请注册奖励、个人内容投影、点赞汇总、Commerce 读者校验、首充奖励及购买报价的所有权和回归不变量；注册奖励、点赞、购买和首充奖励的同库事务语义不得在整改中弱化。该事实清单不批准实现方案，详见 `docs/verification/m7-module-boundary-workflow-inventory.md`。
 - M7 监控信号盘点确认当前只有 Go/process、Server HTTP 和平台任务 Prometheus 指标，四依赖 readiness 与 Compose healthcheck 没有持续采集；PostgreSQL、Redis、MinIO、Gateway/Reader SSR、容器资源和业务可靠性指标均存在缺口，仓库也没有 Prometheus、Alertmanager、可视化或规则。用户已选择根 Compose 可选 `monitoring` profile 与 Alertmanager UI + 通用 Webhook，完整监控设计仍待逐段批准，详见 `docs/verification/m7-monitoring-signal-inventory.md`。
-- M7 CI 覆盖审计确认现有两个 job 只覆盖基础质量与 M1 Compose，根 `make verify` 也只执行 M1；M3 真实依赖、迁移双库、浏览器、备份恢复、性能、安全供应链及固定制品均未进入统一门。审计当时后端边界测试确定失败，该项已在 2026-08-16 的专项整改中关闭；管理构建仍会执行已确认恶意的直接依赖，因此流水线仍不是可信发布入口，详见 `docs/verification/m7-ci-coverage-audit.md`。
+- M7 CI 覆盖审计确认现有两个 job 只覆盖基础质量与 M1 Compose，根 `make verify` 也只执行 M1；M3 真实依赖、迁移双库、完整浏览器、备份恢复、性能、通用安全扫描及固定制品均未进入统一门。审计时的后端边界失败和管理端三个恶意/破坏性构建依赖均已由 2026-08-16 专项整改关闭，管理端新增 CI 等价入口和构建后供应链门；但登录后管理旅程因缺少隔离测试密码未补验，流水线仍不是完整发布入口，详见 `docs/verification/m7-ci-coverage-audit.md`。
 - M7 模块边界整改的架构、合同、上下文事务、批量投影、错误和测试设计，以及 Commerce 自有最小 Reader 搜索投影补充方案均已获用户确认；书面规格正式批准，详细实施计划已形成。投影只用于 Commerce 管理搜索与展示，Reader 仍是事实源，鉴权和交易判断必须走实时合同；实施不得弱化冻结 Reader 契约、跨域原子性或现有边界测试，详见 `docs/superpowers/specs/2026-08-15-moonbook-module-boundary-remediation-design.md` 和 `docs/superpowers/plans/2026-08-15-moonbook-module-boundary-remediation-plan.md`。
 - M7 模块边界整改 Task 1 已完成 Context 绑定的 Platform Transactor：支持最外层提交/回滚、嵌套加入、rollback-only、panic 回滚、既有 Runner 事务接入、事务内 Executor 和提交后回调；提交后回调失败可识别为事实已提交，外部事务禁止静默注册回调。脚本化 driver 单元测试、`gofmt`、`go vet` 和项目浏览器隔离 PostgreSQL 上的提交/回滚/四路并发集成测试通过。
 - M7 模块边界整改 Task 2 已建立 Reader、Commerce、Novel 三域窄合同和稳定错误分类，覆盖账号校验/锁定/批量显示、邀请关系、Commerce 搜索投影与 Reader 兼容交易能力、公开内容/SEO/批量展示、商品目标/购买快照和点赞汇总。合同 DTO 不含 Gin/GVA/数据库实现句柄，Long ID 保持 Go `int64`；AST import 白名单、DTO 形状、错误脱敏、定向单元测试和 `go vet` 通过。Provider 将按后续工作流任务逐项实现，当前运行时行为未改变。
@@ -188,7 +188,7 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Reader/Commerce 真实 PostgreSQL/Redis/MinIO 回归和 `make verify-m3` 完整通过：冻结 Reader tree 为 `ffbe7bb4c56792e94e160de86cc71bce0a6e0e5e`，44 个测试文件/536 个用例、6 个树外 SSR/SEO 用例及 Reader 生产构建无回归。共享验收数据库上的 integration 包改为 `-p=1`，包内并发测试不受影响。
 - Playwright 关键旅程验证匿名目录/详情、邀请码注册、真实 MinIO 两章正文、书架、第二章历史恢复、退出后旧 Token `401` 和书架登录保护，控制台 0 error；临时书籍、对象和账号数据已清理。
 - 隔离验收库的 Reader 账号和 Commerce 搜索投影均为 237 行，`id/username/nickname/status` 双向差异为 0；投影仍不参与任何认证或交易决定。
-- 管理端静态检查仍确认 `vite-vue-path-map@1.0.2` 被生产配置直接调用且旧产物命中注入特征，因此未执行管理端安装或构建。模块边界整改验收已完成，但 M7 生产发布继续 No-Go；恶意依赖、镜像漏洞、统一安全门和约 8 GB 完整副本演练仍待完成。
+- 管理端三个恶意/破坏性构建依赖已删除并由本地确定性插件替代，固定锁安装、28 个测试、ESLint、生产构建、源码/产物供应链门和最终镜像独立扫描均通过。公开登录页桌面与移动视口控制台为 0 error/0 warning；登录后动态菜单、页面切换和 keep-alive 因缺少隔离测试密码待补验。M7 生产发布继续 No-Go；基础镜像与其他依赖漏洞、统一发布门和约 8 GB 完整副本演练仍待完成。
 
 ## M3 退出结论
 

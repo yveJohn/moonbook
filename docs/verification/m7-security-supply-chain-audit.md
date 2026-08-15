@@ -4,7 +4,7 @@
 
 ## 结论
 
-当前 `moonbook/server:local`、`moonbook/web:local` 和 `moonbook/reader-ui:local` 均不能作为生产候选镜像。管理端构建链包含一个已被 OpenSSF/npm 标记为恶意的直接生产依赖，且注入逻辑已经出现在本地生产构建产物；Server 和 Reader 镜像也存在已发布修复版本的 high/critical 漏洞。
+当前 `moonbook/server:local`、`moonbook/web:local` 和 `moonbook/reader-ui:local` 仍均不能作为生产候选镜像。2026-08-16 的专项整改已删除管理端三个确定的恶意/破坏性直接构建依赖，并以源码、锁文件、安装树和最终容器产物扫描证明对应注入入口关闭；但管理端其余依赖、Alpine 基础镜像、Server、Reader 和商业授权阻断仍未关闭。
 
 本审计只读取锁文件、依赖图和本地镜像，不连接生产环境，不把“发现漏洞”误报为“已修复”。
 
@@ -35,7 +35,24 @@
 
 因此当前管理端镜像存在供应链远程控制风险，生产 Go/No-Go 必须立即为 No-Go。修复不能只在运行时阻断域名：必须删除恶意包及其构建调用，用仓库自有的确定性路径映射生成器替代，重新生成锁文件和镜像，并验证产物不再包含注入特征。
 
-管理端 `pnpm audit --prod --json` 汇总为：367 个生产依赖，1 critical、15 high、22 moderate、1 low。除恶意包外，主要高风险包括无修复版本的旧 `wangeditor` XSS、直接依赖 `axios@1.8.2`、`echarts@5.5.1`，以及 `vue3-sfc-loader` 引入的旧 PostCSS/Vue 2 编译链。修复需要按直接依赖、真实调用面和替代组件分别验证，不能用批量强制升级替代回归测试。
+## 2026-08-16 管理端专项整改结果
+
+实施审计除 `vite-vue-path-map@1.0.2` 外又确认两个直接构建依赖存在确定破坏行为：
+
+- `vite-auto-import-svg@2.9.8` 会注入远程 beacon、Base64 远程地址、域名校验和未授权覆盖页；
+- `vite-check-multiple-dom@0.2.1` 会在插件列表没有名为 `svg-transform` 的插件时，于 `closeBundle` 清空 `dist/index.html`。本地 SVG 替换后该行为真实发生，不能用伪造插件名绕过。
+
+三个包、隐藏 `AddSecret` 入口和不再需要的直接 `chokidar` 已从声明、锁文件和构建配置删除。路径映射由 `@vue/compiler-sfc` + `@babel/parser` 的仓库内生成器替代；SVG sprite 由不访问网络、不修改 chunk 的仓库内插件替代。供应链检查器同时拒绝三个包、隐藏全局、明文/Base64 远程 URL、未授权覆盖页、DOM 替换组合和空生产目录，并已接入管理端 CI 构建后步骤。
+
+固定代码提交为 `8fd98ac525664ae9e5a45597ab82018cd34d3ae7`，相关逻辑提交为 `f3b53b5`、`6602999`、`8fd98ac`。Node `24.14.1`、pnpm `10.15.1`、Vite `8.2.1` 下 `pnpm run verify:management` 结果为 28 个测试全部通过、ESLint 通过、生产构建通过；`dist/index.html` 为 14,775 字节，供应链检查报告 `source=347, dist-js=223`。
+
+最终 `moonbook/web:local` 镜像 ID 为 `sha256:ec3121befb42366fac6fe1b704dfe1cf88de574ecd2ca91ccb9f72c9e91f5656`。从运行容器重新提取的 223 个 JavaScript 文件独立通过供应链检查，静态产物清单 SHA-256 为 `23833749b4a73ad6f704a6416dd41e2c85a2fa9bd93b1783201d7ea3c8801b61`。现有 Vite Banner 使用构建时间，因此本地和镜像分别构建的产物不承诺逐字节相同；这里固定的是最终容器真实内容。曾生成空 `index.html` 的中间镜像已废弃，不作为候选证据。
+
+固定 Trivy `0.67.2`（镜像 digest `sha256:e2b22eac59c02003d8749f5b8d9bd073b62e30fefaef5b7c8371204e0a4b0c08`）对最终镜像复扫，Alpine `3.21.5` 仍报告 30 high、2 critical。Gitleaks 固定脚本扫描约 29.68 MB，结果 `no leaks found`。因此恶意/破坏性构建入口关闭不等于镜像安全门通过，管理端仍是生产 No-Go。
+
+Playwright 在隔离栈 `http://127.0.0.1:18488` 验证 `1440x900` 和 `390x844` 登录页正常渲染，控制台 0 error/0 warning。隔离环境没有管理员测试密码，登录、动态菜单、Moonbook 菜单、页面切换、刷新和 keep-alive 未完成；本次没有改密、读取认证令牌或修改隔离数据。该浏览器缺口必须在取得受控测试凭据后补验。
+
+整改前的管理端 `pnpm audit --prod --json` 基线汇总为：367 个生产依赖，1 critical、15 high、22 moderate、1 low，其中 critical 对应本次已删除恶意包。其余主要高风险包括无修复版本的旧 `wangeditor` XSS、直接依赖 `axios@1.8.2`、`echarts@5.5.1`，以及 `vue3-sfc-loader` 引入的旧 PostCSS/Vue 2 编译链；当前精确计数需要在后续通用依赖整改切片重新固定。修复需要按直接依赖、真实调用面和替代组件分别验证，不能用批量强制升级替代回归测试。
 
 ## 冻结 Reader
 
@@ -77,7 +94,7 @@ Reader 镜像扫描结果：
 
 当前 CI 只有构建、测试和 Gitleaks，没有依赖、镜像、SBOM 或许可证门。M7 安全项至少在以下全部完成后才能关闭：
 
-1. 删除 `vite-vue-path-map@1.0.2`，使用可审计的本地确定性生成器，并证明新产物不存在远程注入特征。
+1. 已关闭：删除三个确定的恶意/破坏性直接构建依赖，使用可审计的本地确定性生成器，并证明最终容器产物不存在对应远程注入和空产物特征。
 2. 修复或经用户明确批准缓解管理端其余 high/critical，重新完成管理功能回归。
 3. 明确 Reader 安全升级与冻结零差异边界，升级后完成完整 M3 回归或形成有期限、责任人的缓解批准。
 4. 升级 Go 工具链和可达漏洞依赖，govulncheck 对生产工具链无可达 high/critical。

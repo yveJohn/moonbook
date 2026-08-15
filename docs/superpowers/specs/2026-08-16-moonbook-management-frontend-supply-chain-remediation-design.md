@@ -1,13 +1,13 @@
-# Moonbook 管理前端恶意构建依赖整改设计
+# Moonbook 管理前端构建供应链整改设计
 
 ## 1. 文档状态
 
 - 日期：2026-08-16
-- 状态：实施前书面规格
+- 状态：已实施；登录后浏览器旅程因缺少隔离测试密码待补验
 - 适用仓库：`/Users/yve/code/ai-project/moonbook`
-- 目标：删除 `vite-vue-path-map@1.0.2` 及其生产构建注入入口，用仓库内可审计的确定性实现保留管理前端路径映射能力
+- 目标：删除 `vite-vue-path-map@1.0.2`、`vite-auto-import-svg@2.9.8` 和 `vite-check-multiple-dom@0.2.1` 及其生产构建注入/破坏入口，用仓库内可审计的确定性实现保留路径映射和 SVG sprite 能力
 
-本规格是 M7 供应链整改的第一个独立切片。它关闭已确认的 critical 恶意直接依赖，但不把管理前端其余 high 风险依赖、Server/Reader 依赖漏洞或三个基础镜像漏洞误记为已完成。
+本规格是 M7 供应链整改的第一个独立切片。实施中继续审计构建链，额外确认两个直接构建依赖包含远程注入或清空产物的破坏逻辑，因此按同一安全边界一并删除。该切片关闭三个确定的恶意/破坏性入口，但不把管理前端其余 high 风险依赖、Server/Reader 依赖漏洞或三个基础镜像漏洞误记为已完成。
 
 ## 2. 已确认事实
 
@@ -19,7 +19,9 @@
 4. 插件合法职责只是扫描 `src/view` 与 `src/plugin` 下的 Vue 文件并生成 `src/pathInfo.json`；
 5. 插件的 `generateBundle` 会向生产 JavaScript 插入远程请求、`document.open()` 和 `document.write()` 逻辑；
 6. 当前 `web/dist` 已命中这些注入特征，因此旧产物和旧管理端镜像不可信；
-7. 当前仓库有 133 个目标 Vue 文件，`src/pathInfo.json` 恰好有 133 个映射，无缺失和多余项。
+7. `vite-auto-import-svg@2.9.8` 会注入远程 beacon、Base64 远程地址、域名校验和未授权覆盖页，不能继续执行其构建钩子；
+8. `vite-check-multiple-dom@0.2.1` 会在插件列表没有名为 `svg-transform` 的插件时，于 `closeBundle` 清空 `dist/index.html`；本地 SVG 插件替换后已真实触发空白产物，不能通过伪造插件名绕过；
+9. 当前仓库有 133 个目标 Vue 文件，`src/pathInfo.json` 恰好有 133 个映射，无缺失和多余项；另有 23 个本地 SVG 需要保持系统图标 ID 和插件图标前缀语义。
 
 `pathInfo.json` 被动态路由 keep-alive、菜单组件名推导和组件级联选择器使用。整改必须保留这三个运行时调用面的路径与组件名语义，不能简单删除插件或改为空映射。
 
@@ -27,9 +29,9 @@
 
 ### 3.1 本切片包含
 
-- 仓库内确定性路径映射生成器；
+- 仓库内确定性路径映射和 SVG sprite 生成器；
 - Vite 启动、构建和开发期文件监听适配；
-- 删除恶意包、锁文件条目、`AddSecret()` 调用和专用隐藏全局变量实现；
+- 删除三个恶意/破坏性包、锁文件条目、`AddSecret()` 调用和专用隐藏全局变量实现；
 - 生成器、Vite 适配和当前仓库映射一致性测试；
 - 源码、依赖声明、锁文件、安装树和生产产物的恶意特征扫描；
 - CI 管理端构建后的供应链检查；
@@ -95,20 +97,24 @@ PascalCase 回退规则按连字符、下划线和空白分词并将每段首字
 `web/vite.config.js` 改为导入本地 `pathMap` 插件。删除：
 
 - `vite-vue-path-map` 导入；
+- `vite-auto-import-svg` 导入；
+- `vite-check-multiple-dom` 导入；
 - `AddSecret` 导入和调用；
 - `web/vitePlugin/secret/index.js`；
 - `package.json` 与 `pnpm-lock.yaml` 中的恶意包及其不再需要的传递项。
 
 `@vue/compiler-sfc` 已是直接开发依赖。为避免用正则解释 JavaScript，`@babel/parser` 从现有传递依赖提升为直接开发依赖并锁定到当前兼容版本，不引入新的依赖家族。Vite watcher 由现有 Vite 实例提供。移除恶意包后 `chokidar` 不再被仓库代码直接导入，因此同时删除直接 `chokidar` 开发依赖；Vite 自己的传递依赖由锁文件正常解析。
 
+新增 `web/vitePlugin/svgSprite/` 本地实现，扫描批准的系统与插件 SVG 目录，不跟随符号链接，按稳定顺序生成 sprite 虚拟模块；系统图标保持原 ID，插件图标增加插件名前缀。开发期 SVG 变化触发 full reload。该插件不得实现 `renderChunk` 或 `generateBundle`，不得访问网络、检查部署域名或替换页面。
+
 ### 5.4 供应链检查器
 
 新增 `web/scripts/check-supply-chain.mjs`，以结构化解析和明确指纹检查以下层面：
 
-- `package.json` 不得声明 `vite-vue-path-map`；
-- `pnpm-lock.yaml` 不得包含 `vite-vue-path-map@` 或其完整包键；
+- `package.json` 不得声明三个禁止构建包；
+- `pnpm-lock.yaml` 不得包含三个禁止构建包的解析键；
 - `vite.config.js` 和 `vitePlugin` 不得包含 `AddSecret`、`gva-project-name`、`gva-secret` 或恶意包导入；
-- 安装树存在时不得解析出 `vite-vue-path-map`；
+- 安装树存在时不得解析出三个禁止构建包；
 - 生产 `dist` 存在时不得出现已确认的远程地址明文/Base64 指纹、未授权替换页指纹、`document.open(` 或 `document.write(`；
 - `dist` 必须存在至少一个 JavaScript 入口和生成的路径映射 chunk，避免对空目录误报通过。
 
@@ -176,7 +182,8 @@ Vue 文件事件只触发本地全量重建。生成器不访问网络、不执�
 - 恶意包声明和锁文件条目；
 - 隐藏全局变量入口；
 - 明文或 Base64 远程地址；
-- 生产 chunk 中的 `document.open()`/`document.write()`；
+- 生产 chunk 中的 `document.open()`/`document.write()`、DOM 替换组合和未授权覆盖页；
+- 三个禁止包重新进入声明、锁文件、源码或安装树；
 - 空或缺少 JavaScript 的 `dist`。
 
 正常声明、锁文件和可信最小产物必须通过。
@@ -191,7 +198,7 @@ Vue 文件事件只触发本地全量重建。生成器不访问网络、不执�
 4. `pnpm run build`；
 5. `pnpm run check:supply-chain`；
 6. 重建管理端镜像并确认镜像内容来自新产物；
-7. Playwright 验证管理员登录、动态菜单、Moonbook 主要菜单、页面切换和 keep-alive；
+7. Playwright 验证公开登录页，并在取得隔离测试凭据后验证管理员登录、动态菜单、Moonbook 主要菜单、页面切换和 keep-alive；
 8. 重新执行秘密扫描、管理功能相关契约和 M1/CI 可信范围；
 9. 对新管理端镜像执行漏洞扫描，确认恶意插件关闭，同时把其余漏洞继续记录为独立 No-Go。
 
@@ -220,13 +227,13 @@ Vue 文件事件只触发本地全量重建。生成器不访问网络、不执�
 
 本切片只有在以下条件全部满足后才完成：
 
-- `package.json`、锁文件、源码和安装树不再包含 `vite-vue-path-map`；
+- `package.json`、锁文件、源码和安装树不再包含三个禁止构建包；
 - `AddSecret`、两个隐藏全局变量和 secret 插件文件全部删除；
 - 本地生成器对当前全部 Vue 文件生成与业务合同一致的映射；
 - 新增、修改、删除 Vue 文件在开发期和生产构建中正确更新映射；
 - 生成器、供应链检查器、现有管理测试和 lint 全部通过；
 - 新生产构建不含已确认注入特征；
-- 管理端关键浏览器旅程和 keep-alive 行为无回归；
+- 管理端公开登录页桌面/移动渲染和控制台通过；登录后关键旅程和 keep-alive 在取得隔离测试密码后补验；
 - CI 在生产构建后执行供应链检查；
 - 新管理镜像与产物哈希可定位，旧管理镜像明确废弃；
 - 其余 high/critical 和外部授权项继续作为 No-Go 记录；

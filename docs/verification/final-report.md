@@ -20,9 +20,15 @@
 | M4 财务核对与支付 | `moonbook-finance-reconcile`、隔离支付报告 | 未完成 |
 | M5 长任务恢复与第三方替身 | 导入 Worker、TXT/AI/采集测试 | 未完成 |
 | M6 全量迁移演练 | `docs/migration/`、副本演练报告 | 未完成 |
-| M7 备份、切换、回退 | 本目录及 `docs/runbooks/` | 未完成 |
+| M7 备份、切换、回退 | 本目录及 `docs/runbooks/` | 未完成；管理端三个恶意/破坏性构建依赖已关闭，但其他安全、完整浏览器、恢复和切换门仍未关闭 |
 
 首次 M7 证据审计及当前不可执行项见 `docs/verification/m7-readiness-audit.md`。该审计用于阻止过早标记通过，不替代修复后的恢复、性能、安全和切换演练报告。
+
+## 管理端供应链专项证据
+
+固定代码提交 `8fd98ac525664ae9e5a45597ab82018cd34d3ae7` 已删除 `vite-vue-path-map@1.0.2`、`vite-auto-import-svg@2.9.8` 和 `vite-check-multiple-dom@0.2.1`，并以仓库内可审计实现替代路径映射和 SVG sprite。管理端 CI 等价入口 28 个测试、ESLint、生产构建和供应链检查通过；最终容器产物清单 SHA-256 为 `23833749b4a73ad6f704a6416dd41e2c85a2fa9bd93b1783201d7ea3c8801b61`，镜像 ID 为 `sha256:ec3121befb42366fac6fe1b704dfe1cf88de574ecd2ca91ccb9f72c9e91f5656`。
+
+该项只证明三个确定的构建注入/破坏入口已关闭。Trivy 对最终 Web 镜像仍报告 Alpine `3.21.5` 有 30 high、2 critical；管理端其余依赖、Server/Reader 漏洞、SBOM、许可证和 GVA 商业授权仍是 No-Go。Playwright 公开登录页桌面/移动渲染和控制台通过，但隔离测试密码缺失，登录后动态菜单、Moonbook 页面、刷新和 keep-alive 尚无本轮证据。详见 `docs/verification/m7-security-supply-chain-audit.md` 和 `docs/verification/m7-ci-coverage-audit.md`。
 
 ## 生产动作
 

@@ -4,17 +4,17 @@
 
 ## 结论
 
-当前 GitHub Actions 不能作为 Moonbook 生产切换就绪门。它覆盖 Go 基础质量、管理前端测试/构建、冻结 Reader 测试/构建、Gitleaks 和 M1 空环境 Compose，但没有把 M3-M7 的真实依赖、迁移、浏览器、性能、安全和恢复证据统一固定到同一 commit。
+当前 GitHub Actions 仍不能作为 Moonbook 生产切换就绪门。它覆盖 Go 基础质量、管理前端测试/构建与新增供应链产物门、冻结 Reader 测试/构建、Gitleaks 和 M1 空环境 Compose，但没有把 M3-M7 的真实依赖、迁移、完整浏览器、性能、安全和恢复证据统一固定到同一 commit。
 
-当前流水线还存在两个确定阻断：`TestModuleDependencyRules` 会因 15 处跨模块实现引用而失败；管理前端构建会执行已确认恶意的 `vite-vue-path-map@1.0.2`。在模块边界和供应链整改完成前，不能把现有 CI 视为可通过或可信任的发布入口。
+审计时的两个确定阻断已由专项整改关闭：模块依赖规则当前通过，管理前端三个恶意/破坏性直接构建依赖已删除。管理端 job 现按冻结锁安装、28 个测试、ESLint、生产构建、供应链检查顺序执行，检查器拒绝恶意包、注入指纹和空 `dist`。这只使管理端构建链具备可信基础，统一发布入口仍因其他 M3-M7 缺口保持 No-Go。
 
 ## 当前自动覆盖
 
 | Job/步骤 | 自动执行内容 | 当前结论 |
 | --- | --- | --- |
 | `quality / Verify Go formatting and modules` | Moonbook 目录 gofmt、`go mod verify`、指定后端包 `go vet` | 固定提交 `c88052f` 本地同范围通过 |
-| `quality / Test Moonbook foundation` | 指定后端包 `go test -race` | 模块边界测试确定失败；本机只完成非 race 普通测试基线，Linux race 尚无通过证据 |
-| `quality / Build management frontend` | `pnpm install --frozen-lockfile`、`test:moonbook`、生产构建 | 锁文件确定；但生产构建会执行 critical 恶意包，当前为安全 No-Go；未运行 ESLint |
+| `quality / Test Moonbook foundation` | 指定后端包 `go test -race` | 模块边界专项整改后静态规则和模块宽范围测试本地通过；Linux CI race 的最新远程运行记录仍未固定到本报告 |
+| `quality / Build management frontend` | `pnpm install --frozen-lockfile`、`test:moonbook`、ESLint、生产构建、供应链检查 | 固定 `8fd98ac` 本地等价入口 28/28 测试、lint、build 和 `source=347, dist-js=223` 检查通过；仍不含登录后浏览器旅程、通用漏洞/SBOM/许可证门 |
 | `quality / Test and build frozen reader frontend` | `npm ci`、Vitest、生产构建 | 覆盖冻结 Reader 536 个基线用例和构建；不覆盖树外契约、真实 SSR/浏览器或依赖漏洞门 |
 | `quality / Scan repository secrets` | 固定 Gitleaks 镜像扫描仓库 | 已有精确误报指纹门；不等于运行日志、镜像层或外部 Secret 配置审计 |
 | `m1-compose` | `scripts/verify-m1.sh` | 覆盖空库迁移、完整基础栈、健康、路由、指标鉴权、管理员引导、优雅停机和秘密扫描 |
@@ -44,13 +44,19 @@
 - 备份新鲜度、恢复、升级、回退和 Go/No-Go 报告生成；
 - 固定验收 commit、环境/工具版本和全部证据 artifact 的统一索引。
 
+## 管理端供应链门进展
+
+2026-08-16 新增 `pnpm run verify:management` 作为管理端 CI 等价入口，CI 不再把测试、lint 和产物扫描合并为不可定位的单步。最终容器产物已在 CI 逻辑之外独立提取复扫，223 个 JavaScript 文件通过，且 `index.html` 非空。检查门覆盖当前三个确定的恶意/破坏性构建包和已确认注入指纹，但它不是通用 npm 漏洞、SBOM 或许可证扫描器。
+
+Playwright 只完成公开登录页桌面/移动渲染和控制台检查。由于隔离测试密码未提供，动态菜单、Moonbook 页面、刷新和 keep-alive 仍未进入本轮可复现证据，不能把管理端 E2E 标记为完成。
+
 ## 根验证入口
 
 根 `make verify` 当前只依赖 `verify-m1`，名称容易被误解为全项目验收。M7 关闭前需要一个明确的最终入口，按可并行且有独立超时的阶段组织 M0-M7 自动化证据；耗时或需要受控副本的演练可以由显式 job/命令触发，但必须固定同一 commit、输入摘要、结果和制品位置，不能用文档说明代替执行。
 
 ## 关闭条件
 
-1. 先关闭恶意构建依赖和模块边界失败，保证基础质量门本身可信且可通过；
+1. 已完成基础整改：关闭三个恶意/破坏性构建依赖和模块边界失败，保持对应测试与供应链门持续通过；
 2. CI 执行所有适合自动化的单元、race、真实依赖、契约、SSR、管理构建和 Reader 构建检查；
 3. 为 MySQL/PostgreSQL/Redis/MinIO 集成、浏览器 E2E、安全扫描和镜像构建拆分明确 job 与超时；
 4. 受控完整副本、备份恢复、性能和切换演练以同一 commit 的人工触发工作流或可复现本地命令生成版本化报告；

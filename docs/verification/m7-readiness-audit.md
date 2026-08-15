@@ -118,6 +118,8 @@ M7 必须基于目标容量建立可重复场景、阈值和报告，不能只�
 
 审计后进展：2026-08-15 已执行锁文件、govulncheck 和三个本地镜像的 Trivy 扫描，详见 `docs/verification/m7-security-supply-chain-audit.md`。管理端直接构建依赖 `vite-vue-path-map@1.0.2` 已被标记为 critical 恶意包，且注入逻辑实际进入本地生产产物；当前 Server、Web 和 Reader 镜像也均存在已有修复版本的 high/critical 漏洞。因此当前应用镜像明确为生产 No-Go，安全退出门未关闭。
 
+专项整改进展：2026-08-16 已进一步确认并删除 `vite-vue-path-map@1.0.2`、`vite-auto-import-svg@2.9.8` 和 `vite-check-multiple-dom@0.2.1` 三个恶意/破坏性直接构建依赖，以仓库内确定性路径映射和 SVG sprite 插件替代，并在 CI 构建后增加供应链产物门。最终容器产物 223 个 JavaScript 文件独立扫描通过，`index.html` 为 14,775 字节；最终镜像 ID 为 `sha256:ec3121befb42366fac6fe1b704dfe1cf88de574ecd2ca91ccb9f72c9e91f5656`。但 Trivy 复扫仍报告 Alpine 3.21.5 有 30 high、2 critical，登录后管理旅程也因缺少隔离测试密码未完成。M7 及生产发布继续 No-Go。
+
 ## CI 与统一验收缺口
 
 当前 CI 执行基础 Go race 测试、管理前端测试/构建、冻结 Reader 测试/构建、Gitleaks 和 M1 Compose 验证。但它没有：
