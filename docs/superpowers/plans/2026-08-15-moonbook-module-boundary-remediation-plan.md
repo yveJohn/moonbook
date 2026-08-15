@@ -31,12 +31,12 @@
 - Create: `server/internal/platform/transaction/transactor_test.go`
 - Create: `server/internal/platform/transaction/transactor_integration_test.go`
 
-- [ ] **Step 1：编写失败测试。** 覆盖最外层提交、回调错误回滚、panic 回滚并继续传播、嵌套加入、嵌套错误被上层吞掉后仍 rollback-only、提交失败、`AfterCommit` 仅成功提交后按注册顺序执行，以及回调失败不反转已提交事实。
-- [ ] **Step 2：确认失败。** 运行 `go test ./internal/platform/transaction -v`，预期因包和 API 尚不存在失败。
-- [ ] **Step 3：实现 Transactor。** 提供 `Within(ctx, fn)`、Context 内部事务解析和最小 `DBTX` 接口；业务合同不暴露 `*sql.Tx`。嵌套作用域复用现有事务并共享 rollback-only 状态，只有最外层提交或回滚；另提供仅供 Platform 适配既有 Runner 外层事务的 `WithExisting(ctx, tx, fn)`，该入口不提交或回滚调用方拥有的事务，但共享 rollback-only 状态。
-- [ ] **Step 4：真实 PostgreSQL 验证。** 使用隔离表验证嵌套错误、panic、并发调用和 AfterCommit；测试自行清理唯一 fixture，不使用无条件清表。
-- [ ] **Step 5：质量检查。** 运行 `gofmt`、`go test ./internal/platform/transaction -v` 和 `go vet ./internal/platform/transaction`。
-- [ ] **Step 6：提交。** 提交信息：`新增上下文事务协调器`。
+- [x] **Step 1：编写失败测试。** 覆盖最外层提交、回调错误回滚、panic 回滚并继续传播、嵌套加入、嵌套错误被上层吞掉后仍 rollback-only、提交失败、`AfterCommit` 仅成功提交后按注册顺序执行，以及回调失败不反转已提交事实。
+- [x] **Step 2：确认失败。** 运行 `go test ./internal/platform/transaction -v`，预期因包和 API 尚不存在失败。
+- [x] **Step 3：实现 Transactor。** 提供 `Within(ctx, fn)`、Context 内部事务解析和最小 `DBTX` 接口；业务合同不暴露 `*sql.Tx`。嵌套作用域复用现有事务并共享 rollback-only 状态，只有最外层提交或回滚；另提供仅供 Platform 适配既有 Runner 外层事务的 `WithExisting(ctx, tx, fn)`，该入口不提交或回滚调用方拥有的事务，但共享 rollback-only 状态。
+- [x] **Step 4：真实 PostgreSQL 验证。** 使用隔离表验证嵌套错误、panic、并发调用和 AfterCommit；测试自行清理唯一 fixture，不使用无条件清表。
+- [x] **Step 5：质量检查。** 运行 `gofmt`、`go test ./internal/platform/transaction -v` 和 `go vet ./internal/platform/transaction`。
+- [x] **Step 6：提交。** 提交信息：`新增上下文事务协调器`。
 
 ## Task 2：建立三域窄合同与稳定错误
 
