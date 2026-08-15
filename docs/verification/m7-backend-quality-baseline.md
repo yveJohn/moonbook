@@ -61,15 +61,38 @@ CGO_ENABLED=0 GOCACHE=/tmp/moonbook-gocache go test \
 
 这不是单纯的测试维护问题。批准架构明确禁止模块跨边界操作其他模块内部实现，而当前 Reader 兼容层、交易 HTTP 层和鉴权/序列化帮助代码已经形成双向实现依赖。
 
+### 数据所有权扩展审计
+
+import 测试只检查 Go 包依赖，不检查 SQL 字符串。继续按批准架构的逻辑域归属审计后，至少 11 个实现文件还直接读取或修改其他模块拥有的数据：
+
+| 调用模块 | 数据所有者 | 文件 | 越界行为 |
+| --- | --- | --- | --- |
+| reader | novel | `reader/me/repository.go` | 直接联查书籍/章节，写入点赞汇总并校验阅读位置 |
+| reader | novel | `reader/public/service.go` | 直接实现书库、分类、章节、正文导航和 sitemap 查询 |
+| reader | commerce | `reader/account/http.go` | 直接查询权益、会员授予和会员商品 |
+| reader | commerce | `reader/invite/repository.go` | 在 Reader 注册事务中直接调用钱包实现写奖励流水 |
+| commerce | reader | `commerce/adminmembership/repository.go` | 直接锁定并校验 Reader 账号 |
+| commerce | reader | `commerce/adminorder/repository.go` | 直接联查、锁定和展示 Reader 账号 |
+| commerce | reader | `commerce/adminrechargeorder/repository.go` | 直接联查 Reader 账号用户名 |
+| commerce | reader | `commerce/adminwallet/repository.go` | 直接联查并锁定 Reader 账号 |
+| commerce | reader | `commerce/invitereward/repository.go` | 直接查询 Reader 邀请关系 |
+| commerce | novel | `commerce/adminproduct/repository.go` | 直接校验书籍/章节商品目标 |
+| commerce | novel | `commerce/purchase/repository.go` | 直接读取章节元数据计算购买报价 |
+
+表名不能用于推断模块所有权。钱包、支付、订单、权益及部分历史 `reader_` 前缀表属于 Commerce；账号、会话、邀请关系和个人行为属于 Reader；书籍、章节、SEO 与对象引用属于 Novel。修复只移动 import 或复制 DTO 会让当前测试变绿，却仍然违反数据所有权边界。
+
+专项设计还必须处理跨域事务：Reader 注册与邀请奖励、购买与账号校验、点赞事实与书籍汇总需要在模块合同下保持现有原子性或定义可证明的一致性策略，不能简单拆成无补偿的顺序调用。
+
 ## 关闭条件
 
 关闭该质量门必须满足：
 
-1. 为 Reader 身份、Commerce 访问判定和 Novel 正文/SEO 等跨域能力定义最小稳定契约；
+1. 为 Reader 身份/账号/邀请关系、Commerce 访问判定/权益/商品/钱包和 Novel 元数据/正文/SEO 等跨域能力定义最小稳定契约；
 2. 由初始化组合根注入契约实现，业务模块不直接构造或导入其他模块内部 Service、DTO 或帮助包；
 3. 保持冻结 Reader API 的路由、响应、错误语义和 Long ID 字符串合同不变；
-4. `TestModuleDependencyRules` 原样通过，不增加文件级或包级放行；
-5. 同范围普通测试、vet 和 Linux race 测试通过；
-6. 在固定验收提交上重新生成本报告，并由 CI 保存可定位日志。
+4. 上述 11 个文件不再直接读写其他模块拥有的表，跨域事务具备原子性或明确且经过测试的一致性保证；
+5. `TestModuleDependencyRules` 原样通过，不增加文件级或包级放行；
+6. 同范围普通测试、vet 和 Linux race 测试通过；
+7. 在固定验收提交上重新生成本报告，并由 CI 保存可定位日志。
 
 该重构涉及多个既有模块边界，应先完成专项设计和批准，再实施；本报告只固定问题证据，不代表设计已经批准。
