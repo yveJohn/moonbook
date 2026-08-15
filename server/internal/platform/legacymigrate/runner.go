@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
 type BatchResult struct {
@@ -99,20 +101,22 @@ func (runner *Runner) runStage(ctx context.Context, name string, stage Stage) er
 		if err != nil {
 			return fmt.Errorf("begin batch transaction: %w", err)
 		}
-		result, err := stage.RunBatch(ctx, runner.source, tx, cursor, runner.batchSize)
+		var result BatchResult
+		err = transaction.WithExisting(ctx, tx, func(txCtx context.Context) error {
+			var runErr error
+			result, runErr = stage.RunBatch(txCtx, runner.source, tx, cursor, runner.batchSize)
+			if runErr != nil {
+				return runErr
+			}
+			if result.Processed < 0 || int64(len(result.Errors)) > result.Processed {
+				return errors.New("stage returned invalid batch counters")
+			}
+			if !result.Done && result.Processed == 0 && result.NextCursor == cursor {
+				return errors.New("stage made no progress")
+			}
+			return runner.persistBatch(txCtx, tx, name, result)
+		})
 		if err != nil {
-			tx.Rollback()
-			return err
-		}
-		if result.Processed < 0 || int64(len(result.Errors)) > result.Processed {
-			tx.Rollback()
-			return errors.New("stage returned invalid batch counters")
-		}
-		if !result.Done && result.Processed == 0 && result.NextCursor == cursor {
-			tx.Rollback()
-			return errors.New("stage made no progress")
-		}
-		if err := runner.persistBatch(ctx, tx, name, result); err != nil {
 			tx.Rollback()
 			return err
 		}

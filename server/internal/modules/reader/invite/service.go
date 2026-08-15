@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
@@ -19,12 +20,15 @@ var (
 )
 
 type Service struct {
-	repo Repository
-	auth *auth.Service
+	repo   Repository
+	auth   *auth.Service
+	tx     Transactor
+	sync   commercecontract.ReaderSearchProjectionWriter
+	reward commercecontract.RegistrationRewardGranter
 }
 
-func NewService(repo Repository, authService *auth.Service) *Service {
-	return &Service{repo: repo, auth: authService}
+func NewService(repo Repository, authService *auth.Service, transactor Transactor, projectionSync commercecontract.ReaderSearchProjectionWriter, rewardGranter commercecontract.RegistrationRewardGranter) *Service {
+	return &Service{repo: repo, auth: authService, tx: transactor, sync: projectionSync, reward: rewardGranter}
 }
 
 // Register consumes the invitation and creates the account and relation in
@@ -34,10 +38,35 @@ func (s *Service) Register(ctx context.Context, req auth.RegisterRequest) (auth.
 	if strings.TrimSpace(req.Username) == "" || req.Password == "" || strings.TrimSpace(req.InviteCode) == "" {
 		return auth.ReaderAccount{}, auth.AccessToken{}, auth.ErrInvalidCredentials
 	}
-	if s.repo == nil || s.auth == nil {
+	if s.repo == nil || s.auth == nil || s.tx == nil || s.sync == nil || s.reward == nil {
 		return auth.ReaderAccount{}, auth.AccessToken{}, ErrRegistrationUnavailable
 	}
-	account, err := s.repo.RegisterWithInvite(ctx, Registration{Username: strings.TrimSpace(req.Username), Password: req.Password, Nickname: strings.TrimSpace(req.Nickname), InviteCode: strings.TrimSpace(req.InviteCode)})
+	var account auth.ReaderAccount
+	err := s.tx.Within(ctx, func(txCtx context.Context) error {
+		created, err := s.repo.RegisterWithInvite(txCtx, Registration{Username: strings.TrimSpace(req.Username), Password: req.Password, Nickname: strings.TrimSpace(req.Nickname), InviteCode: strings.TrimSpace(req.InviteCode)})
+		if err != nil {
+			return err
+		}
+		if err := s.sync.UpsertReaderSearchProjection(txCtx, commercecontract.ReaderSearchProjection{
+			ReaderID: created.Account.ID,
+			Username: created.Account.Username,
+			Nickname: created.Account.Nickname,
+			Status:   created.Account.Status,
+		}); err != nil {
+			return err
+		}
+		if created.RelationID != 0 {
+			if err := s.reward.GrantRegistrationRewards(txCtx, commercecontract.RegistrationRewardRequest{
+				RelationID: created.RelationID,
+				InviterID:  created.InviterID,
+				InviteeID:  created.Account.ID,
+			}); err != nil {
+				return err
+			}
+		}
+		account = created.Account
+		return nil
+	})
 	if err != nil {
 		return auth.ReaderAccount{}, auth.AccessToken{}, err
 	}

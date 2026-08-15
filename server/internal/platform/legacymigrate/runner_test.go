@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -22,12 +23,15 @@ type targetStage struct {
 	marker string
 	fail   bool
 	calls  int
+	target *sql.DB
+	bound  bool
 }
 
 func (stage *targetStage) Name() string { return stage.name }
 
 func (stage *targetStage) RunBatch(ctx context.Context, _ *sql.DB, target *sql.Tx, _ string, _ int) (BatchResult, error) {
 	stage.calls++
+	stage.bound = transaction.Executor(ctx, stage.target) == target
 	if _, err := target.ExecContext(ctx, `
 		INSERT INTO migration_errors
 			(migration_name,stage,error_code,error_message,retryable)
@@ -58,12 +62,15 @@ func TestRunnerPersistsCheckpointAndRollsBackFailedStageWithPostgres(t *testing.
 		t.Fatal(err)
 	}
 	runner.verifySource = func(context.Context, *sql.DB) error { return nil }
-	success := &targetStage{name: "success", marker: migration}
+	success := &targetStage{name: "success", marker: migration, target: target}
 	if err := runner.Run(ctx, success); err != nil {
 		t.Fatal(err)
 	}
 	if err := runner.Run(ctx, success); err != nil || success.calls != 1 {
 		t.Fatalf("idempotent rerun calls=%d err=%v", success.calls, err)
+	}
+	if !success.bound {
+		t.Fatal("runner did not bind the batch transaction to the stage context")
 	}
 	var processed int64
 	var done bool
@@ -76,7 +83,7 @@ func TestRunnerPersistsCheckpointAndRollsBackFailedStageWithPostgres(t *testing.
 		t.Fatalf("checkpoint processed=%d done=%t", processed, done)
 	}
 
-	failure := &targetStage{name: "failure", marker: migration, fail: true}
+	failure := &targetStage{name: "failure", marker: migration, fail: true, target: target}
 	if err := runner.Run(ctx, failure); err == nil {
 		t.Fatal("failed stage returned nil error")
 	}

@@ -15,7 +15,17 @@ var (
 // Repository owns the registration transaction. Implementations must lock the
 // invite row before validating or incrementing its usage count.
 type Repository interface {
-	RegisterWithInvite(context.Context, Registration) (auth.ReaderAccount, error)
+	RegisterWithInvite(context.Context, Registration) (RegistrationResult, error)
+}
+
+type RegistrationResult struct {
+	Account    auth.ReaderAccount
+	RelationID int64
+	InviterID  int64
+}
+
+type Transactor interface {
+	Within(context.Context, func(context.Context) error) error
 }
 
 type Registration struct {

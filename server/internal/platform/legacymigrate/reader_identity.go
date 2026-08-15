@@ -3,15 +3,20 @@ package legacymigrate
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 )
 
 // ReaderIdentityStage migrates reader accounts and invite facts. Passwords are
 // copied as hashes only; migration diagnostics never include their values.
-type ReaderIdentityStage struct{}
+type ReaderIdentityStage struct {
+	ProjectionWriter commercecontract.ReaderSearchProjectionWriter
+}
 
 func (ReaderIdentityStage) Name() string { return "reader-identity" }
 
@@ -29,7 +34,10 @@ func passwordAlgorithm(hash string) (string, bool) {
 	return "", false
 }
 
-func (ReaderIdentityStage) RunBatch(ctx context.Context, source *sql.DB, target *sql.Tx, cursor string, limit int) (BatchResult, error) {
+func (stage ReaderIdentityStage) RunBatch(ctx context.Context, source *sql.DB, target *sql.Tx, cursor string, limit int) (BatchResult, error) {
+	if stage.ProjectionWriter == nil {
+		return BatchResult{}, errors.New("reader identity migration requires a commerce projection writer")
+	}
 	table, last, err := stageCursor(cursor, "reader_user")
 	if err != nil {
 		return BatchResult{}, err
@@ -40,7 +48,7 @@ func (ReaderIdentityStage) RunBatch(ctx context.Context, source *sql.DB, target 
 			return BatchResult{}, err
 		}
 		if exists {
-			return migrateReaderUsers(ctx, source, target, last, limit)
+			return migrateReaderUsers(ctx, source, target, stage.ProjectionWriter, last, limit)
 		}
 		table, last = "user", 0
 	}
@@ -57,7 +65,7 @@ func (ReaderIdentityStage) RunBatch(ctx context.Context, source *sql.DB, target 
 			return BatchResult{}, err
 		}
 		if exists {
-			return migrateLegacyUsers(ctx, source, target, last, limit)
+			return migrateLegacyUsers(ctx, source, target, stage.ProjectionWriter, last, limit)
 		}
 	}
 	return BatchResult{NextCursor: "user:0", Done: true, Metadata: map[string]any{"source": "reader_user,user", "skipped": "table_not_found"}}, nil
@@ -79,7 +87,7 @@ func stageCursor(raw, first string) (string, int64, error) {
 	return parts[0], id, nil
 }
 
-func migrateReaderUsers(ctx context.Context, source *sql.DB, target *sql.Tx, last int64, limit int) (BatchResult, error) {
+func migrateReaderUsers(ctx context.Context, source *sql.DB, target *sql.Tx, writer commercecontract.ReaderSearchProjectionWriter, last int64, limit int) (BatchResult, error) {
 	rows, err := source.QueryContext(ctx, `SELECT id,username,COALESCE(nickname,''),password_hash,COALESCE(status,'enabled'),COALESCE(invite_code_id,0),last_login_time,create_time,update_time FROM reader_user WHERE id>? ORDER BY id LIMIT ?`, last, limit)
 	if err != nil {
 		return BatchResult{}, err
@@ -103,12 +111,15 @@ func migrateReaderUsers(ctx context.Context, source *sql.DB, target *sql.Tx, las
 		if _, err := target.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,password_algorithm,status,invite_code_id,last_login_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,NULLIF($7::bigint,0),$8,COALESCE($9,now()),COALESCE($10,now())) ON CONFLICT(id) DO UPDATE SET username=EXCLUDED.username,nickname=EXCLUDED.nickname,password_hash=EXCLUDED.password_hash,password_algorithm=EXCLUDED.password_algorithm,status=EXCLUDED.status,invite_code_id=EXCLUDED.invite_code_id,last_login_at=EXCLUDED.last_login_at,updated_at=EXCLUDED.updated_at`, id, strings.TrimSpace(username), strings.TrimSpace(nick), hash, alg, status, invite, nullableLegacyTime(login), nullableLegacyTime(created), nullableLegacyTime(updated)); err != nil {
 			return BatchResult{}, err
 		}
+		if err := syncMigratedReaderProjection(ctx, target, writer, id); err != nil {
+			return BatchResult{}, err
+		}
 	}
 	result.Done = result.Processed < int64(limit)
 	return result, nil
 }
 
-func migrateLegacyUsers(ctx context.Context, source *sql.DB, target *sql.Tx, last int64, limit int) (BatchResult, error) {
+func migrateLegacyUsers(ctx context.Context, source *sql.DB, target *sql.Tx, writer commercecontract.ReaderSearchProjectionWriter, last int64, limit int) (BatchResult, error) {
 	rows, err := source.QueryContext(ctx, `SELECT id,username,password,COALESCE(nick_name,''),COALESCE(status,0),create_time,update_time FROM user WHERE id>? ORDER BY id LIMIT ?`, last, limit)
 	if err != nil {
 		return BatchResult{}, err
@@ -134,9 +145,23 @@ func migrateLegacyUsers(ctx context.Context, source *sql.DB, target *sql.Tx, las
 		if err != nil {
 			return BatchResult{}, err
 		}
+		if err := syncMigratedReaderProjection(ctx, target, writer, id); err != nil {
+			return BatchResult{}, err
+		}
 	}
 	result.Done = result.Processed < int64(limit)
 	return result, nil
+}
+
+func syncMigratedReaderProjection(ctx context.Context, target *sql.Tx, writer commercecontract.ReaderSearchProjectionWriter, readerID int64) error {
+	var projection commercecontract.ReaderSearchProjection
+	if err := target.QueryRowContext(ctx, `
+SELECT id, username, nickname, status
+FROM reader_accounts
+WHERE id=$1`, readerID).Scan(&projection.ReaderID, &projection.Username, &projection.Nickname, &projection.Status); err != nil {
+		return err
+	}
+	return writer.UpsertReaderSearchProjection(ctx, projection)
 }
 
 func mapLegacyUserStatus(status int) string {

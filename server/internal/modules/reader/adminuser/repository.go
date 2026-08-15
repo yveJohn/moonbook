@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -73,25 +75,24 @@ func (r SQLRepository) SetStatus(ctx context.Context, id int64, status string) (
 	if status != "enabled" && status != "disabled" {
 		return User{}, errors.New("invalid reader status")
 	}
-	tx, err := r.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return User{}, err
+	executor := transaction.Executor(ctx, r.DB)
+	if executor == r.DB {
+		return User{}, transaction.ErrNoTransaction
 	}
-	defer tx.Rollback()
 	var u User
-	if err = scan(tx.QueryRowContext(ctx, userSelect+` WHERE id=$1 FOR UPDATE`, id), &u); err != nil {
+	if err := scan(executor.QueryRowContext(ctx, userSelect+` WHERE id=$1 FOR UPDATE`, id), &u); err != nil {
 		return User{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE reader_accounts SET status=$1,updated_at=now() WHERE id=$2`, status, id); err != nil {
+	if _, err := executor.ExecContext(ctx, `UPDATE reader_accounts SET status=$1,updated_at=now() WHERE id=$2`, status, id); err != nil {
 		return User{}, err
 	}
 	if status != "enabled" {
-		if _, err = tx.ExecContext(ctx, `UPDATE reader_sessions SET revoked_at=now() WHERE reader_id=$1 AND revoked_at IS NULL`, id); err != nil {
+		if _, err := executor.ExecContext(ctx, `UPDATE reader_sessions SET revoked_at=now() WHERE reader_id=$1 AND revoked_at IS NULL`, id); err != nil {
 			return User{}, err
 		}
 	}
-	if err = scan(tx.QueryRowContext(ctx, userSelect+` WHERE id=$1`, id), &u); err != nil {
+	if err := scan(executor.QueryRowContext(ctx, userSelect+` WHERE id=$1`, id), &u); err != nil {
 		return User{}, err
 	}
-	return u, tx.Commit()
+	return u, nil
 }

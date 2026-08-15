@@ -101,12 +101,12 @@
 - Create: `server/internal/modules/reader/accountsync/service_test.go`
 - Modify: `server/initialize/router_biz.go`
 
-- [ ] **Step 1：编写失败测试。** 覆盖现有注册和管理端状态变更同步；Reader 写失败不改投影，投影写失败使 Reader 写回滚，重复 upsert 不产生多行。密码重置和摘要升级不改变投影字段，不得为同步投影改动它们的事务语义。
-- [ ] **Step 2：实现同事务同步。** Reader 写流程通过 `commerce/contract` 调用投影 Provider，双方从 Context 取得同一事务；不得在 Reader 中直接写 Commerce 表。
-- [ ] **Step 3：改造旧账号迁移。** Runner 使用 `WithExisting` 把每批目标事务绑定进 Stage Context；账号 Stage 写入 `reader_accounts` 后通过 Commerce 合同同步投影。检查点、账号和投影由 Runner 的同一事务提交或回滚，幂等重跑保持零差异。
-- [ ] **Step 4：实现一致性应用服务。** Reader 分页读取源快照，通过 Commerce 合同读取投影，报告 missing/extra/mismatch；显式修复模式按 Reader 事实 upsert 或删除，日志不输出账号敏感字段。
-- [ ] **Step 5：真实 PostgreSQL 验证。** 注入投影故障验证回滚；验证迁移中断恢复、重复执行和一致性修复归零。
-- [ ] **Step 6：提交。** 提交信息：`同步读者账号搜索投影`。
+- [x] **Step 1：编写失败测试。** 覆盖现有注册和管理端状态变更同步；Reader 写失败不改投影，投影写失败使 Reader 写回滚，重复 upsert 不产生多行。密码重置和摘要升级不改变投影字段，不得为同步投影改动它们的事务语义。
+- [x] **Step 2：实现同事务同步。** Reader 写流程通过 `commerce/contract` 调用投影 Provider，双方从 Context 取得同一事务；不得在 Reader 中直接写 Commerce 表。
+- [x] **Step 3：改造旧账号迁移。** Runner 使用 `WithExisting` 把每批目标事务绑定进 Stage Context；账号 Stage 写入 `reader_accounts` 后通过 Commerce 合同同步投影。检查点、账号和投影由 Runner 的同一事务提交或回滚，幂等重跑保持零差异。
+- [x] **Step 4：实现一致性应用服务。** Reader 分页读取源快照，通过 Commerce 合同读取投影，报告 missing/extra/mismatch；显式修复模式按 Reader 事实 upsert 或删除，日志不输出账号敏感字段。
+- [x] **Step 5：真实 PostgreSQL 验证。** 注入投影故障验证回滚；验证迁移中断恢复、重复执行和一致性修复归零。
+- [x] **Step 6：提交。** 提交信息：`同步读者账号搜索投影`。
 
 ## Task 5：把 Reader-facing Commerce HTTP 迁入 Reader
 

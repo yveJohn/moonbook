@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/legacymigrate"
 	_ "github.com/go-sql-driver/mysql"
@@ -64,6 +65,7 @@ func run() int {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	command := flag.Arg(0)
+	readerIdentity := legacymigrate.ReaderIdentityStage{ProjectionWriter: commerceprovider.NewReaderSearch(target)}
 	stages := []legacymigrate.Stage{legacymigrate.PreflightStage{}}
 	if command == "all" {
 		objects, downloader, err := coverDependencies(target)
@@ -82,14 +84,14 @@ func run() int {
 			legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader},
 			legacymigrate.NovelChaptersStage{Objects: objects},
 			legacymigrate.NovelReaderSEOStage{},
-			legacymigrate.ReaderIdentityStage{},
+			readerIdentity,
 			legacymigrate.ReaderCommerceStage{},
 			legacymigrate.ReaderFinanceStage{},
 			legacymigrate.ReaderActivityStage{},
 		)
 	}
 	if command == "reader-identity" || command == "reader-commerce" || command == "reader-finance" || command == "reader-activity" {
-		stages = append(stages, legacymigrate.ReaderIdentityStage{})
+		stages = append(stages, readerIdentity)
 		if command == "reader-commerce" || command == "reader-finance" || command == "reader-activity" {
 			stages = append(stages, legacymigrate.ReaderCommerceStage{})
 		}

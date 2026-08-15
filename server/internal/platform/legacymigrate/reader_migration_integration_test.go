@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
+	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/reconcile"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -50,7 +52,7 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stages := []Stage{ReaderIdentityStage{}, ReaderCommerceStage{}, ReaderFinanceStage{}, ReaderActivityStage{}}
+	stages := []Stage{ReaderIdentityStage{ProjectionWriter: commerceprovider.NewReaderSearch(target)}, ReaderCommerceStage{}, ReaderFinanceStage{}, ReaderActivityStage{}}
 	if err := runner.Run(ctx, stages...); err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +65,8 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_accounts WHERE id=$1 AND password_algorithm='md5' AND status='disabled'`, []any{readerIDs[1]}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_accounts WHERE id=$1`, []any{readerIDs[2]}, 0)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_sessions WHERE reader_id IN ($1,$2)`, []any{readerIDs[0], readerIDs[1]}, 0)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_reader_search_projection WHERE reader_id IN ($1,$2)`, []any{readerIDs[0], readerIDs[1]}, 2)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM ((SELECT id,username,nickname,status FROM reader_accounts WHERE id IN ($1,$2) EXCEPT SELECT reader_id,username,nickname,status FROM commerce_reader_search_projection WHERE reader_id IN ($1,$2)) UNION ALL (SELECT reader_id,username,nickname,status FROM commerce_reader_search_projection WHERE reader_id IN ($1,$2) EXCEPT SELECT id,username,nickname,status FROM reader_accounts WHERE id IN ($1,$2))) d`, []any{readerIDs[0], readerIDs[1]}, 0)
 
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_invite_relations WHERE id=9007199254741102 AND invite_code_id=9007199254741101`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_products WHERE id=9007199254741201 AND target_id=$1 AND source_type='legacy'`, []any{bookID}, 1)
@@ -150,6 +154,52 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	}
 }
 
+type failingMigrationProjection struct{ err error }
+
+func (writer failingMigrationProjection) UpsertReaderSearchProjection(context.Context, commercecontract.ReaderSearchProjection) error {
+	return writer.err
+}
+func (writer failingMigrationProjection) DeleteReaderSearchProjection(context.Context, int64) error {
+	return writer.err
+}
+
+func TestReaderIdentityMigrationRollsBackAccountAndCheckpointWhenProjectionFails(t *testing.T) {
+	mysqlDSN := os.Getenv("MOONBOOK_LEGACY_TEST_DSN")
+	postgresDSN := os.Getenv("MOONBOOK_MIGRATION_TEST_DSN")
+	if mysqlDSN == "" || postgresDSN == "" {
+		t.Skip("MOONBOOK_LEGACY_TEST_DSN and MOONBOOK_MIGRATION_TEST_DSN are not configured")
+	}
+	source, err := sql.Open("mysql", mysqlDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	target, err := sql.Open("pgx", postgresDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	readerIDs := []int64{9007199254740993, 9007199254740994, 9007199254740995}
+	migration := fmt.Sprintf("reader-projection-rollback-%d", time.Now().UnixNano())
+	cleanupReaderMigrationFixture(t, target, migration, readerIDs, 9007199254742001, 9007199254742101, 9007199254742201, 9007199254742202)
+	t.Cleanup(func() {
+		cleanupReaderMigrationFixture(t, target, migration, readerIDs, 9007199254742001, 9007199254742101, 9007199254742201, 9007199254742202)
+		_ = target.Close()
+	})
+	runner, err := NewRunner(source, target, migration, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := ReaderIdentityStage{ProjectionWriter: failingMigrationProjection{err: fmt.Errorf("forced projection failure")}}
+	if err := runner.Run(ctx, stage); err == nil {
+		t.Fatal("expected projection failure")
+	}
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_accounts WHERE id = ANY($1)`, []any{readerIDs}, 0)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_reader_search_projection WHERE reader_id = ANY($1)`, []any{readerIDs}, 0)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1`, []any{migration}, 0)
+}
+
 func seedReaderMigrationTargets(t *testing.T, db *sql.DB, categoryID, authorID, bookID, chapterID int64) {
 	t.Helper()
 	ctx := context.Background()
@@ -206,6 +256,7 @@ func cleanupReaderMigrationFixture(t *testing.T, db *sql.DB, migration string, r
 		{`DELETE FROM reader_invite_relations WHERE inviter_reader_id = ANY($1) OR invitee_reader_id = ANY($1)`, []any{readerIDs}},
 		{`DELETE FROM reader_invite_codes WHERE inviter_reader_id = ANY($1)`, []any{readerIDs}},
 		{`DELETE FROM reader_sessions WHERE reader_id = ANY($1)`, []any{readerIDs}},
+		{`DELETE FROM commerce_reader_search_projection WHERE reader_id = ANY($1)`, []any{readerIDs}},
 		{`DELETE FROM reader_accounts WHERE id = ANY($1)`, []any{readerIDs}},
 		{`DELETE FROM novel_chapters WHERE id=$1`, []any{chapterID}},
 		{`DELETE FROM novel_books WHERE id=$1`, []any{bookID}},

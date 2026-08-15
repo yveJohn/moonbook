@@ -12,3 +12,7 @@ type Repository interface {
 	SetStatus(context.Context, int64, string) (User, error)
 	ResetPassword(context.Context, int64, string, string) error
 }
+
+type Transactor interface {
+	Within(context.Context, func(context.Context) error) error
+}

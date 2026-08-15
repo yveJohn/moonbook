@@ -14,6 +14,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/checkin"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
+	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/purchase"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/recharge"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
@@ -34,6 +35,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/txtimport"
 	readeraccount "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/account"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/accountsync"
 	readeractivity "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/activity"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/adminfeedback"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/admininvite"
@@ -42,6 +44,7 @@ import (
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	readerme "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/me"
 	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/gin-gonic/gin"
 	"os"
@@ -66,7 +69,10 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	readerService := readerauth.NewService(readerauth.SQLRepository{DB: db}, readerauth.RedisRateLimiter{Client: global.GVA_REDIS, Prefix: "moonbook:reader:rate:"}, readerauth.TokenConfig{Secret: []byte(global.GVA_CONFIG.JWT.SigningKey)})
 	activityService := readeractivity.NewService(readeractivity.SQLRepository{DB: db})
 	readerService.SetActivityRecorder(activityService)
-	registration := readerinvite.NewService(readerinvite.SQLRepository{DB: db}, readerService)
+	transactor := transaction.New(db)
+	readerSearch := commerceprovider.NewReaderSearch(db)
+	accountConsistency := accountsync.NewService(accountsync.SQLAccountPager{DB: db}, readerSearch, readerSearch, 500)
+	registration := readerinvite.NewService(readerinvite.SQLRepository{DB: db}, readerService, transactor, readerSearch, commerceprovider.NewRegistrationReward(db))
 	readerauth.RegisterRoutes(publicGroup, readerauth.NewHandler(readerService, registration))
 	readerme.RegisterRoutes(publicGroup, readerme.NewService(readerme.SQLRepository{DB: db}), readerService)
 	readeraccount.RegisterRoutes(publicGroup, db, readerService)
@@ -83,7 +89,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	adminproduct.RegisterRoutes(privateGroup, adminproduct.NewService(adminproduct.SQLRepository{DB: db}))
 	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db}))
 	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}))
-	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}))
+	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}, transactor, readerSearch, accountConsistency))
 	adminfeedback.RegisterRoutes(privateGroup, adminfeedback.NewService(adminfeedback.SQLRepository{DB: db}))
 	admininvite.RegisterRoutes(privateGroup, admininvite.NewService(admininvite.SQLRepository{DB: db}))
 	admincheckin.RegisterRoutes(privateGroup, admincheckin.NewService(admincheckin.SQLRepository{DB: db}))

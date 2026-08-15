@@ -10,6 +10,11 @@ var ErrInsufficientBalance = errors.New("wallet balance is insufficient")
 
 type SQLRepository struct{ DB *sql.DB }
 
+type DBTX interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 func (r SQLRepository) Get(ctx context.Context, readerID int64) (Wallet, error) {
 	var w Wallet
 	err := r.DB.QueryRowContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, readerID).Err()
@@ -61,7 +66,7 @@ func (r SQLRepository) Mutate(ctx context.Context, m Mutation) (Ledger, error) {
 }
 
 // MutateTx applies a wallet mutation inside an existing transaction.
-func MutateTx(ctx context.Context, tx *sql.Tx, m Mutation) (Ledger, error) {
+func MutateTx(ctx context.Context, tx DBTX, m Mutation) (Ledger, error) {
 	if m.Amount <= 0 || (m.Direction != "income" && m.Direction != "expense") || (m.CoinType != "recharge" && m.CoinType != "bonus") {
 		return Ledger{}, errors.New("invalid wallet mutation")
 	}
