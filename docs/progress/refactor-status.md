@@ -46,6 +46,7 @@
 - M7 CI 覆盖审计确认现有两个 job 只覆盖基础质量与 M1 Compose，根 `make verify` 也只执行 M1；M3 真实依赖、迁移双库、浏览器、备份恢复、性能、安全供应链及固定制品均未进入统一门。当前后端边界测试确定失败，管理构建还会执行已确认恶意的直接依赖，因此流水线不是可信发布入口，详见 `docs/verification/m7-ci-coverage-audit.md`。
 - M7 模块边界整改的架构、合同、上下文事务、批量投影、错误和测试设计，以及 Commerce 自有最小 Reader 搜索投影补充方案均已获用户确认；书面规格正式批准，详细实施计划已形成。投影只用于 Commerce 管理搜索与展示，Reader 仍是事实源，鉴权和交易判断必须走实时合同；实施不得弱化冻结 Reader 契约、跨域原子性或现有边界测试，详见 `docs/superpowers/specs/2026-08-15-moonbook-module-boundary-remediation-design.md` 和 `docs/superpowers/plans/2026-08-15-moonbook-module-boundary-remediation-plan.md`。
 - M7 模块边界整改 Task 1 已完成 Context 绑定的 Platform Transactor：支持最外层提交/回滚、嵌套加入、rollback-only、panic 回滚、既有 Runner 事务接入、事务内 Executor 和提交后回调；提交后回调失败可识别为事实已提交，外部事务禁止静默注册回调。脚本化 driver 单元测试、`gofmt`、`go vet` 和项目浏览器隔离 PostgreSQL 上的提交/回滚/四路并发集成测试通过。
+- M7 模块边界整改 Task 2 已建立 Reader、Commerce、Novel 三域窄合同和稳定错误分类，覆盖账号校验/锁定/批量显示、邀请关系、Commerce 搜索投影与 Reader 兼容交易能力、公开内容/SEO/批量展示、商品目标/购买快照和点赞汇总。合同 DTO 不含 Gin/GVA/数据库实现句柄，Long ID 保持 Go `int64`；AST import 白名单、DTO 形状、错误脱敏、定向单元测试和 `go vet` 通过。Provider 将按后续工作流任务逐项实现，当前运行时行为未改变。
 
 ## M1 已验证单元
 

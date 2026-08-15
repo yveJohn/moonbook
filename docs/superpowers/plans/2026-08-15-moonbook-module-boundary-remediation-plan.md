@@ -58,11 +58,11 @@
 - Create: `server/internal/modules/commerce/contract/contract_test.go`
 - Create: `server/internal/modules/novel/contract/contract_test.go`
 
-- [ ] **Step 1：编写合同形状测试。** 断言 DTO 不含 Gin Context、GVA Model、Repository、表名、`*sql.DB` 或 `*sql.Tx`；Long ID 仍为 Go `int64` 领域值，HTTP 字符串化留在 Reader 兼容层。
-- [ ] **Step 2：编写错误分类测试。** 覆盖 not found、disabled、conflict、temporary、timeout 和 unknown，保证 `errors.Is` 可用且消息不含 SQL、表名、对象键、DSN 或凭据。
-- [ ] **Step 3：定义窄接口。** 按账号校验/锁定、显示快照、邀请关系、商业汇总、商品访问、奖励参与者、公开内容、购买快照和点赞汇总拆分，不建立全域巨型 Service。
-- [ ] **Step 4：增加合同包依赖测试。** 证明合同包只依赖标准库和同领域合同 DTO，不反向引用任何 Provider 或实现包；Provider 编译期断言随对应 Adapter 任务加入。
-- [ ] **Step 5：验证并提交。** 运行 `go test ./internal/modules/reader/contract ./internal/modules/commerce/contract ./internal/modules/novel/contract -v`；提交信息：`建立跨领域业务合同`。
+- [x] **Step 1：编写合同形状测试。** 断言 DTO 不含 Gin Context、GVA Model、Repository、表名、`*sql.DB` 或 `*sql.Tx`；Long ID 仍为 Go `int64` 领域值，HTTP 字符串化留在 Reader 兼容层。
+- [x] **Step 2：编写错误分类测试。** 覆盖 not found、disabled、conflict、temporary、timeout 和 unknown，保证 `errors.Is` 可用且消息不含 SQL、表名、对象键、DSN 或凭据。
+- [x] **Step 3：定义窄接口。** 按账号校验/锁定、显示快照、邀请关系、商业汇总、商品访问、奖励参与者、公开内容、购买快照和点赞汇总拆分，不建立全域巨型 Service。
+- [x] **Step 4：增加合同包依赖测试。** 证明合同包只依赖标准库和同领域合同 DTO，不反向引用任何 Provider 或实现包；Provider 编译期断言随对应 Adapter 任务加入。
+- [x] **Step 5：验证并提交。** 运行 `go test ./internal/modules/reader/contract ./internal/modules/commerce/contract ./internal/modules/novel/contract -v`；提交信息：`建立跨领域业务合同`。
 
 ## Task 3：新增 Commerce Reader 搜索投影
 
