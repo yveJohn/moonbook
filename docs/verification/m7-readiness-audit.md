@@ -114,6 +114,8 @@ M7 必须基于目标容量建立可重复场景、阈值和报告，不能只�
 
 商业授权和真实第三方凭据属于外部 Go/No-Go 项，但必须有明确责任人和证据位置，不能用代码测试替代。
 
+审计后进展：2026-08-15 已执行锁文件、govulncheck 和三个本地镜像的 Trivy 扫描，详见 `docs/verification/m7-security-supply-chain-audit.md`。管理端直接构建依赖 `vite-vue-path-map@1.0.2` 已被标记为 critical 恶意包，且注入逻辑实际进入本地生产产物；当前 Server、Web 和 Reader 镜像也均存在已有修复版本的 high/critical 漏洞。因此当前应用镜像明确为生产 No-Go，安全退出门未关闭。
+
 ## CI 与统一验收缺口
 
 当前 CI 执行基础 Go race 测试、管理前端测试/构建、冻结 Reader 测试/构建、Gitleaks 和 M1 Compose 验证。但它没有：

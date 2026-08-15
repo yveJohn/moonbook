@@ -38,6 +38,7 @@
 - M7 GVA 基座审计确认通用 `/system/getSystemConfig` 会回显 JWT、Redis、数据库、邮件和 MinIO 等 Secret，`setSystemConfig` 还能改写运行配置，生产前必须关闭或白名单化；平台任务无统一只读监控，旧在线状态和通知公告也没有确定等价结论。详细证据见 `docs/verification/m7-gva-foundation-audit.md`。
 - M7 已完成一次双项目、独立命名卷的本地合成备份恢复演练，修正 MinIO 客户端挂载、稳定 SHA-256 清单、空库恢复顺序、一次性迁移调用和版本表名，并把财务核对命令纳入 Server 镜像；恢复后 106 张表、版本 58/59 条记录、1 个 43 字节对象与源端一致，迁移 `applied=0`、基础设施 healthy、财务 `mismatches=0`，完整 Compose 栈及三项健康入口通过。该证据只关闭命令级可执行性和基础启动冒烟，真实业务数据、协调停写、支付回调和认证业务旅程仍待完成，详见 `docs/verification/m7-backup-restore-rehearsal.md`。
 - M7 已新增固定 commit/tag/digest、配置与 Secret 门禁、升级前备份、一次性迁移、应用替换、冒烟和回退兼容边界明确的 Compose 升级 Runbook，并在 `3058fee` 到 `a8c209d` 两个固定 Server 镜像间完成隔离演练。升级迁移 `applied=0`，版本 58/59 条记录和 `sys_params` 夹具保持不变，目标镜像新增财务核对返回 `mismatches=0`，升级及应用镜像回退后的 gateway/API/Reader 健康均通过。该版本对无迁移差异，只关闭命令级升级和特定兼容回退缺口；真实业务、含迁移版本兼容、TLS/可信代理、资源限制和生产观察阈值仍待完成，详见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
+- M7 依赖与供应链审计确认当前三个应用镜像均为生产 No-Go：管理端 `vite-vue-path-map@1.0.2` 是已公告的 critical 恶意包且注入逻辑实际进入生产构建产物；Server 镜像由 Go 1.24.2 构建，`moonbook-server` 为 34 high/3 critical；管理端 Alpine 层为 30 high/2 critical；Reader 的 Alpine 层为 17 high/2 critical、Node 层为 32 high/3 critical。冻结 Reader 锁文件当前 npm audit 为 5 high，均可由 React Router 7.18.2 修复。恶意插件替换、依赖/基础镜像升级、SBOM、许可证和 CI 安全门仍待实施，详见 `docs/verification/m7-security-supply-chain-audit.md`。
 
 ## M1 已验证单元
 
