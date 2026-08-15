@@ -49,6 +49,7 @@
 - M7 模块边界整改 Task 2 已建立 Reader、Commerce、Novel 三域窄合同和稳定错误分类，覆盖账号校验/锁定/批量显示、邀请关系、Commerce 搜索投影与 Reader 兼容交易能力、公开内容/SEO/批量展示、商品目标/购买快照和点赞汇总。合同 DTO 不含 Gin/GVA/数据库实现句柄，Long ID 保持 Go `int64`；AST import 白名单、DTO 形状、错误脱敏、定向单元测试和 `go vet` 通过。Provider 将按后续工作流任务逐项实现，当前运行时行为未改变。
 - M7 模块边界整改 Task 3 已新增 `00059` Commerce Reader 搜索投影及其 Provider：表严格限定六个字段、无 Reader 外键，支持幂等 upsert、按 ID 删除、主键游标分页，并通过 Context 事务执行器加入调用方 PostgreSQL 事务；运行时代码不读取 `reader_accounts`。隔离 PostgreSQL 已验证空库迁移、从 `00058` 带账号升级、重复执行 `applied=0`、账号行数不减少和六字段双向差异为 0；本地浏览验收库升级后 Reader/投影均为 38 行且差异为 0，仓储事务回滚集成测试通过。Provider 尚未注入 Reader 账号写流程，该原子同步属于 Task 4。
 - M7 模块边界整改 Task 4 已把 Reader 注册、管理端账号状态和旧账号迁移接入 Commerce 搜索投影：注册账号、邀请码、邀请关系、双方奖励和投影在同一 PostgreSQL 事务内提交，状态变更与会话撤销、投影同步同成同败，session/token 仅在注册事务提交后创建；密码重置不刷新投影。迁移 Runner 将每批事务绑定到 Context，账号、投影与检查点可共同回滚并支持幂等重跑。新增双主键游标流式一致性服务，审计 missing/extra/mismatch，显式 repair 可收敛且只输出最多 100 个 Reader ID 哈希指纹。定向单元测试、`go vet`、真实 PostgreSQL 注册/状态/repair 集成测试及 MySQL 到 PostgreSQL 迁移回滚与重跑验证通过；验收库四字段双向差异为 0，钱包不可变触发器保持启用。边界违规由 15 项降为 14 项，余项按 Task 5 至 Task 8 继续整改。
+- M7 模块边界整改 Task 5 已将 Reader-facing 签到、钱包、购买和充值 HTTP 编排迁入 `reader/commercecompat`，Commerce 通过窄合同 Provider 保留原 Service、Repository 和交易规则。11 条冻结路由的方法、路径、公开/认证边界均保持不变，HTTP 200 包装、业务 code/message、`data/rows/total` 空值、日期及 Long ID 字符串由 Reader 合同测试逐项锁定；新位置保留原 6 个契约测试入口并新增路由唯一性与认证清单测试。Reader/Commerce 全包测试、`go vet` 及真实 PostgreSQL 签到、购买、充值集成测试通过；模块边界违规由 14 项降为 7 项，剩余项属于 Task 6 和 Task 7 的 Reader public/account 整改。
 
 ## M1 已验证单元
 

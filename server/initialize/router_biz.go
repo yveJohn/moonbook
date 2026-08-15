@@ -41,6 +41,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/admininvite"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/adminuser"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/commercecompat"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	readerme "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/me"
 	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
@@ -76,10 +77,10 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	readerauth.RegisterRoutes(publicGroup, readerauth.NewHandler(readerService, registration))
 	readerme.RegisterRoutes(publicGroup, readerme.NewService(readerme.SQLRepository{DB: db}), readerService)
 	readeraccount.RegisterRoutes(publicGroup, db, readerService)
-	wallet.RegisterRoutes(publicGroup, wallet.NewService(wallet.SQLRepository{DB: db}), readerService)
-	recharge.RegisterRoutes(publicGroup, recharge.NewService(recharge.SQLRepository{DB: db}), readerService)
-	checkin.RegisterRoutes(publicGroup, checkin.NewService(checkin.SQLRepository{DB: db}), readerService)
-	purchase.RegisterRoutes(publicGroup, purchase.NewService(purchase.SQLRepository{DB: db}), readerService)
+	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
+	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewService(recharge.SQLRepository{DB: db})), readerService)
+	commercecompat.RegisterCheckinRoutes(publicGroup, commerceprovider.NewCheckin(checkin.NewService(checkin.SQLRepository{DB: db})), readerService)
+	commercecompat.RegisterPurchaseRoutes(publicGroup, commerceprovider.NewPurchase(purchase.NewService(purchase.SQLRepository{DB: db})), readerService)
 	payment.RegisterRoutes(publicGroup, payment.NewService(payment.SQLRepository{DB: db}, os.Getenv("MOONBOOK_EPUSDT_PID"), os.Getenv("MOONBOOK_EPUSDT_SECRET")))
 	adminrecharge.RegisterRoutes(privateGroup, adminrecharge.NewService(adminrecharge.SQLRepository{DB: db}))
 	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))

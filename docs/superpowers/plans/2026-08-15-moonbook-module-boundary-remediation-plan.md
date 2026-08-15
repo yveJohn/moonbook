@@ -127,12 +127,12 @@
 - Remove after equivalent tests pass: `server/internal/modules/commerce/wallet/http_contract_test.go`
 - Modify: `server/initialize/router_biz.go`
 
-- [ ] **Step 1：冻结路由和响应测试。** 复制行为断言而非实现，逐接口核对路径、方法、认证、HTTP 200 包装、业务 code/message、`data/rows/total` 空值、日期和 Long ID 字符串。
-- [ ] **Step 2：确认新 Handler 测试失败。** 新兼容层只依赖 Reader 内部 auth/wire 和 Commerce contract 替身。
-- [ ] **Step 3：迁移 HTTP 编排。** Commerce 保留签到、购买、充值、钱包规则与 Provider；Reader Handler 仅做解析、认证、合同调用和冻结错误映射。
-- [ ] **Step 4：切换组合根。** `initialize` 注入 Commerce Provider 并只注册一次冻结路由；用路由清单测试确认无缺失、重复或方法变化。
-- [ ] **Step 5：删除旧 HTTP 实现并验证。** 先证明新 Reader 合同测试逐断言覆盖四份旧测试且用例数不减少，再删除旧 HTTP 与旧位置测试；运行新合同测试、`TestModuleDependencyRules` 定向测试和 Reader 路由清单。
-- [ ] **Step 6：提交。** 提交信息：`归并读者交易兼容接口`。
+- [x] **Step 1：冻结路由和响应测试。** 复制行为断言而非实现，逐接口核对路径、方法、认证、HTTP 200 包装、业务 code/message、`data/rows/total` 空值、日期和 Long ID 字符串。
+- [x] **Step 2：确认新 Handler 测试失败。** 新兼容层只依赖 Reader 内部 auth/wire 和 Commerce contract 替身。
+- [x] **Step 3：迁移 HTTP 编排。** Commerce 保留签到、购买、充值、钱包规则与 Provider；Reader Handler 仅做解析、认证、合同调用和冻结错误映射。
+- [x] **Step 4：切换组合根。** `initialize` 注入 Commerce Provider 并只注册一次冻结路由；用路由清单测试确认无缺失、重复或方法变化。
+- [x] **Step 5：删除旧 HTTP 实现并验证。** 先证明新 Reader 合同测试逐断言覆盖四份旧测试且用例数不减少，再删除旧 HTTP 与旧位置测试；运行新合同测试、`TestModuleDependencyRules` 定向测试和 Reader 路由清单。
+- [x] **Step 6：提交。** 提交信息：`归并读者交易兼容接口`。
 
 ## Task 6：通过 Novel 合同重构 Reader 公开内容
 
