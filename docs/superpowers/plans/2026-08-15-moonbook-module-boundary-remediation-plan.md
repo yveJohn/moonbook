@@ -273,12 +273,12 @@
 - Create: `server/internal/modules/composition_root_test.go`
 - Create: `server/internal/modules/table_ownership_test.go`
 
-- [ ] **Step 1：先让测试报告当前越界。** `table_ownership_test.go` 用类型化 Go map 固定 Reader/Commerce/Novel 表归属；Go AST 扫描非测试 Go 源码中的 SQL 字符串常量和可解析拼接并报告跨域访问。
-- [ ] **Step 2：固定例外边界。** 只扫描业务模块运行时代码；版本迁移和测试 fixture 不属于业务运行时。动态表名只允许同领域显式枚举，禁止任意字符串逃逸。
-- [ ] **Step 3：增加组合根检查。** 业务包不能构造其他领域 Provider；跨域实现装配只能出现在 `initialize`。
-- [ ] **Step 4：禁止投影越权。** 静态或架构测试证明交易决策代码不依赖 `commerce_reader_search_projection` 查询结果，并禁止 Commerce 运行时读取 `reader_accounts`。
-- [ ] **Step 5：运行门禁。** `go test ./internal/modules -run 'TestModuleDependencyRules|TestSQLOwnership|TestCompositionRoot' -v` 必须全部通过。
-- [ ] **Step 6：提交。** 提交信息：`增加模块数据所有权检查`。
+- [x] **Step 1：先让测试报告当前越界。** `table_ownership_test.go` 用类型化 Go map 固定 Reader/Commerce/Novel 表归属；Go AST 扫描非测试 Go 源码中的 SQL 字符串常量和可解析拼接并报告跨域访问。
+- [x] **Step 2：固定例外边界。** 只扫描业务模块运行时代码；版本迁移和测试 fixture 不属于业务运行时。动态表名只允许同领域显式枚举，禁止任意字符串逃逸。
+- [x] **Step 3：增加组合根检查。** 业务包不能构造其他领域 Provider；跨域实现装配只能出现在 `initialize`。
+- [x] **Step 4：禁止投影越权。** 静态或架构测试证明交易决策代码不依赖 `commerce_reader_search_projection` 查询结果，并禁止 Commerce 运行时读取 `reader_accounts`。
+- [x] **Step 5：运行门禁。** `go test ./internal/modules -run 'TestModuleDependencyRules|TestSQLOwnership|TestCompositionRoot' -v` 必须全部通过。
+- [x] **Step 6：提交。** 提交信息：`增加模块数据所有权检查`。
 
 ## Task 14：执行全量回归并固定验收证据
 
