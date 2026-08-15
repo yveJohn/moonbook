@@ -12,7 +12,7 @@
 | M3 读者域与零修改兼容 | 已完成 | 冻结 Reader 树、全部调用面契约、真实 PostgreSQL/Redis/MinIO、SSR 异常、生产构建和 Playwright 关键旅程均通过统一验收；8GB 副本容量演练归属 M6 |
 | M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览及当前财务表迁移已实现；审计确认 Reader 真实支付创建、完整回调审计、财务全域核对和两个只读运营页签仍待补齐 |
 | M5 内容生产与长任务 | 实施中 | 论坛、TXT、清洗、摘要和画像 Worker 的租约续期、失租停止、重启接管与结果唯一性已通过真实 PostgreSQL/MinIO 验证；内容生产旧数据迁移映射仍待补齐 |
-| M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；新增 `moonbook-legacy-migrate all` 全量编排入口，真实 8GB 副本演练和完整差异报告仍待完成 |
+| M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；约 8 GB 候选副本已只读定位，内容生产 stage、完整性校验、全量演练和差异报告仍待完成 |
 | M7 生产切换就绪验收 | 审计中 | 备份恢复、Compose 升级和空库短时性能基线已有隔离证据；真实数据容量、监控告警、安全、统一 CI 和最终报告仍存在明确缺口 |
 
 ## M0 已完成
@@ -30,7 +30,7 @@
 
 - GVA BSL 1.1 规定 Production Use 需要商业许可证；生产切换前必须取得并保存授权证据。
 - 冻结 reader-ui 的 npm 依赖存在 9 个 high 漏洞，必须在 M7 前升级或形成批准的缓解记录。
-- 旧仓库存在约 8 GB 数据库备份，但新仓库未复制该敏感/大体积文件；完整数据副本演练将在 M6 使用受控来源执行。
+- 冻结旧仓库已只读定位 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节，结合 gzip ISIZE 模值和用户提供信息推算单成员原始大小约 8,129,574,556 字节。文件未解压、未校验、未导入且保持未跟踪，完整副本演练仍须先完成内容生产 stage、对象转换和全域核对器，详见 `docs/verification/m6-data-copy-discovery.md`。
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
 - M4 退出审计确认 Reader 创建充值订单当前只写本地 `pending`，未调用 EPUSDT 创建交易，无法产生支付地址；拒绝回调不会完整落审计日志，Compose 也未注入已声明的 EPUSDT 变量。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
 - M5/M6 审计确认内容生产旧表尚未进入 `moonbook-legacy-migrate all`，目标表缺少通用 legacy 幂等来源键，TXT/清洗/合并对象迁移及核对器未实现；论坛 Cookie 当前仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
