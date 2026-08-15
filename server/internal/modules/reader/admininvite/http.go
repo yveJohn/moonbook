@@ -17,11 +17,30 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	write := private.Group("reader").Use(middleware.OperationRecord())
 	read.GET("inviteCodes", h.list)
 	write.POST("inviteCodes", h.create)
+	write.PUT("inviteCodes/:id", h.update)
 	write.PUT("inviteCodes/:id/status", h.status)
 	write.DELETE("inviteCodes/:id", h.delete)
 }
 func render(v InviteCode) map[string]any {
-	return map[string]any{"id": v.ID, "inviterReaderId": v.InviterReaderID, "code": v.Code, "status": v.Status, "maxUseCount": v.MaxUseCount, "usedCount": v.UsedCount, "expiresAt": v.ExpiresAt, "createdAt": v.CreatedAt}
+	return map[string]any{"id": v.ID, "inviterReaderId": v.InviterReaderID, "code": v.Code, "status": v.Status, "maxUseCount": v.MaxUseCount, "usedCount": v.UsedCount, "expiresAt": v.ExpiresAt, "remark": v.Remark, "createdAt": v.CreatedAt}
+}
+func (h *Handler) update(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串"))
+		return
+	}
+	var req UpdateInput
+	if c.ShouldBindJSON(&req) != nil {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "请求参数无效"))
+		return
+	}
+	v, err := h.service.Update(c, id, req)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, render(v), "更新成功")
 }
 func (h *Handler) list(c *gin.Context) {
 	p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

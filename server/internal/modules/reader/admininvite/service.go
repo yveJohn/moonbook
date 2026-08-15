@@ -20,6 +20,9 @@ func (s *Service) List(ctx context.Context, k string, p, n int) ([]InviteCode, i
 func (s *Service) Create(ctx context.Context, in CreateInput) (InviteCode, error) {
 	return s.Repo.Create(ctx, in)
 }
+func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (InviteCode, error) {
+	return s.Repo.Update(ctx, id, in)
+}
 func (s *Service) SetStatus(ctx context.Context, id int64, st string) (InviteCode, error) {
 	return s.Repo.SetStatus(ctx, id, st)
 }

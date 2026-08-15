@@ -39,13 +39,12 @@
 | 书架、历史、偏好、点赞 | 读者 API 与相关表 | 查看读者行为、兼容读者端 | M3 | 基线已盘点 |
 | 反馈处理 | `reader/feedback` / `ReaderFeedbackAdminController` | 列表、详情、回复 | M3 | 列表、详情、单次回复已实现 |
 | 运营概览 | `/dashboard/overview` / `DashboardOverviewService` | 用户总量、周期新增、日活、去重周期活跃、30 天趋势 | M4 | `00055`、`GET /dashboard/overview` 和 GVA Dashboard 已实现；按 Kuala Lumpur 自然日采集，30 天趋势零填充，真实 PostgreSQL 与双库迁移测试通过 |
-| 邀请码 | `reader/inviteCode` / `ReaderInviteCodeController` | 生成、编辑、删除、状态 | M4 | 生成、删除、启停已实现；已使用码禁止删除，编辑字段待补 |
+| 邀请码 | `reader/inviteCode` / `ReaderInviteCodeController` | 生成、编辑、删除、状态 | M4 | `00057`、`/reader/inviteCodes` 和管理页面已实现生成、编辑、删除、启停；人工码可编辑邀请码、最大次数、过期时间和备注，读者自动码仅允许编辑状态与备注且禁止删除，真实 PostgreSQL 与浏览器验收通过 |
 | 签到奖励规则 | `reader/checkinReward` / `ReaderCheckinRewardRuleController` | CRUD、启停 | M4 | `00025`、`/reader/checkinRules`、管理页面已实现；fixed/random 校验及启用唯一约束有集成测试 |
 | 钱包与流水 | `reader/wallet` / `ReaderWalletAdminController` | 余额、流水、调整、签到、邀请奖励 | M4 | 余额、不可变流水和人工调账已实现；请求 ID 幂等、钱包锁和余额不足保护有真实 PostgreSQL 集成测试；签到奖励和邀请奖励均有配置/流水闭环 |
 | 消费商品 | `reader/product` / `ReaderProductController` | 书籍、章节、会员、免广告商品及上下架 | M4 | 管理端分页筛选、CRUD、在售状态、目标存在性校验和历史订单删除保护已实现；真实 PostgreSQL 集成测试通过 |
 | 消费订单 | `reader/order` / `ReaderOrderAdminController` | 查询、人工充值、确认 | M4 | 管理端列表/详情和筛选已实现；模拟充值按“创建 pending 订单、单独确认入账”两阶段执行，请求/确认流水幂等且操作受审计；退款仍需独立财务审批设计 |
 | 会员人工发放 | `reader/user` / `ReaderMembershipGrantController` | 限时或永久会员发放、幂等请求、备注审计 | M4 | `POST /reader/users/:id/membership` 已实现；事务锁定读者账号，会员授予独立叠加且不修改购买订单 |
-| 会员发放 | 读者详情组件 | 发放、有效期、永久会员 | M4 | 基线已盘点 |
 | 充值产品与设置 | `reader/payment/product` / `ReaderRechargeProductAdminController` | 预设档位、自定义兑换范围 | M4 | 充值档位 CRUD、自定义充值开关/汇率/最小最大范围管理已实现；真实 PostgreSQL 集成测试覆盖非法规则 |
 | 支付渠道 | `reader/payment/channel` / `ReaderPaymentChannelAdminController` | 配置、启停、连通性检查、凭据保护 | M4 | 渠道查询、启停、凭据状态和脱敏连通性检查已实现；真实生产网关连通性仍需切换前使用受控凭据验收 |
 | 充值订单与回调 | `reader/payment/order` / `ReaderRechargeOrderAdminController` | 详情、回调日志、主动同步、异常状态 | M4 | 订单列表、筛选、详情、回调日志审计、人工补单和受控主动同步已实现；真实网关仍需使用脱敏凭据完成环境验收 |
