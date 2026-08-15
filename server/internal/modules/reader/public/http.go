@@ -6,8 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
@@ -27,8 +26,8 @@ type pageResponse struct {
 }
 type Handler struct{ service *Service }
 
-func RegisterRoutes(group *gin.RouterGroup, db *sql.DB, objects *objectstore.Service, auth *readerauth.Service, access *catalog.Service) {
-	h := &Handler{service: NewService(db, objects, access)}
+func RegisterRoutes(group *gin.RouterGroup, service *Service, auth *readerauth.Service) {
+	h := &Handler{service: service}
 	r := group.Group("/reader").Use(readerauth.OptionalReader(auth))
 	r.GET("/seo/config", h.seoConfig)
 	r.GET("/seo/robots.txt", h.robots)
@@ -92,19 +91,21 @@ func summary(book Book) map[string]any {
 	return out
 }
 
-func productStatus(status catalog.AccessResult) map[string]any {
+func productStatus(status commercecontract.AccessResult) map[string]any {
 	value := map[string]any{
-		"bookId": status.BookID, "chargeMode": status.ChargeMode, "readable": status.Readable,
+		"bookId": strconv.FormatInt(status.BookID, 10), "chargeMode": status.ChargeMode, "readable": status.Readable,
 		"accessReason": status.AccessReason, "entitled": status.BookPurchased || status.MembershipEntitled,
 		"purchased": status.BookPurchased, "membershipEntitled": status.MembershipEntitled,
 		"purchasable": status.Purchasable, "productId": nil, "productName": nil,
 		"priceCoin": nil, "saleStatus": nil, "product": nil,
 	}
-	if status.ProductID != "" {
-		value["productId"], value["productName"], value["priceCoin"], value["saleStatus"] = status.ProductID, status.ProductName, status.PriceCoin, status.SaleStatus
+	if status.ProductID != nil {
+		productID := strconv.FormatInt(*status.ProductID, 10)
+		priceCoin := strconv.FormatInt(status.PriceCoin, 10)
+		value["productId"], value["productName"], value["priceCoin"], value["saleStatus"] = productID, status.ProductName, priceCoin, status.SaleStatus
 		value["product"] = map[string]any{
-			"id": status.ProductID, "productType": "book", "targetId": status.BookID,
-			"productName": status.ProductName, "priceCoin": status.PriceCoin, "allowBonusCoin": 0,
+			"id": productID, "productType": "book", "targetId": strconv.FormatInt(status.BookID, 10),
+			"productName": status.ProductName, "priceCoin": priceCoin, "allowBonusCoin": 0,
 			"durationDays": nil, "saleStatus": status.SaleStatus, "sortOrder": 0, "remark": "",
 			"createTime": nil, "updateTime": nil,
 		}
@@ -239,8 +240,13 @@ func (h *Handler) chapters(c *gin.Context) {
 	out := make([]map[string]any, 0, len(chapters))
 	for _, chapter := range chapters {
 		access := map[string]any{"bookId": strconv.FormatInt(chapter.BookID, 10), "chapterId": strconv.FormatInt(chapter.ID, 10), "chargeMode": chapter.ChargeMode, "readable": !chapter.IsVIP, "accessReason": "free_chapter", "membershipEntitled": false, "bookPurchased": false, "chapterPurchased": false, "purchasable": chapter.IsVIP, "chapterWordCount": chapter.WordCount, "pricingWordUnit": nil, "pricingCoinUnit": nil, "chapterPrice": strconv.FormatInt(chapter.Price, 10)}
-		if chapter.Access.BookID != "" {
-			access = map[string]any{"bookId": chapter.Access.BookID, "chapterId": chapter.Access.ChapterID, "chargeMode": chapter.Access.ChargeMode, "readable": chapter.Access.Readable, "accessReason": chapter.Access.AccessReason, "membershipEntitled": chapter.Access.MembershipEntitled, "bookPurchased": chapter.Access.BookPurchased, "chapterPurchased": chapter.Access.ChapterPurchased, "purchasable": chapter.Access.Purchasable, "chapterWordCount": chapter.Access.ChapterWordCount, "pricingWordUnit": chapter.Access.PricingWordUnit, "pricingCoinUnit": chapter.Access.PricingCoinUnit, "chapterPrice": chapter.Access.ChapterPrice}
+		if chapter.Access.BookID != 0 {
+			pricingCoinUnit, chapterPrice := "", ""
+			if chapter.Access.ChargeMode == "word_charge" {
+				pricingCoinUnit = strconv.FormatInt(chapter.Access.PricingCoinUnit, 10)
+				chapterPrice = strconv.FormatInt(chapter.Access.ChapterPrice, 10)
+			}
+			access = map[string]any{"bookId": strconv.FormatInt(chapter.Access.BookID, 10), "chapterId": optionalContractID(chapter.Access.ChapterID), "chargeMode": chapter.Access.ChargeMode, "readable": chapter.Access.Readable, "accessReason": chapter.Access.AccessReason, "membershipEntitled": chapter.Access.MembershipEntitled, "bookPurchased": chapter.Access.BookPurchased, "chapterPurchased": chapter.Access.ChapterPurchased, "purchasable": chapter.Access.Purchasable, "chapterWordCount": chapter.Access.ChapterWordCount, "pricingWordUnit": chapter.Access.PricingWordUnit, "pricingCoinUnit": pricingCoinUnit, "chapterPrice": chapterPrice}
 		}
 		out = append(out, map[string]any{"chapterId": strconv.FormatInt(chapter.ID, 10), "bookId": strconv.FormatInt(chapter.BookID, 10), "chapterNo": chapter.No, "chapterName": chapter.Name, "wordCount": chapter.WordCount, "updateTime": readerwire.DateTime(chapter.UpdatedAt), "accessStatus": access, "productStatus": productStatus(normalizeBookStatus(chapter.Access))})
 	}
@@ -273,7 +279,14 @@ func (h *Handler) seoConfig(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	ok(c, map[string]any{"id": strconv.FormatInt(v.ID, 10), "seoEnabled": v.SEOEnabled, "indexingEnabled": v.IndexingEnabled, "sitemapEnabled": v.SitemapEnabled, "siteName": v.SiteName, "siteUrl": v.SiteURL, "defaultDescription": v.DefaultDescription, "homeTitle": v.HomeTitle, "homeDescription": v.HomeDescription, "booksTitleTemplate": v.BooksTitleTemplate, "booksDescriptionTemplate": v.BooksDescriptionTemplate, "bookTitleTemplate": v.BookTitleTemplate, "bookDescriptionTemplate": v.BookDescriptionTemplate}, "查询成功")
+	ok(c, map[string]any{"id": "1", "seoEnabled": v.Enabled, "indexingEnabled": v.IndexingEnabled, "sitemapEnabled": v.SitemapEnabled, "siteName": v.SiteName, "siteUrl": v.SiteURL, "defaultDescription": v.DefaultDescription, "homeTitle": v.HomeTitle, "homeDescription": v.HomeDescription, "booksTitleTemplate": v.BooksTitleTemplate, "booksDescriptionTemplate": v.BooksDescriptionTemplate, "bookTitleTemplate": v.BookTitleTemplate, "bookDescriptionTemplate": v.BookDescriptionTemplate}, "查询成功")
+}
+
+func optionalContractID(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return strconv.FormatInt(*value, 10)
 }
 func (h *Handler) robots(c *gin.Context) {
 	body, err := h.service.Robots(c)

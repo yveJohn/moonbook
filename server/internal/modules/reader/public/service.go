@@ -4,158 +4,74 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"html"
 	"net/http"
-	"strings"
-	"time"
-	"unicode/utf8"
 
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
+	novelcontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
 
 type Service struct {
-	db      *sql.DB
-	objects *objectstore.Service
-	access  *catalog.Service
+	db       *sql.DB
+	books    novelcontract.PublicBookReader
+	chapters novelcontract.PublicChapterReader
+	seo      novelcontract.SEOReader
+	access   commercecontract.AccessReader
 }
 
-func NewService(db *sql.DB, objects *objectstore.Service, access *catalog.Service) *Service {
-	return &Service{db: db, objects: objects, access: access}
-}
-func notFound(msg string) error { return apperror.New(apperror.CodeNotFound, http.StatusNotFound, msg) }
-
-func (s *Service) scanBook(row *sql.Row) (Book, error) {
-	var b Book
-	err := row.Scan(&b.ID, &b.Name, &b.Author, &b.Description, &b.CategoryCode, &b.CategoryName, &b.BookStatus, &b.ChargeMode, &b.WordCount, &b.LikeCount, &b.VisitCount, &b.FixedPriceCoin, &b.LastChapterID, &b.LastChapterName, &b.LastChapterUpdatedAt, &b.Featured, &b.FeaturedNote)
-	return b, err
+func NewService(db *sql.DB, books novelcontract.PublicBookReader, chapters novelcontract.PublicChapterReader, seo novelcontract.SEOReader, access commercecontract.AccessReader) *Service {
+	return &Service{db: db, books: books, chapters: chapters, seo: seo, access: access}
 }
 
-const bookColumns = `b.id,b.book_name,b.author_name,b.description,b.category_code,b.category_name,b.book_status,b.charge_mode,b.word_count,b.like_count,b.visit_count,b.fixed_price_coin,b.last_chapter_id,b.last_chapter_name,b.last_chapter_updated_at,b.featured,b.featured_note`
+func notFound(message string) error {
+	return apperror.New(apperror.CodeNotFound, http.StatusNotFound, message)
+}
 
-func (s *Service) relations(ctx context.Context, books []Book) error {
-	if len(books) == 0 {
-		return nil
+func (service *Service) Featured(ctx context.Context) ([]Book, error) {
+	if service == nil || service.books == nil {
+		return nil, novelcontract.ErrUnavailable
 	}
-	marks := make([]string, len(books))
-	args := make([]any, len(books))
-	pos := map[int64]int{}
-	for i, b := range books {
-		marks[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = b.ID
-		pos[b.ID] = i
-		books[i].SubCategories = []Category{}
-	}
-	rows, e := s.db.QueryContext(ctx, `SELECT book_id,category_code,category_name FROM novel_book_sub_categories WHERE book_id IN (`+strings.Join(marks, ",")+") ORDER BY book_id,sort", args...)
-	if e != nil {
-		return e
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		var c Category
-		if e = rows.Scan(&id, &c.Code, &c.Name); e != nil {
-			return e
-		}
-		books[pos[id]].SubCategories = append(books[pos[id]].SubCategories, c)
-	}
-	return rows.Err()
+	return service.books.FeaturedBooks(ctx)
 }
-func (s *Service) Featured(ctx context.Context) ([]Book, error) {
-	return s.list(ctx, `b.featured=true`, nil, "b.featured_sort ASC,b.id DESC", 0, 0)
+
+func (service *Service) Random(ctx context.Context) ([]Book, error) {
+	if service == nil || service.books == nil {
+		return nil, novelcontract.ErrUnavailable
+	}
+	return service.books.RandomBooks(ctx)
 }
-func (s *Service) Random(ctx context.Context) ([]Book, error) {
-	return s.list(ctx, "", nil, "random()", 20, 0)
+
+func (service *Service) List(ctx context.Context, keyword, category, subcategory string, page, size int) ([]Book, int64, error) {
+	if service == nil || service.books == nil {
+		return nil, 0, novelcontract.ErrUnavailable
+	}
+	return service.books.Books(ctx, keyword, category, subcategory, page, size)
 }
-func (s *Service) List(ctx context.Context, keyword, category, sub string, page, size int) ([]Book, int64, error) {
-	if page < 1 {
-		page = 1
+
+func (service *Service) Categories(ctx context.Context, kind string) ([]Category, error) {
+	if service == nil || service.books == nil {
+		return nil, novelcontract.ErrUnavailable
 	}
-	if size < 1 {
-		size = 10
-	}
-	if size > 100 {
-		size = 100
-	}
-	args := []any{"%" + strings.TrimSpace(keyword) + "%", strings.TrimSpace(category), strings.TrimSpace(sub)}
-	where := `b.deleted_at IS NULL AND b.publish_status='published' AND ($1='%%' OR b.book_name ILIKE $1 OR b.author_name ILIKE $1) AND ($2='' OR b.category_code=$2) AND ($3='' OR EXISTS (SELECT 1 FROM novel_book_sub_categories x WHERE x.book_id=b.id AND x.category_code=$3))`
-	var total int64
-	if e := s.db.QueryRowContext(ctx, "SELECT count(*) FROM novel_books b WHERE "+where, args...).Scan(&total); e != nil {
-		return nil, 0, e
-	}
-	items, e := s.list(ctx, where, args, "b.updated_at DESC,b.id DESC", size, (page-1)*size)
-	return items, total, e
+	return service.books.Categories(ctx, kind)
 }
-func (s *Service) list(ctx context.Context, where string, args []any, order string, limit, offset int) ([]Book, error) {
-	base := `b.deleted_at IS NULL AND b.publish_status='published'`
-	if where != "" {
-		base += " AND " + where
+
+func (service *Service) Get(ctx context.Context, id int64) (Book, error) {
+	if service == nil || service.books == nil {
+		return Book{}, novelcontract.ErrUnavailable
 	}
-	q := `SELECT ` + bookColumns + ` FROM novel_books b WHERE ` + base + ` ORDER BY ` + order
-	if limit > 0 {
-		q += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
-	}
-	rows, e := s.db.QueryContext(ctx, q, args...)
-	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	out := []Book{}
-	for rows.Next() {
-		var b Book
-		if e = rows.Scan(&b.ID, &b.Name, &b.Author, &b.Description, &b.CategoryCode, &b.CategoryName, &b.BookStatus, &b.ChargeMode, &b.WordCount, &b.LikeCount, &b.VisitCount, &b.FixedPriceCoin, &b.LastChapterID, &b.LastChapterName, &b.LastChapterUpdatedAt, &b.Featured, &b.FeaturedNote); e != nil {
-			return nil, e
-		}
-		out = append(out, b)
-	}
-	if e = rows.Err(); e != nil {
-		return nil, e
-	}
-	if e = s.relations(ctx, out); e != nil {
-		return nil, e
-	}
-	return out, nil
-}
-func (s *Service) Categories(ctx context.Context, kind string) ([]Category, error) {
-	rows, e := s.db.QueryContext(ctx, `SELECT code,name FROM novel_categories WHERE kind=$1 AND enabled AND deleted_at IS NULL ORDER BY sort,id`, kind)
-	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	out := []Category{}
-	for rows.Next() {
-		var c Category
-		if e = rows.Scan(&c.Code, &c.Name); e != nil {
-			return nil, e
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-func (s *Service) Get(ctx context.Context, id int64) (Book, error) {
-	b, e := s.scanBook(s.db.QueryRowContext(ctx, `SELECT `+bookColumns+` FROM novel_books b WHERE b.id=$1 AND b.deleted_at IS NULL AND b.publish_status='published'`, id))
-	if errors.Is(e, sql.ErrNoRows) {
+	book, err := service.books.Book(ctx, id)
+	if errors.Is(err, novelcontract.ErrBookNotFound) {
 		return Book{}, notFound("书籍不存在")
 	}
-	if e != nil {
-		return Book{}, e
-	}
-	books := []Book{b}
-	if e = s.relations(ctx, books); e != nil {
-		return Book{}, e
-	}
-	return books[0], nil
+	return book, err
 }
 
-func (s *Service) Detail(ctx context.Context, id int64, readerID *int64) (BookDetail, error) {
-	book, err := s.Get(ctx, id)
+func (service *Service) Detail(ctx context.Context, id int64, readerID *int64) (BookDetail, error) {
+	book, err := service.Get(ctx, id)
 	if err != nil {
 		return BookDetail{}, err
 	}
-	status, err := s.BookStatus(ctx, book, readerID)
+	status, err := service.BookStatus(ctx, book, readerID)
 	if err != nil {
 		return BookDetail{}, err
 	}
@@ -163,57 +79,71 @@ func (s *Service) Detail(ctx context.Context, id int64, readerID *int64) (BookDe
 	if readerID == nil {
 		return detail, nil
 	}
-	if err = s.db.QueryRowContext(ctx, `SELECT
+	if service.db == nil {
+		return BookDetail{}, errors.New("reader relationship repository is unavailable")
+	}
+	if err = service.db.QueryRowContext(ctx, `SELECT
 		EXISTS(SELECT 1 FROM reader_book_likes WHERE reader_id=$1 AND book_id=$2),
-		EXISTS(SELECT 1 FROM reader_bookshelf_entries WHERE reader_id=$1 AND book_id=$2)`, *readerID, id).
-		Scan(&detail.Liked, &detail.InBookshelf); err != nil {
+		EXISTS(SELECT 1 FROM reader_bookshelf_entries WHERE reader_id=$1 AND book_id=$2)`, *readerID, id).Scan(&detail.Liked, &detail.InBookshelf); err != nil {
 		return BookDetail{}, err
 	}
 	var history History
-	err = s.db.QueryRowContext(ctx, `SELECT h.id,h.book_id,h.chapter_id,h.chapter_no,c.chapter_name,h.position_type,h.position_value,h.progress_percent,h.last_read_at
-		FROM reader_reading_history h JOIN novel_chapters c ON c.id=h.chapter_id AND c.book_id=h.book_id
-		WHERE h.reader_id=$1 AND h.book_id=$2 AND c.deleted_at IS NULL AND c.chapter_status='enabled'`, *readerID, id).
-		Scan(&history.ID, &history.BookID, &history.ChapterID, &history.ChapterNo, &history.ChapterName, &history.PositionType, &history.PositionValue, &history.ProgressPercent, &history.LastReadAt)
+	err = service.db.QueryRowContext(ctx, `SELECT id,book_id,chapter_id,chapter_no,position_type,position_value,progress_percent,last_read_at
+		FROM reader_reading_history WHERE reader_id=$1 AND book_id=$2`, *readerID, id).
+		Scan(&history.ID, &history.BookID, &history.ChapterID, &history.ChapterNo, &history.PositionType, &history.PositionValue, &history.ProgressPercent, &history.LastReadAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return detail, nil
 	}
 	if err != nil {
 		return BookDetail{}, err
 	}
+	chapter, err := service.chapters.Chapter(ctx, history.ChapterID)
+	if errors.Is(err, novelcontract.ErrChapterNotFound) {
+		return detail, nil
+	}
+	if err != nil {
+		return BookDetail{}, err
+	}
+	if chapter.BookID != history.BookID {
+		return detail, nil
+	}
+	history.ChapterName = chapter.Name
 	detail.History = &history
 	return detail, nil
 }
 
-func (s *Service) BookStatus(ctx context.Context, book Book, readerID *int64) (catalog.AccessResult, error) {
-	if s.access == nil {
-		return catalog.AccessResult{}, catalog.ErrRepositoryUnavailable
+func (service *Service) BookStatus(ctx context.Context, book Book, readerID *int64) (commercecontract.AccessResult, error) {
+	if service.access == nil {
+		return commercecontract.AccessResult{}, commercecontract.ErrUnavailable
 	}
-	status, err := s.access.AccessReader(ctx, catalog.AccessRequest{
-		ReaderID: readerID, BookID: book.ID, ChargeMode: book.ChargeMode, FixedPriceCoin: book.FixedPriceCoin,
-	})
+	results, err := service.access.AccessReaders(ctx, []commercecontract.AccessRequest{{ReaderID: readerID, BookID: book.ID, ChargeMode: book.ChargeMode, FixedPriceCoin: book.FixedPriceCoin}})
 	if err != nil {
-		return catalog.AccessResult{}, err
+		return commercecontract.AccessResult{}, err
 	}
-	return normalizeBookStatus(status), nil
+	if len(results) != 1 {
+		return commercecontract.AccessResult{}, commercecontract.ErrUnavailable
+	}
+	return normalizeBookStatus(results[0]), nil
 }
 
-func (s *Service) BookStatuses(ctx context.Context, books []Book, readerID *int64) (map[int64]catalog.AccessResult, error) {
-	statuses := make(map[int64]catalog.AccessResult, len(books))
+func (service *Service) BookStatuses(ctx context.Context, books []Book, readerID *int64) (map[int64]commercecontract.AccessResult, error) {
+	statuses := make(map[int64]commercecontract.AccessResult, len(books))
 	if len(books) == 0 {
 		return statuses, nil
 	}
-	if s.access == nil {
-		return nil, catalog.ErrRepositoryUnavailable
+	if service.access == nil {
+		return nil, commercecontract.ErrUnavailable
 	}
-	requests := make([]catalog.AccessRequest, 0, len(books))
+	requests := make([]commercecontract.AccessRequest, 0, len(books))
 	for _, book := range books {
-		requests = append(requests, catalog.AccessRequest{
-			ReaderID: readerID, BookID: book.ID, ChargeMode: book.ChargeMode, FixedPriceCoin: book.FixedPriceCoin,
-		})
+		requests = append(requests, commercecontract.AccessRequest{ReaderID: readerID, BookID: book.ID, ChargeMode: book.ChargeMode, FixedPriceCoin: book.FixedPriceCoin})
 	}
-	results, err := s.access.AccessReaders(ctx, requests)
+	results, err := service.access.AccessReaders(ctx, requests)
 	if err != nil {
 		return nil, err
+	}
+	if len(results) != len(books) {
+		return nil, commercecontract.ErrUnavailable
 	}
 	for index, result := range results {
 		statuses[books[index].ID] = normalizeBookStatus(result)
@@ -221,193 +151,141 @@ func (s *Service) BookStatuses(ctx context.Context, books []Book, readerID *int6
 	return statuses, nil
 }
 
-func normalizeBookStatus(status catalog.AccessResult) catalog.AccessResult {
-	if status.AccessReason == string(catalog.BookOwned) || status.AccessReason == string(catalog.Membership) || status.AccessReason == string(catalog.LoginRequired) || status.AccessReason == string(catalog.UnsupportedMode) {
+func normalizeBookStatus(status commercecontract.AccessResult) commercecontract.AccessResult {
+	switch status.AccessReason {
+	case "book_owned", "membership", "login_required", "unsupported_mode":
 		return status
 	}
-	switch catalog.ChargeMode(status.ChargeMode) {
-	case catalog.LoginFree:
-		status.Readable, status.AccessReason = true, string(catalog.LoginFreeReason)
-	case catalog.MembershipOnly:
-		status.Readable, status.AccessReason = false, string(catalog.MembershipRequired)
-	case catalog.FixedPrice:
-		status.Readable, status.AccessReason = false, string(catalog.BookPurchaseRequired)
-	case catalog.WordCharge:
-		status.Readable, status.AccessReason, status.Purchasable = false, string(catalog.ChapterPurchaseRequired), false
+	switch status.ChargeMode {
+	case "login_free":
+		status.Readable, status.AccessReason = true, "login_free"
+	case "membership_only":
+		status.Readable, status.AccessReason = false, "membership_required"
+	case "fixed_price":
+		status.Readable, status.AccessReason = false, "book_purchase_required"
+	case "word_charge":
+		status.Readable, status.AccessReason, status.Purchasable = false, "chapter_purchase_required", false
 	default:
-		status.Readable, status.AccessReason = false, string(catalog.UnsupportedMode)
+		status.Readable, status.AccessReason = false, "unsupported_mode"
 	}
 	return status
 }
-func (s *Service) Chapters(ctx context.Context, bookID int64, readerID *int64) ([]Chapter, error) {
-	rows, e := s.db.QueryContext(ctx, `SELECT c.id,c.book_id,c.chapter_no,c.chapter_name,c.word_count,c.updated_at,c.is_vip,c.book_price_coin,b.charge_mode,b.book_name FROM novel_chapters c JOIN novel_books b ON b.id=c.book_id WHERE c.book_id=$1 AND c.deleted_at IS NULL AND c.chapter_status='enabled' AND b.deleted_at IS NULL AND b.publish_status='published' ORDER BY c.chapter_no,c.id`, bookID)
-	if e != nil {
-		return nil, e
+
+func (service *Service) Chapters(ctx context.Context, bookID int64, readerID *int64) ([]Chapter, error) {
+	if service == nil || service.chapters == nil {
+		return nil, novelcontract.ErrUnavailable
 	}
-	defer rows.Close()
-	out := []Chapter{}
-	for rows.Next() {
-		var c Chapter
-		if e = rows.Scan(&c.ID, &c.BookID, &c.No, &c.Name, &c.WordCount, &c.UpdatedAt, &c.IsVIP, &c.Price, &c.ChargeMode, &c.BookName); e != nil {
-			return nil, e
-		}
-		out = append(out, c)
+	source, err := service.chapters.Chapters(ctx, bookID)
+	if err != nil {
+		return nil, err
 	}
-	if e = rows.Err(); e != nil {
-		return nil, e
+	chapters := make([]Chapter, 0, len(source))
+	for _, value := range source {
+		chapters = append(chapters, chapterFromContract(value))
 	}
-	if s.access != nil && len(out) > 0 {
-		reqs := make([]catalog.AccessRequest, 0, len(out))
-		for _, chapter := range out {
-			reqs = append(reqs, catalog.AccessRequest{ReaderID: readerID, BookID: chapter.BookID, ChapterID: chapter.ID, ChargeMode: chapter.ChargeMode, ChapterWordCount: chapter.WordCount})
-		}
-		results, accessErr := s.access.AccessReaders(ctx, reqs)
+	if service.access == nil || len(chapters) == 0 {
+		return chapters, nil
+	}
+	requests := make([]commercecontract.AccessRequest, 0, len(chapters))
+	for _, chapter := range chapters {
+		chapterID := chapter.ID
+		requests = append(requests, commercecontract.AccessRequest{ReaderID: readerID, BookID: chapter.BookID, ChapterID: chapterID, ChargeMode: chapter.ChargeMode, ChapterWordCount: chapter.WordCount})
+	}
+	results, err := service.access.AccessReaders(ctx, requests)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) != len(chapters) {
+		return nil, commercecontract.ErrUnavailable
+	}
+	for index := range results {
+		chapters[index].Access = results[index]
+	}
+	return chapters, nil
+}
+
+func (service *Service) Chapter(ctx context.Context, id int64, readerID *int64) (Chapter, string, ChapterContentMeta, error) {
+	if service == nil || service.chapters == nil {
+		return Chapter{}, "", ChapterContentMeta{}, novelcontract.ErrUnavailable
+	}
+	metadata, err := service.chapters.Chapter(ctx, id)
+	if errors.Is(err, novelcontract.ErrChapterNotFound) {
+		return Chapter{}, "", ChapterContentMeta{}, notFound("章节不存在")
+	}
+	if err != nil {
+		return Chapter{}, "", ChapterContentMeta{}, err
+	}
+	chapter := chapterFromContract(metadata)
+	if service.access != nil {
+		chapterID := chapter.ID
+		results, accessErr := service.access.AccessReaders(ctx, []commercecontract.AccessRequest{{ReaderID: readerID, BookID: chapter.BookID, ChapterID: chapterID, ChargeMode: chapter.ChargeMode, ChapterWordCount: chapter.WordCount}})
 		if accessErr != nil {
-			return nil, accessErr
+			return chapter, "", ChapterContentMeta{}, accessErr
 		}
-		for i := range results {
-			out[i].Access = results[i]
+		if len(results) != 1 {
+			return chapter, "", ChapterContentMeta{}, commercecontract.ErrUnavailable
+		}
+		if !results[0].Readable {
+			return chapter, "", ChapterContentMeta{}, accessError(results[0].AccessReason)
 		}
 	}
-	return out, nil
+	content, err := service.chapters.ChapterContent(ctx, id)
+	if errors.Is(err, novelcontract.ErrObjectUnavailable) || errors.Is(err, novelcontract.ErrObjectIntegrity) {
+		return chapter, "", ChapterContentMeta{}, apperror.Wrap(err, apperror.CodeUnavailable, http.StatusServiceUnavailable, "读取章节正文失败")
+	}
+	if errors.Is(err, novelcontract.ErrObjectEncoding) {
+		return chapter, "", ChapterContentMeta{}, apperror.Wrap(err, apperror.CodeInternal, http.StatusInternalServerError, "章节正文编码无效")
+	}
+	if errors.Is(err, novelcontract.ErrChapterNotFound) {
+		return chapter, "", ChapterContentMeta{}, notFound("章节不存在")
+	}
+	if err != nil {
+		return chapter, "", ChapterContentMeta{}, err
+	}
+	chapter = chapterFromContract(content.Chapter)
+	return chapter, content.Text, ChapterContentMeta{Version: content.Version, SHA256: content.SHA256, ByteSize: content.Bytes}, nil
 }
-func (s *Service) Chapter(ctx context.Context, id int64, readerID *int64) (Chapter, string, objectstore.Object, error) {
-	var c Chapter
-	e := s.db.QueryRowContext(ctx, `SELECT c.id,c.book_id,c.chapter_no,c.chapter_name,c.word_count,c.updated_at,c.is_vip,c.book_price_coin,b.charge_mode,b.book_name FROM novel_chapters c JOIN novel_books b ON b.id=c.book_id WHERE c.id=$1 AND c.deleted_at IS NULL AND c.chapter_status='enabled' AND b.deleted_at IS NULL AND b.publish_status='published'`, id).Scan(&c.ID, &c.BookID, &c.No, &c.Name, &c.WordCount, &c.UpdatedAt, &c.IsVIP, &c.Price, &c.ChargeMode, &c.BookName)
-	if errors.Is(e, sql.ErrNoRows) {
-		return c, "", objectstore.Object{}, notFound("章节不存在")
-	}
-	if e != nil {
-		return c, "", objectstore.Object{}, e
-	}
-	if s.access != nil {
-		r, e := s.access.AccessReader(ctx, catalog.AccessRequest{ReaderID: readerID, BookID: c.BookID, ChapterID: c.ID, ChargeMode: c.ChargeMode, ChapterWordCount: c.WordCount})
-		if e != nil {
-			return c, "", objectstore.Object{}, e
-		}
-		if !r.Readable {
-			return c, "", objectstore.Object{}, accessError(r.AccessReason)
-		}
-	}
-	data, obj, e := s.objects.ReadActive(ctx, objectstore.Target{Kind: objectstore.KindChapterContent, BookID: c.BookID, OwnerID: c.ID})
-	if e != nil {
-		return c, "", obj, apperror.Wrap(e, apperror.CodeUnavailable, http.StatusServiceUnavailable, "读取章节正文失败")
-	}
-	if !utf8.Valid(data) {
-		return c, "", obj, apperror.New(apperror.CodeInternal, 500, "章节正文编码无效")
-	}
-	var prev, next sql.NullInt64
-	if e = s.db.QueryRowContext(ctx, `SELECT
-		(SELECT p.id FROM novel_chapters p WHERE p.book_id=c.book_id AND p.deleted_at IS NULL AND p.chapter_status='enabled' AND (p.chapter_no,p.id)<(c.chapter_no,c.id) ORDER BY p.chapter_no DESC,p.id DESC LIMIT 1),
-		(SELECT n.id FROM novel_chapters n WHERE n.book_id=c.book_id AND n.deleted_at IS NULL AND n.chapter_status='enabled' AND (n.chapter_no,n.id)>(c.chapter_no,c.id) ORDER BY n.chapter_no,n.id LIMIT 1)
-		FROM novel_chapters c WHERE c.id=$1`, c.ID).Scan(&prev, &next); e != nil {
-		return c, "", obj, e
-	}
-	if prev.Valid {
-		c.PrevID = &prev.Int64
-	}
-	if next.Valid {
-		c.NextID = &next.Int64
-	}
-	return c, string(data), obj, nil
+
+func chapterFromContract(value novelcontract.Chapter) Chapter {
+	return Chapter{ID: value.ID, BookID: value.BookID, No: value.Number, Name: value.Name, WordCount: value.WordCount, UpdatedAt: value.UpdatedAt, IsVIP: value.VIP, Price: value.PriceCoin, ChargeMode: value.ChargeMode, BookName: value.BookName, PrevID: value.PreviousID, NextID: value.NextID}
 }
+
 func accessError(reason string) error {
-	code := 46102
-	msg := "仅限会员阅读"
+	code, message := 46102, "仅限会员阅读"
 	switch reason {
 	case "login_required":
-		code = 46101
-		msg = "请先登录后阅读"
+		code, message = 46101, "请先登录后阅读"
 	case "book_purchase_required":
-		code = 46103
-		msg = "请先购买作品"
+		code, message = 46103, "请先购买作品"
 	case "chapter_purchase_required":
-		code = 46104
-		msg = "请先购买章节"
+		code, message = 46104, "请先购买章节"
 	case "unsupported_mode":
-		code = 46105
-		msg = "作品收费模式不可用"
+		code, message = 46105, "作品收费模式不可用"
 	}
-	return apperror.New(apperror.CodeForbidden, code, msg)
+	return apperror.New(apperror.CodeForbidden, code, message)
 }
 
-func (s *Service) SEO(ctx context.Context) (readerseo.Config, error) {
-	return readerseo.NewService(s.db).Get(ctx)
+func (service *Service) SEO(ctx context.Context) (novelcontract.SEOConfig, error) {
+	if service == nil || service.seo == nil {
+		return novelcontract.SEOConfig{}, novelcontract.ErrUnavailable
+	}
+	return service.seo.SEO(ctx)
 }
-func (s *Service) Robots(ctx context.Context) (string, error) {
-	c, e := s.SEO(ctx)
-	if e != nil {
-		return "", e
+
+func (service *Service) Robots(ctx context.Context) (string, error) {
+	if service == nil || service.seo == nil {
+		return "", novelcontract.ErrUnavailable
 	}
-	if !c.IndexingEnabled || !c.SEOEnabled {
-		return "User-agent: *\nDisallow: /\n", nil
-	}
-	v := "User-agent: *\nAllow: /\nDisallow: /auth/\nDisallow: /me\nDisallow: /shelf\nDisallow: /read/\n"
-	if c.SitemapEnabled {
-		v += "Sitemap: " + c.SiteURL + "/reader/seo/sitemap.xml\n"
-	}
-	return v, nil
+	return service.seo.Robots(ctx)
 }
-func (s *Service) Sitemap(ctx context.Context, page int) (string, error) {
-	c, e := s.SEO(ctx)
-	if e != nil {
-		return "", e
+
+func (service *Service) Sitemap(ctx context.Context, page int) (string, error) {
+	if service == nil || service.seo == nil {
+		return "", novelcontract.ErrUnavailable
 	}
-	if !c.SEOEnabled || !c.IndexingEnabled {
-		return xmlEmpty(), nil
-	}
-	const n = 49998
-	var count int64
-	if e = s.db.QueryRowContext(ctx, `SELECT count(*) FROM novel_books WHERE deleted_at IS NULL AND publish_status='published'`).Scan(&count); e != nil {
-		return "", e
-	}
-	pages := int((count + n - 1) / n)
-	if pages < 1 {
-		pages = 1
-	}
-	if page < 0 || page > pages {
+	value, err := service.seo.Sitemap(ctx, page)
+	if errors.Is(err, novelcontract.ErrBookNotFound) {
 		return "", sql.ErrNoRows
 	}
-	if page == 0 && count > n {
-		var b strings.Builder
-		b.WriteString(xmlHeader + "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n")
-		for i := 1; i <= pages; i++ {
-			fmt.Fprintf(&b, "<sitemap><loc>%s/reader/seo/sitemap-books-%d.xml</loc></sitemap>\n", html.EscapeString(c.SiteURL), i)
-		}
-		b.WriteString("</sitemapindex>\n")
-		return b.String(), nil
-	}
-	if page > 0 && count <= n {
-		return "", sql.ErrNoRows
-	}
-	offset := page * n
-	if page > 0 {
-		offset = (page - 1) * n
-	}
-	rows, e := s.db.QueryContext(ctx, `SELECT id,updated_at FROM novel_books WHERE deleted_at IS NULL AND publish_status='published' ORDER BY updated_at DESC,id DESC LIMIT $1 OFFSET $2`, n, offset)
-	if e != nil {
-		return "", e
-	}
-	defer rows.Close()
-	var b strings.Builder
-	b.WriteString(xmlHeader + "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n")
-	if page <= 1 {
-		fmt.Fprintf(&b, "<url><loc>%s/</loc></url>\n<url><loc>%s/books</loc></url>\n", html.EscapeString(c.SiteURL), html.EscapeString(c.SiteURL))
-	}
-	for rows.Next() {
-		var id int64
-		var t time.Time
-		if e = rows.Scan(&id, &t); e != nil {
-			return "", e
-		}
-		fmt.Fprintf(&b, "<url><loc>%s/books/%d</loc><lastmod>%s</lastmod></url>\n", html.EscapeString(c.SiteURL), id, t.UTC().Format(time.RFC3339))
-	}
-	b.WriteString("</urlset>\n")
-	return b.String(), rows.Err()
-}
-
-const xmlHeader = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-
-func xmlEmpty() string {
-	return xmlHeader + "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"></urlset>\n"
+	return value, err
 }

@@ -6,7 +6,10 @@ import (
 	"time"
 )
 
-var ErrActiveObjectNotFound = errors.New("active object not found")
+var (
+	ErrActiveObjectNotFound = errors.New("active object not found")
+	ErrObjectIntegrity      = errors.New("object integrity check failed")
+)
 
 const (
 	KindChapterContent = "chapter_content"

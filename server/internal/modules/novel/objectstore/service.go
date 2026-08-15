@@ -499,7 +499,7 @@ func (service *Service) ReadActive(ctx context.Context, target Target) ([]byte, 
 	}
 	digest := sha256.Sum256(data)
 	if int64(len(data)) != object.ByteSize || hex.EncodeToString(digest[:]) != object.SHA256 {
-		return nil, Object{}, errors.New("active object integrity check failed")
+		return nil, Object{}, fmt.Errorf("%w: active object", ErrObjectIntegrity)
 	}
 	return data, object, nil
 }
@@ -522,7 +522,7 @@ func (service *Service) ReadStored(ctx context.Context, id int64) ([]byte, Objec
 	data, err := io.ReadAll(io.LimitReader(body, object.ByteSize+1))
 	digest := sha256.Sum256(data)
 	if err != nil || int64(len(data)) != object.ByteSize || hex.EncodeToString(digest[:]) != object.SHA256 {
-		return nil, Object{}, errors.New("stored object integrity check failed")
+		return nil, Object{}, fmt.Errorf("%w: stored object", ErrObjectIntegrity)
 	}
 	return data, object, nil
 }

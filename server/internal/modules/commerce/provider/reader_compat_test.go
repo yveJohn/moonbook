@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/checkin"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/purchase"
@@ -134,3 +135,20 @@ func TestRechargeProviderConvertsRequestsOrdersAndErrors(t *testing.T) {
 }
 
 func stringPointer(value string) *string { return &value }
+
+type accessRepositoryStub struct{ context catalog.AccessContext }
+
+func (stub accessRepositoryStub) LoadAccessContext(context.Context, catalog.AccessRequest) (catalog.AccessContext, error) {
+	return stub.context, nil
+}
+
+func TestAccessProviderConvertsCatalogDecision(t *testing.T) {
+	product := catalog.Product{ID: 9007199254740993, ProductName: "作品", PriceCoin: 11, SaleStatus: "on_sale"}
+	provider := NewAccess(catalog.NewService(accessRepositoryStub{context: catalog.AccessContext{Product: &product, Reader: catalog.ReaderContext{ReaderID: int64Pointer(7)}}}))
+	results, err := provider.AccessReaders(context.Background(), []contract.AccessRequest{{ReaderID: int64Pointer(7), BookID: 9223372036854775807, ChargeMode: "fixed_price"}})
+	if err != nil || len(results) != 1 || results[0].BookID != 9223372036854775807 || results[0].ProductID == nil || *results[0].ProductID != 9007199254740993 || results[0].PriceCoin != 11 {
+		t.Fatalf("results=%+v err=%v", results, err)
+	}
+}
+
+func int64Pointer(value int64) *int64 { return &value }

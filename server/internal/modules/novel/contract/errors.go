@@ -8,6 +8,7 @@ var (
 	ErrNotPublished      = errors.New("novel content is not published")
 	ErrObjectUnavailable = errors.New("novel object is unavailable")
 	ErrObjectIntegrity   = errors.New("novel object integrity check failed")
+	ErrObjectEncoding    = errors.New("novel object encoding is invalid")
 	ErrTargetUnavailable = errors.New("novel purchase target is unavailable")
 	ErrUnavailable       = errors.New("novel dependency is unavailable")
 	ErrTimeout           = errors.New("novel dependency timed out")

@@ -49,6 +49,7 @@ type Chapter struct {
 type ChapterContent struct {
 	Chapter Chapter
 	Text    string
+	Version int
 	SHA256  string
 	Bytes   int64
 }
@@ -63,6 +64,7 @@ type PublicBookReader interface {
 
 type PublicChapterReader interface {
 	Chapters(context.Context, int64) ([]Chapter, error)
+	Chapter(context.Context, int64) (Chapter, error)
 	ChapterContent(context.Context, int64) (ChapterContent, error)
 }
 

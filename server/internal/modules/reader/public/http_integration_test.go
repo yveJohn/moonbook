@@ -16,7 +16,9 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
+	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	novelprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/provider"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -99,7 +101,9 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 	})
 	auth := readerauth.NewService(readerauth.SQLRepository{DB: db}, readerauth.RedisRateLimiter{Client: redis, Prefix: "moonbook:reader:http-it:rate:"}, readerauth.TokenConfig{Secret: []byte("reader-http-integration-secret-32"), TTL: time.Hour, Issuer: "moonbook-reader-http-it"})
 	router := gin.New()
-	RegisterRoutes(router.Group("/"), db, objects, auth, catalog.NewService(catalog.SQLRepository{DB: db}))
+	novelPublic := novelprovider.NewPublic(db, objects)
+	access := commerceprovider.NewAccess(catalog.NewService(catalog.SQLRepository{DB: db}))
+	RegisterRoutes(router.Group("/"), NewService(db, novelPublic, novelPublic, novelPublic, access), auth)
 	token, err := auth.CreateToken(ctx, reader)
 	if err != nil {
 		t.Fatal(err)
@@ -212,7 +216,8 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 		t.Run("chapter content "+mode, func(t *testing.T) {
 			faultRouter := gin.New()
 			faultObjects := objectstore.NewService(db, readerFaultBlobStore{BlobStore: minioTest.Store, mode: mode})
-			RegisterRoutes(faultRouter.Group("/"), db, faultObjects, auth, catalog.NewService(catalog.SQLRepository{DB: db}))
+			faultNovel := novelprovider.NewPublic(db, faultObjects)
+			RegisterRoutes(faultRouter.Group("/"), NewService(db, faultNovel, faultNovel, faultNovel, access), auth)
 			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/reader/chapters/%d", chapter), nil)
 			req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 			resp := httptest.NewRecorder()

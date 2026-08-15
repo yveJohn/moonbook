@@ -32,6 +32,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/importtask"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/metadata"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	novelprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/readerseo"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/txtimport"
 	readeraccount "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/account"
@@ -117,6 +118,8 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	txtimport.RegisterRoutes(privateGroup, txtimport.NewService(txtimport.SQLRepository{DB: db}), txtimport.MinIOFileStore{Blobs: blobs})
 	fetchlog.RegisterRoutes(privateGroup, fetchlog.NewService(fetchlog.SQLRepository{DB: db}))
 	readerseo.RegisterRoutes(privateGroup, db)
-	readerpublic.RegisterRoutes(publicGroup, db, objects, readerService, commerce)
+	novelPublic := novelprovider.NewPublic(db, objects)
+	readerPublic := readerpublic.NewService(db, novelPublic, novelPublic, novelPublic, commerceprovider.NewAccess(commerce))
+	readerpublic.RegisterRoutes(publicGroup, readerPublic, readerService)
 
 }

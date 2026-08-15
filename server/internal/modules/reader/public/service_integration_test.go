@@ -9,7 +9,9 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
+	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	novelprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/provider"
 )
 
 func TestReaderPublicPublishedBookChapterAndMinIO(t *testing.T) {
@@ -77,7 +79,8 @@ func TestReaderPublicPublishedBookChapterAndMinIO(t *testing.T) {
 		_, _ = db.ExecContext(cleanup, `DELETE FROM novel_categories WHERE id=$1`, category)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_accounts WHERE id=$1`, reader)
 	})
-	service := NewService(db, objects, catalog.NewService(catalog.SQLRepository{DB: db}))
+	novelPublic := novelprovider.NewPublic(db, objects)
+	service := NewService(db, novelPublic, novelPublic, novelPublic, commerceprovider.NewAccess(catalog.NewService(catalog.SQLRepository{DB: db})))
 	statuses, err := service.BookStatuses(ctx, []Book{{ID: book, ChargeMode: "login_free"}}, &reader)
 	if err != nil || !statuses[book].Readable || statuses[book].AccessReason != string(catalog.LoginFreeReason) {
 		t.Fatalf("reader batch book statuses=%+v err=%v", statuses, err)
@@ -95,7 +98,7 @@ func TestReaderPublicPublishedBookChapterAndMinIO(t *testing.T) {
 		t.Fatalf("chapter access=%+v err=%v", chapters, err)
 	}
 	got, text, active, err := service.Chapter(ctx, chapter, &reader)
-	if err != nil || got.ID != chapter || text != string(content) || active.ID != obj.ID || got.NextID == nil || *got.NextID != nextChapter || got.PrevID != nil {
+	if err != nil || got.ID != chapter || text != string(content) || active.Version != obj.Version || active.SHA256 != obj.SHA256 || active.ByteSize != obj.ByteSize || got.NextID == nil || *got.NextID != nextChapter || got.PrevID != nil {
 		t.Fatalf("chapter=%+v text=%q object=%+v err=%v", got, text, active, err)
 	}
 	got, _, _, err = service.Chapter(ctx, nextChapter, &reader)

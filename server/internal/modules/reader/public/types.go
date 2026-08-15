@@ -1,22 +1,15 @@
 package public
 
-import "time"
-import "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
+import (
+	"time"
 
-type Category struct{ Code, Name string }
-type Book struct {
-	ID                                                                            int64
-	Name, Author, Description, CategoryCode, CategoryName, BookStatus, ChargeMode string
-	SubCategories                                                                 []Category
-	WordCount, LikeCount                                                          int
-	VisitCount                                                                    int64
-	FixedPriceCoin                                                                *int64
-	LastChapterID                                                                 *int64
-	LastChapterName                                                               *string
-	LastChapterUpdatedAt                                                          *time.Time
-	Featured                                                                      bool
-	FeaturedNote                                                                  string
-}
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
+	novelcontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/contract"
+)
+
+type Category = novelcontract.Category
+type Book = novelcontract.Book
+
 type Chapter struct {
 	ID, BookID int64
 	No         int
@@ -27,9 +20,15 @@ type Chapter struct {
 	Price      int64
 	ChargeMode string
 	BookName   string
-	Access     catalog.AccessResult
+	Access     commercecontract.AccessResult
 	PrevID     *int64
 	NextID     *int64
+}
+
+type ChapterContentMeta struct {
+	Version  int
+	SHA256   string
+	ByteSize int64
 }
 
 type History struct {
@@ -43,7 +42,7 @@ type History struct {
 
 type BookDetail struct {
 	Book
-	Status      catalog.AccessResult
+	Status      commercecontract.AccessResult
 	Liked       bool
 	InBookshelf bool
 	History     *History

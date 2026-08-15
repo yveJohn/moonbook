@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -34,8 +34,8 @@ func TestSummaryKeepsLongIDsAsStrings(t *testing.T) {
 }
 
 func TestProductStatusKeepsLongIDsAndLoginFreeContract(t *testing.T) {
-	status := productStatus(normalizeBookStatus(catalog.AccessResult{
-		BookID: "9223372036854775807", ChargeMode: "login_free", AccessReason: "free_chapter",
+	status := productStatus(normalizeBookStatus(commercecontract.AccessResult{
+		BookID: math.MaxInt64, ChargeMode: "login_free", AccessReason: "free_chapter",
 	}))
 	if status["bookId"] != "9223372036854775807" || status["accessReason"] != "login_free" || status["readable"] != true {
 		t.Fatalf("unexpected product status: %+v", status)

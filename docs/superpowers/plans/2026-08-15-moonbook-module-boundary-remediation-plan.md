@@ -146,11 +146,11 @@
 - Create: `server/internal/modules/novel/provider/public_test.go`
 - Modify: `server/initialize/router_biz.go`
 
-- [ ] **Step 1：用合同替身补失败测试。** 覆盖书库分页、发布过滤、详情、章节导航、分类、SEO、sitemap、正文 MinIO 大小/SHA-256 校验、缺失对象和基础设施错误脱敏。
-- [ ] **Step 2：实现 Novel 批量/公开合同 Adapter。** `novel/provider/public.go` 组合现有 books、chapters、objectstore 和 readerseo 能力并添加编译期合同断言；查询只发生在 Novel 内，正文读取继续由 Novel 校验对象，批量结果保持顺序、缺失项和空值。
-- [ ] **Step 3：改造 Reader Service。** Reader 组合 Novel 内容与 Commerce 访问/价格合同，不引用具体 catalog、objectstore 或 readerseo 类型。
-- [ ] **Step 4：组合根注入。** 只有 `initialize` 构造三个实现并注入 Reader public。
-- [ ] **Step 5：验证并提交。** 运行 Reader public 单元/真实 PostgreSQL+Redis+MinIO 集成及冻结契约；提交信息：`重构读者公开内容边界`。
+- [x] **Step 1：用合同替身补失败测试。** 覆盖书库分页、发布过滤、详情、章节导航、分类、SEO、sitemap、正文 MinIO 大小/SHA-256 校验、缺失对象和基础设施错误脱敏。
+- [x] **Step 2：实现 Novel 批量/公开合同 Adapter。** `novel/provider/public.go` 组合现有 books、chapters、objectstore 和 readerseo 能力并添加编译期合同断言；查询只发生在 Novel 内，正文读取继续由 Novel 校验对象，批量结果保持顺序、缺失项和空值。
+- [x] **Step 3：改造 Reader Service。** Reader 组合 Novel 内容与 Commerce 访问/价格合同，不引用具体 catalog、objectstore 或 readerseo 类型。
+- [x] **Step 4：组合根注入。** 只有 `initialize` 构造三个实现并注入 Reader public。
+- [x] **Step 5：验证并提交。** 运行 Reader public 单元/真实 PostgreSQL+Redis+MinIO 集成及冻结契约；提交信息：`重构读者公开内容边界`。
 
 ## Task 7：重构 Reader 账号商业视图与个人内容投影
 
