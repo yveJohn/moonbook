@@ -30,7 +30,7 @@
 
 - GVA BSL 1.1 规定 Production Use 需要商业许可证；生产切换前必须取得并保存授权证据。
 - 冻结 reader-ui 的 npm 依赖存在 9 个 high 漏洞，必须在 M7 前升级或形成批准的缓解记录。
-- 冻结旧仓库已只读定位 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节，结合 gzip ISIZE 模值和用户提供信息推算单成员原始大小约 8,129,574,556 字节。文件未解压、未校验、未导入且保持未跟踪，完整副本演练仍须先完成内容生产 stage、对象转换和全域核对器，详见 `docs/verification/m6-data-copy-discovery.md`。
+- 冻结旧仓库已只读定位 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节，结合 gzip ISIZE 模值和用户提供信息推算单成员原始大小约 8,129,574,556 字节。Moonbook PostgreSQL 与 MinIO 数据目录所在 Docker 文件系统当前可用约 934.68 GiB，容量不是当前直接阻断项；文件仍未解压、未校验、未导入且保持未跟踪，完整副本演练仍须先完成内容生产 stage、对象转换和全域核对器，详见 `docs/verification/m6-data-copy-discovery.md`。
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
 - M4 退出审计确认 Reader 创建充值订单当前只写本地 `pending`，未调用 EPUSDT 创建交易，无法产生支付地址；拒绝回调不会完整落审计日志，Compose 也未注入已声明的 EPUSDT 变量。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
 - M5/M6 审计确认内容生产旧表尚未进入 `moonbook-legacy-migrate all`，目标表缺少通用 legacy 幂等来源键，TXT/清洗/合并对象迁移及核对器未实现；论坛 Cookie 当前仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
