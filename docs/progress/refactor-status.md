@@ -13,7 +13,7 @@
 | M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览及当前财务表迁移已实现；审计确认 Reader 真实支付创建、完整回调审计、财务全域核对和两个只读运营页签仍待补齐 |
 | M5 内容生产与长任务 | 实施中 | 论坛、TXT、清洗、摘要和画像 Worker 的租约续期、失租停止、重启接管与结果唯一性已通过真实 PostgreSQL/MinIO 验证；内容生产旧数据迁移映射仍待补齐 |
 | M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；新增 `moonbook-legacy-migrate all` 全量编排入口，真实 8GB 副本演练和完整差异报告仍待完成 |
-| M7 生产切换就绪验收 | 未开始 | - |
+| M7 生产切换就绪验收 | 审计中 | 已完成首次证据审计；备份恢复 Runbook、升级、监控告警、性能、安全、统一 CI 和最终报告仍存在明确缺口 |
 
 ## M0 已完成
 
@@ -34,6 +34,7 @@
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
 - M4 退出审计确认 Reader 创建充值订单当前只写本地 `pending`，未调用 EPUSDT 创建交易，无法产生支付地址；拒绝回调不会完整落审计日志，Compose 也未注入已声明的 EPUSDT 变量。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
 - M5/M6 审计确认内容生产旧表尚未进入 `moonbook-legacy-migrate all`，目标表缺少通用 legacy 幂等来源键，TXT/清洗/合并对象迁移及核对器未实现；论坛 Cookie 当前仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
+- M7 首次审计确认最终报告仍是模板，备份恢复文档包含错误迁移表名、一次性容器 `exec`、未挂载 MinIO 备份目录和可能校验错误 Compose 项目等不可执行步骤；性能、安全、告警、故障处理、升级和统一最终验收均无闭环报告。详细证据见 `docs/verification/m7-readiness-audit.md`。
 
 ## M1 已验证单元
 
