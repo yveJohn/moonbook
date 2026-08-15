@@ -65,6 +65,10 @@ docker compose --env-file .env start
 
 `stop` 和普通 `down` 不删除数据卷。禁止使用 `down -v`，除非已经确认 `moonbook_postgres_data`、`moonbook_redis_data` 和 `moonbook_minio_data` 只含可丢弃的本地数据，并得到与当前操作风险相符的授权。
 
+## 升级
+
+升级不能直接用可覆盖 tag 执行 `up -d`。必须固定发布 commit、应用镜像 digest、配置版本和迁移边界，先完成协调备份，再按“目标镜像迁移、应用层替换、健康/业务/财务冒烟、观察或受控回退”的顺序执行。完整命令和数据库迁移后的回退限制见 `docs/runbooks/upgrade-compose.md`；本地固定提交演练证据见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
+
 ## 配置与秘密
 
 - `.env.example` 只含本地开发占位值，不能用于生产。

@@ -61,6 +61,8 @@ M7 当前未满足生产切换就绪条件。仓库已经有 Compose 部署、�
 
 Compose 当前适合作为本地和单机基础，但尚没有经过升级/降级演练的生产操作证据。k3s 清单仍按批准范围留在本目标之外。
 
+审计后进展：2026-08-15 已新增 `docs/runbooks/upgrade-compose.md`，并在 `3058fee` 到 `a8c209d` 两个固定提交镜像之间完成隔离 Compose 升级和应用镜像回退演练，详见 `docs/verification/m7-compose-upgrade-rehearsal.md`。迁移输出 `applied=0`，数据库版本和持久化夹具不变，升级与回退后的网关、API readiness 和 Reader health 均通过；目标镜像财务核对为 `mismatches=0`。该版本对没有迁移差异，因此只关闭命令级升级和特定兼容回退缺口；生产镜像 digest、真实业务冒烟、含迁移版本兼容性、TLS/可信代理、资源限制和观察阈值仍待完成。
+
 ## 切换与回退缺口
 
 现有切换文档给出正确的高层顺序和最晚回退公式，但不足以让另一名工程师独立执行：
