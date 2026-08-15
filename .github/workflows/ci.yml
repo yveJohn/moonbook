@@ -35,9 +35,21 @@ jobs:
       - name: Test Moonbook foundation
         working-directory: server
         run: go test -race ./internal/... ./config ./core/... ./initialize/... ./middleware ./cmd/moonbook-admin ./cmd/moonbook-config ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
+      - name: Install management frontend dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+      - name: Test management frontend
+        working-directory: web
+        run: pnpm run test:moonbook
+      - name: Lint management frontend
+        working-directory: web
+        run: pnpm run lint
       - name: Build management frontend
         working-directory: web
-        run: pnpm install --frozen-lockfile && pnpm run test:moonbook && pnpm run build
+        run: pnpm run build
+      - name: Check management frontend supply chain
+        working-directory: web
+        run: pnpm run check:supply-chain
       - name: Test and build frozen reader frontend
         working-directory: reader-ui
         run: npm ci && npm test && npm run build
