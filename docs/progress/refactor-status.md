@@ -36,6 +36,7 @@
 - M5/M6 审计确认内容生产旧表尚未进入 `moonbook-legacy-migrate all`，目标表缺少通用 legacy 幂等来源键，TXT/清洗/合并对象迁移及核对器未实现；论坛 Cookie 当前仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
 - M7 首次审计确认最终报告仍是模板，备份恢复文档包含错误迁移表名、一次性容器 `exec`、未挂载 MinIO 备份目录和可能校验错误 Compose 项目等不可执行步骤；性能、安全、告警、故障处理、升级和统一最终验收均无闭环报告。详细证据见 `docs/verification/m7-readiness-audit.md`。
 - M7 GVA 基座审计确认通用 `/system/getSystemConfig` 会回显 JWT、Redis、数据库、邮件和 MinIO 等 Secret，`setSystemConfig` 还能改写运行配置，生产前必须关闭或白名单化；平台任务无统一只读监控，旧在线状态和通知公告也没有确定等价结论。详细证据见 `docs/verification/m7-gva-foundation-audit.md`。
+- M7 已完成一次双项目、独立命名卷的本地合成备份恢复演练，修正 MinIO 客户端挂载、稳定 SHA-256 清单、空库恢复顺序、一次性迁移调用和版本表名，并把财务核对命令纳入 Server 镜像；恢复后 106 张表、版本 58/59 条记录、1 个 43 字节对象与源端一致，迁移 `applied=0`、基础设施 healthy、财务 `mismatches=0`，完整 Compose 栈及三项健康入口通过。该证据只关闭命令级可执行性和基础启动冒烟，真实业务数据、协调停写、支付回调和认证业务旅程仍待完成，详见 `docs/verification/m7-backup-restore-rehearsal.md`。
 
 ## M1 已验证单元
 

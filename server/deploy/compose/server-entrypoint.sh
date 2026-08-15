@@ -31,6 +31,7 @@ case "${1:-}" in
   moonbook-server) shift; set -- /app/moonbook-server "$@" ;;
   moonbook-migrate) shift; set -- /app/moonbook-migrate "$@" ;;
   moonbook-admin) shift; set -- /app/moonbook-admin "$@" ;;
+  moonbook-finance-reconcile) shift; set -- /app/moonbook-finance-reconcile "$@" ;;
 esac
 
 exec "$@"

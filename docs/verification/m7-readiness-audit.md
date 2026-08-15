@@ -45,6 +45,8 @@ M7 当前未满足生产切换就绪条件。仓库已经有 Compose 部署、�
 
 在修正并用独立项目演练前，备份恢复只能视为未验证草案。
 
+审计后进展：2026-08-15 已修正上述命令级问题，并以两个 `moonbook_verify_` 隔离项目完成 PostgreSQL/MinIO 本地合成备份恢复，报告见 `docs/verification/m7-backup-restore-rehearsal.md`。该演练没有真实业务数据、支付回调协调停写或完整应用冒烟，因此 M7 备份恢复退出门仍未完成。
+
 ## 部署与升级缺口
 
 `deploy-compose.md` 覆盖首次启动和日常启停，但没有完整升级流程。至少缺少：
