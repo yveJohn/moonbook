@@ -44,6 +44,7 @@
 - M7 已把上述违规归并为 9 类跨域工作流，固定 Reader 路由兼容、公开内容投影、账号商业视图、邀请注册奖励、个人内容投影、点赞汇总、Commerce 读者校验、首充奖励及购买报价的所有权和回归不变量；注册奖励、点赞、购买和首充奖励的同库事务语义不得在整改中弱化。该事实清单不批准实现方案，详见 `docs/verification/m7-module-boundary-workflow-inventory.md`。
 - M7 监控信号盘点确认当前只有 Go/process、Server HTTP 和平台任务 Prometheus 指标，四依赖 readiness 与 Compose healthcheck 没有持续采集；PostgreSQL、Redis、MinIO、Gateway/Reader SSR、容器资源和业务可靠性指标均存在缺口，仓库也没有 Prometheus、Alertmanager、可视化或规则。用户已选择根 Compose 可选 `monitoring` profile 与 Alertmanager UI + 通用 Webhook，完整监控设计仍待逐段批准，详见 `docs/verification/m7-monitoring-signal-inventory.md`。
 - M7 CI 覆盖审计确认现有两个 job 只覆盖基础质量与 M1 Compose，根 `make verify` 也只执行 M1；M3 真实依赖、迁移双库、浏览器、备份恢复、性能、安全供应链及固定制品均未进入统一门。当前后端边界测试确定失败，管理构建还会执行已确认恶意的直接依赖，因此流水线不是可信发布入口，详见 `docs/verification/m7-ci-coverage-audit.md`。
+- M7 模块边界整改的架构、合同、上下文事务、批量投影、错误和测试设计已逐节获用户确认，专项书面规格已形成并等待最终复核；实施不得弱化冻结 Reader 契约、跨域原子性或现有边界测试，详见 `docs/superpowers/specs/2026-08-15-moonbook-module-boundary-remediation-design.md`。
 
 ## M1 已验证单元
 
