@@ -12,13 +12,13 @@
 
 ## 执行规则
 
-- [ ] 每个任务先补失败测试并记录预期失败原因，再做最小实现。
-- [ ] Go 命令在 `server` 目录执行，统一使用 `CGO_ENABLED=0 GOCACHE=/tmp/moonbook-gocache`；需要 race 时在 Linux 执行。
-- [ ] 真实集成测试只能使用项目专用 PostgreSQL、Redis 和 MinIO，不连接生产环境。
-- [ ] 不修改冻结仓库和 `reader-ui` 业务代码，不修改、删除或改名 `00001` 至 `00058`。
-- [ ] 不跳过、删除或放宽 `TestModuleDependencyRules`，不为当前违规增加白名单。
-- [ ] 每个逻辑任务完成验证后检查全部工作区修改，使用简体中文独立提交。
-- [ ] 管理前端恶意依赖未整改前，不执行或信任生产构建；该项持续标记为 M7 安全 No-Go。
+- [x] 每个任务先补失败测试并记录预期失败原因，再做最小实现。
+- [x] Go 命令在 `server` 目录执行，统一使用 `CGO_ENABLED=0 GOCACHE=/tmp/moonbook-gocache`；需要 race 时在 Linux 执行。
+- [x] 真实集成测试只能使用项目专用 PostgreSQL、Redis 和 MinIO，不连接生产环境。
+- [x] 不修改冻结仓库和 `reader-ui` 业务代码，不修改、删除或改名 `00001` 至 `00058`。
+- [x] 不跳过、删除或放宽 `TestModuleDependencyRules`，不为当前违规增加白名单。
+- [x] 每个逻辑任务完成验证后检查全部工作区修改，使用简体中文独立提交。
+- [x] 管理前端恶意依赖未整改前，不执行或信任生产构建；该项持续标记为 M7 安全 No-Go。
 
 ## Task 1：建立 Context 事务基础设施
 
@@ -290,28 +290,28 @@
 - Reference without contract changes: `docs/contracts/reader-api.md`
 - Modify: `docs/migration/mapping.md`
 
-- [ ] **Step 1：普通后端质量门。** 运行 gofmt 检查、`go mod verify`、与 CI 同范围的 `go vet` 和 `go test`；不得排除失败包。
-- [ ] **Step 2：真实依赖回归。** 运行涉及 Reader、Commerce、Novel、迁移和事务的真实 PostgreSQL/Redis/MinIO 集成测试，确认 fixture 清理不减少其他业务数据。
-- [ ] **Step 3：M3 零修改回归。** 运行 `make verify-m3`、冻结 Reader 树差异、536 个基线用例、契约、SSR 和浏览器关键旅程；路由清单必须无变化。
-- [ ] **Step 4：Linux race。** 在 Linux CI 或等价环境运行目标包及跨域并发测试的 `go test -race`，保存固定 commit 与日志定位信息。
-- [ ] **Step 5：可信前端边界。** 只运行不触发恶意依赖的静态检查；生产构建继续明确 No-Go，直到供应链整改独立完成。
-- [ ] **Step 6：更新证据。** 记录命令、结果、验收 commit、投影一致性统计、剩余风险和 M7 安全阻断，不把模块整改误写为 M4-M7 全部完成。
-- [ ] **Step 7：最终检查与提交。** 检查 tracked/untracked 文件、秘密、构建产物和 `git diff --check`；提交信息：`补充模块边界整改验收证据`。
+- [x] **Step 1：普通后端质量门。** 运行 gofmt 检查、`go mod verify`、与 CI 同范围的 `go vet` 和 `go test`；不得排除失败包。
+- [x] **Step 2：真实依赖回归。** 运行涉及 Reader、Commerce、Novel、迁移和事务的真实 PostgreSQL/Redis/MinIO 集成测试，确认 fixture 清理不减少其他业务数据。
+- [x] **Step 3：M3 零修改回归。** 运行 `make verify-m3`、冻结 Reader 树差异、536 个基线用例、契约、SSR 和浏览器关键旅程；路由清单必须无变化。
+- [x] **Step 4：Linux race。** 在 Linux CI 或等价环境运行目标包及跨域并发测试的 `go test -race`，保存固定 commit 与日志定位信息。
+- [x] **Step 5：可信前端边界。** 只运行不触发恶意依赖的静态检查；生产构建继续明确 No-Go，直到供应链整改独立完成。
+- [x] **Step 6：更新证据。** 记录命令、结果、验收 commit、投影一致性统计、剩余风险和 M7 安全阻断，不把模块整改误写为 M4-M7 全部完成。
+- [x] **Step 7：最终检查与提交。** 检查 tracked/untracked 文件、秘密、构建产物和 `git diff --check`；提交信息：`补充模块边界整改验收证据`。
 
 ## 最终验收清单
 
-- [ ] 15 处跨模块实现引用全部消除，原样 `TestModuleDependencyRules` 通过。
-- [ ] Reader、Commerce、Novel 运行时代码不直接访问其他领域表，SQL 所有权测试通过。
-- [ ] `initialize` 是唯一跨领域实现组合根。
-- [ ] Reader 拥有全部冻结 Reader HTTP 路由、认证、DTO 和错误映射。
-- [ ] Commerce 搜索投影与 Reader 账号零差异；筛选、总数、分页和无钱包账号语义正确。
-- [ ] 投影不参与认证、状态锁定、调账、购买、会员授予或权益决定。
-- [ ] 注册奖励、点赞、购买和首充奖励具备真实 PostgreSQL 回滚、幂等和并发证据。
-- [ ] Reader 跨域查询使用批量合同，无 N+1，排序、缺失关联、空值和分页语义保持。
-- [ ] 冻结 Reader 契约、Long ID 字符串、SSR、536 个基线用例和关键旅程无回归。
-- [ ] Go 普通测试、vet、迁移验证和 Linux race 通过，报告固定到验收 commit。
-- [ ] 管理前端恶意依赖仍作为独立 M7 安全 No-Go，未使用旧生产构建伪造证据。
-- [ ] 工作区干净，所有有效修改按功能使用简体中文提交，未 push。
+- [x] 15 处跨模块实现引用全部消除，原样 `TestModuleDependencyRules` 通过。
+- [x] Reader、Commerce、Novel 运行时代码不直接访问其他领域表，SQL 所有权测试通过。
+- [x] `initialize` 是唯一跨领域实现组合根。
+- [x] Reader 拥有全部冻结 Reader HTTP 路由、认证、DTO 和错误映射。
+- [x] Commerce 搜索投影与 Reader 账号零差异；筛选、总数、分页和无钱包账号语义正确。
+- [x] 投影不参与认证、状态锁定、调账、购买、会员授予或权益决定。
+- [x] 注册奖励、点赞、购买和首充奖励具备真实 PostgreSQL 回滚、幂等和并发证据。
+- [x] Reader 跨域查询使用批量合同，无 N+1，排序、缺失关联、空值和分页语义保持。
+- [x] 冻结 Reader 契约、Long ID 字符串、SSR、536 个基线用例和关键旅程无回归。
+- [x] Go 普通测试、vet、迁移验证和 Linux race 通过，报告固定到验收 commit。
+- [x] 管理前端恶意依赖仍作为独立 M7 安全 No-Go，未使用旧生产构建伪造证据。
+- [x] 工作区干净，所有有效修改按功能使用简体中文提交，未 push。
 
 ## 服务影响
 

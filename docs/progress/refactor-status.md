@@ -43,7 +43,7 @@
 - M7 后端质量基线在固定提交 `c88052f` 验证格式、Go 模块和 vet 通过，本地监听相关测试在允许回环监听后通过；但 `TestModuleDependencyRules` 确定发现 Reader、Commerce 与 Novel 之间 15 处跨域实现引用，扩展审计还确认至少 11 个实现文件直接读写其他模块拥有的数据，当前 CI 后端测试应失败。该缺口必须通过领域契约、组合根和跨域事务设计关闭，禁止跳过或放宽边界测试，详见 `docs/verification/m7-backend-quality-baseline.md`。
 - M7 已把上述违规归并为 9 类跨域工作流，固定 Reader 路由兼容、公开内容投影、账号商业视图、邀请注册奖励、个人内容投影、点赞汇总、Commerce 读者校验、首充奖励及购买报价的所有权和回归不变量；注册奖励、点赞、购买和首充奖励的同库事务语义不得在整改中弱化。该事实清单不批准实现方案，详见 `docs/verification/m7-module-boundary-workflow-inventory.md`。
 - M7 监控信号盘点确认当前只有 Go/process、Server HTTP 和平台任务 Prometheus 指标，四依赖 readiness 与 Compose healthcheck 没有持续采集；PostgreSQL、Redis、MinIO、Gateway/Reader SSR、容器资源和业务可靠性指标均存在缺口，仓库也没有 Prometheus、Alertmanager、可视化或规则。用户已选择根 Compose 可选 `monitoring` profile 与 Alertmanager UI + 通用 Webhook，完整监控设计仍待逐段批准，详见 `docs/verification/m7-monitoring-signal-inventory.md`。
-- M7 CI 覆盖审计确认现有两个 job 只覆盖基础质量与 M1 Compose，根 `make verify` 也只执行 M1；M3 真实依赖、迁移双库、浏览器、备份恢复、性能、安全供应链及固定制品均未进入统一门。当前后端边界测试确定失败，管理构建还会执行已确认恶意的直接依赖，因此流水线不是可信发布入口，详见 `docs/verification/m7-ci-coverage-audit.md`。
+- M7 CI 覆盖审计确认现有两个 job 只覆盖基础质量与 M1 Compose，根 `make verify` 也只执行 M1；M3 真实依赖、迁移双库、浏览器、备份恢复、性能、安全供应链及固定制品均未进入统一门。审计当时后端边界测试确定失败，该项已在 2026-08-16 的专项整改中关闭；管理构建仍会执行已确认恶意的直接依赖，因此流水线仍不是可信发布入口，详见 `docs/verification/m7-ci-coverage-audit.md`。
 - M7 模块边界整改的架构、合同、上下文事务、批量投影、错误和测试设计，以及 Commerce 自有最小 Reader 搜索投影补充方案均已获用户确认；书面规格正式批准，详细实施计划已形成。投影只用于 Commerce 管理搜索与展示，Reader 仍是事实源，鉴权和交易判断必须走实时合同；实施不得弱化冻结 Reader 契约、跨域原子性或现有边界测试，详见 `docs/superpowers/specs/2026-08-15-moonbook-module-boundary-remediation-design.md` 和 `docs/superpowers/plans/2026-08-15-moonbook-module-boundary-remediation-plan.md`。
 - M7 模块边界整改 Task 1 已完成 Context 绑定的 Platform Transactor：支持最外层提交/回滚、嵌套加入、rollback-only、panic 回滚、既有 Runner 事务接入、事务内 Executor 和提交后回调；提交后回调失败可识别为事实已提交，外部事务禁止静默注册回调。脚本化 driver 单元测试、`gofmt`、`go vet` 和项目浏览器隔离 PostgreSQL 上的提交/回滚/四路并发集成测试通过。
 - M7 模块边界整改 Task 2 已建立 Reader、Commerce、Novel 三域窄合同和稳定错误分类，覆盖账号校验/锁定/批量显示、邀请关系、Commerce 搜索投影与 Reader 兼容交易能力、公开内容/SEO/批量展示、商品目标/购买快照和点赞汇总。合同 DTO 不含 Gin/GVA/数据库实现句柄，Long ID 保持 Go `int64`；AST import 白名单、DTO 形状、错误脱敏、定向单元测试和 `go vet` 通过。Provider 将按后续工作流任务逐项实现，当前运行时行为未改变。
@@ -179,6 +179,16 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 - Reader 兼容 DTO 的日期已集中统一为旧 Java `yyyy-MM-dd HH:mm:ss`，覆盖个人数据、作品/章节、钱包流水、充值/购买订单和会员商品；Go 默认 RFC3339 不再进入这些读者响应，空时间仍为 `null`。单元快照与真实 PostgreSQL/Redis/MinIO 回归通过。
 - 隔离 Compose 浏览器环境已验证注册后 `/me` 所需的 `GET /reader/me/entitlements`、`GET /reader/products/membership`、`POST /reader/me/invite/code` 均经 Reader 网关返回 HTTP 200；邀请码首次生成使用 PostgreSQL 事务和 advisory lock 并保证重复请求复用同一邀请码。Reader Origin 已加入严格 CORS 白名单，注册请求从 `127.0.0.1` 页面返回 200。浏览器关键旅程已于 2026-08-15 补齐；8GB 副本的容量与耗时演练明确归属 M6。
 - 新增 `make verify-m3` 可重复退出验收：先锁定 Reader Git 树，再执行全部 Reader/Commerce 单元与契约测试；真实依赖阶段强制要求 PostgreSQL、Redis 和 MinIO 环境变量并覆盖所有 Reader/Commerce 包，最后运行冻结 Reader 44 个测试文件/536 个用例、树外 6 个 SSR/SEO 异常契约及生产构建。2026-08-15 在隔离 `moonbook_browser` 栈完整执行通过且无 Skip。
+
+## M7 模块边界整改验收（2026-08-16）
+
+- 运行时代码基线 `7ec5d01c8a17531c212ae4701018f6dc304038af` 已消除原审计的 15 处跨模块实现引用和 11 处跨域 SQL；依赖、SQL 所有权、表所有权和组合根静态门全部通过且未增加放行。
+- Reader、Commerce、Novel 跨域能力统一经 contract/provider 注入，`initialize` 保持唯一组合根。注册奖励、点赞、购买和首充奖励继续使用同一 PostgreSQL 事务；模拟充值、支付回调和人工补单采用 Reader 账号锁、订单锁、钱包锁的统一顺序，并用受邀读者 advisory lock 防止首充奖励竞争。
+- 普通格式、模块校验、`go vet` 和 CI 同范围 `go test` 全部通过；官方 `golang:1.24.2-bookworm` 容器中的 CI 完整范围 `go test -race` 也全部通过。
+- Reader/Commerce 真实 PostgreSQL/Redis/MinIO 回归和 `make verify-m3` 完整通过：冻结 Reader tree 为 `ffbe7bb4c56792e94e160de86cc71bce0a6e0e5e`，44 个测试文件/536 个用例、6 个树外 SSR/SEO 用例及 Reader 生产构建无回归。共享验收数据库上的 integration 包改为 `-p=1`，包内并发测试不受影响。
+- Playwright 关键旅程验证匿名目录/详情、邀请码注册、真实 MinIO 两章正文、书架、第二章历史恢复、退出后旧 Token `401` 和书架登录保护，控制台 0 error；临时书籍、对象和账号数据已清理。
+- 隔离验收库的 Reader 账号和 Commerce 搜索投影均为 237 行，`id/username/nickname/status` 双向差异为 0；投影仍不参与任何认证或交易决定。
+- 管理端静态检查仍确认 `vite-vue-path-map@1.0.2` 被生产配置直接调用且旧产物命中注入特征，因此未执行管理端安装或构建。模块边界整改验收已完成，但 M7 生产发布继续 No-Go；恶意依赖、镜像漏洞、统一安全门和约 8 GB 完整副本演练仍待完成。
 
 ## M3 退出结论
 

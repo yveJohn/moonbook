@@ -1,16 +1,19 @@
-# M7 后端质量门基线
+# M7 后端质量门验收
 
-验证时间：2026-08-15
+验证时间：2026-08-16
+运行时代码基线：`7ec5d01c8a17531c212ae4701018f6dc304038af`
 
 ## 结论
 
-固定提交 `c88052fba2ff1d7a8710b568eddfd38b033d2790` 的后端格式、Go 模块校验和 `go vet` 通过，但 CI 同范围的 `go test` 未通过。确定阻断不是外部依赖或沙箱环境，而是模块依赖规则发现 15 处跨域直接引用实现包。
+模块边界整改后的后端格式、模块校验、`go vet`、普通测试和 Linux race 均通过。原基线发现的 15 处跨模块实现引用和 11 处跨域 SQL 已全部移除；依赖、SQL 所有权、表所有权和组合根静态门保持原样通过，没有增加放行规则。
 
-因此当前 `.github/workflows/ci.yml` 的 `Test Moonbook foundation` 在 Linux CI 中也应失败，M7 后端质量门和统一验收门均不能标记完成。本报告不通过跳过、删除或放宽边界测试来换取绿色结果。
+Reader、Commerce、Novel 的真实 PostgreSQL/Redis/MinIO 回归通过。冻结 Reader tree 保持 `ffbe7bb4c56792e94e160de86cc71bce0a6e0e5e`，`make verify-m3` 完整通过 44 个测试文件、536 个冻结用例、6 个树外 SSR/SEO 用例和 Reader 生产构建。隔离 Compose 浏览器关键旅程也已闭环。
 
-## 验证范围
+本结论只关闭模块边界整改的后端质量门，不关闭整个 M7：管理前端仍直接执行已确认恶意的 `vite-vue-path-map@1.0.2`，应用镜像漏洞、统一 CI 安全门和约 8 GB 完整副本演练仍未完成，生产发布继续 No-Go。
 
-命令与仓库 CI 的后端包范围一致，本机按仓库约束关闭 cgo 并使用独立缓存：
+## 普通质量门
+
+在 `server` 目录使用独立缓存和 `CGO_ENABLED=0` 执行：
 
 ```bash
 gofmt -l internal/modules internal/platform \
@@ -30,69 +33,57 @@ CGO_ENABLED=0 GOCACHE=/tmp/moonbook-gocache go test \
   ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
 ```
 
-本地没有执行 `-race`。仓库已记录本机 ARM cgo 在上游 `go-m1cpu` 初始化期间不稳定，race 证据仍必须由 Linux CI 或等价 Linux 验证环境提供；这不改变普通测试当前已有确定失败的事实。
+结果：`gofmt -l` 无输出，`go mod verify` 返回 `all modules verified`，`go vet` 和普通测试退出码均为 0。需要本机回环监听的 HTTP fixture 在允许回环监听后同范围通过。
 
-## 通过项
+## Linux race
 
-- `gofmt -l` 无输出；
-- `go mod verify` 输出 `all modules verified`；
-- 同范围 `go vet` 退出码为 0；
-- 全量普通测试运行中，除下述模块边界包和本地监听环境项外，其余列出的包均通过或明确为无测试文件；
-- `internal/modules/novel/importtask` 的四个本地 HTTP fixture 用例在允许回环监听后通过；
-- `internal/platform/legacymigrate` 的封面下载安全与限制用例在允许回环监听后通过。
+本机 macOS ARM cgo 路径仍受上游 `go-m1cpu` 初始化问题影响，因此使用已有官方 `golang:1.24.2-bookworm` Linux 镜像、只读源码和只读模块缓存执行 CI 完整后端范围：
 
-最后两项在受限沙箱内最初因 `listen tcp4 127.0.0.1:0: bind: operation not permitted` 失败。沙箱外仅放开本机随机端口监听后对应包分别返回 `ok`，因此不记录为 Moonbook 代码失败。
+```bash
+go test -race \
+  ./internal/... ./config ./core/... ./initialize/... ./middleware \
+  ./cmd/moonbook-admin ./cmd/moonbook-config \
+  ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
+```
 
-## 确定失败
+结果：退出码 0。模块静态门、Reader/Commerce/Novel、迁移、事务和全部命令包均通过；并发重点包 `reader/invite`、`reader/me`、`commerce/payment`、`novel/provider`、`platform/transaction` 同时包含在该范围内。
 
-`internal/modules/dependency_test.go` 要求业务模块只能通过目标模块的 `contract` 包协作。当前没有任何业务域 `contract` 目录，测试报告 15 处违规，分布在 9 个文件：
+## 真实依赖与 M3
 
-| 调用模块 | 被直接引用模块 | 文件 | 直接依赖 |
-| --- | --- | --- | --- |
-| commerce | reader | `commerce/checkin/http.go` | Reader 鉴权实现 |
-| commerce | reader | `commerce/purchase/http.go` | Reader 鉴权与 wire 实现 |
-| commerce | reader | `commerce/recharge/http.go` | Reader 鉴权与 wire 实现 |
-| commerce | reader | `commerce/wallet/http.go` | Reader 鉴权与 wire 实现 |
-| reader | commerce | `reader/account/http.go` | 邀请奖励实现 |
-| reader | commerce | `reader/invite/repository.go` | 邀请奖励实现 |
-| reader | commerce、novel | `reader/public/http.go` | Commerce 与小说实现 |
-| reader | commerce、novel | `reader/public/service.go` | 目录访问、对象存储和 SEO 实现 |
-| reader | commerce | `reader/public/types.go` | Commerce 访问结果类型 |
+- Reader/Commerce 四个交易相关包的真实依赖集成测试连续 10 轮通过；模拟充值、支付回调和人工补单的统一锁序未再出现 PostgreSQL 死锁。
+- Reader/Commerce 全量真实 PostgreSQL/Redis/MinIO 脚本通过；脚本使用 `-p=1` 隔离共享验收数据库上的包级 fixture，包内并发测试保持启用。
+- `make verify-m3` 完整通过且无 Skip：冻结 Reader tree 校验、Go 单元/契约、真实依赖、536 个冻结用例、6 个树外 SSR/SEO 用例和 Reader 生产构建全部成功。
+- 隔离验收库执行 Reader 账号搜索投影修复后为 `reader_accounts=237`、`commerce_reader_search_projection=237`，`id/username/nickname/status` 双向差异为 0。
 
-这不是单纯的测试维护问题。批准架构明确禁止模块跨边界操作其他模块内部实现，而当前 Reader 兼容层、交易 HTTP 层和鉴权/序列化帮助代码已经形成双向实现依赖。
+## 浏览器关键旅程
 
-### 数据所有权扩展审计
+隔离 `moonbook_browser` 栈使用 PostgreSQL `25488`、Redis `26488`、MinIO `29488` 和 Reader `18489`。Playwright 已验证：
 
-import 测试只检查 Go 包依赖，不检查 SQL 字符串。继续按批准架构的逻辑域归属审计后，至少 11 个实现文件还直接读取或修改其他模块拥有的数据：
+- 匿名书库与详情、匿名阅读登录跳转；
+- 邀请码注册后回跳第一章，读取真实 MinIO 正文；
+- 加入书架、两章切换、第二章历史持久化；
+- 书架显示第二章，“继续阅读”恢复第二章；
+- 退出后旧 Token 请求 `/reader/me/history` 返回业务 `401`，再次访问书架跳转登录；
+- 全过程控制台错误为 0。
 
-| 调用模块 | 数据所有者 | 文件 | 越界行为 |
-| --- | --- | --- | --- |
-| reader | novel | `reader/me/repository.go` | 直接联查书籍/章节，写入点赞汇总并校验阅读位置 |
-| reader | novel | `reader/public/service.go` | 直接实现书库、分类、章节、正文导航和 sitemap 查询 |
-| reader | commerce | `reader/account/http.go` | 直接查询权益、会员授予和会员商品 |
-| reader | commerce | `reader/invite/repository.go` | 在 Reader 注册事务中直接调用钱包实现写奖励流水 |
-| commerce | reader | `commerce/adminmembership/repository.go` | 直接锁定并校验 Reader 账号 |
-| commerce | reader | `commerce/adminorder/repository.go` | 直接联查、锁定和展示 Reader 账号 |
-| commerce | reader | `commerce/adminrechargeorder/repository.go` | 直接联查 Reader 账号用户名 |
-| commerce | reader | `commerce/adminwallet/repository.go` | 直接联查并锁定 Reader 账号 |
-| commerce | reader | `commerce/invitereward/repository.go` | 直接查询 Reader 邀请关系 |
-| commerce | novel | `commerce/adminproduct/repository.go` | 直接校验书籍/章节商品目标 |
-| commerce | novel | `commerce/purchase/repository.go` | 直接读取章节元数据计算购买报价 |
+冻结 Reader 的历史上报语义是在离开当前章节或产生进度动作时保存当前章节；因此从第一章首次进入第二章只保存第一章，再从第二章切回第一章后第二章历史才会持久化。该行为与冻结源码一致，不是后端契约回归。
 
-表名不能用于推断模块所有权。钱包、支付、订单、权益及部分历史 `reader_` 前缀表属于 Commerce；账号、会话、邀请关系和个人行为属于 Reader；书籍、章节、SEO 与对象引用属于 Novel。修复只移动 import 或复制 DTO 会让当前测试变绿，却仍然违反数据所有权边界。
+临时浏览器书籍、两章正文对象、账号、会话、邀请码、邀请关系、钱包和活动记录已从隔离栈清理，目标书籍与账号计数均为 0。
 
-专项设计还必须处理跨域事务：Reader 注册与邀请奖励、购买与账号校验、点赞事实与书籍汇总需要在模块合同下保持现有原子性或定义可证明的一致性策略，不能简单拆成无补偿的顺序调用。
+## 可信前端边界
 
-## 关闭条件
+没有执行管理端 `pnpm install` 或生产构建。静态检查确认：
 
-关闭该质量门必须满足：
+- `web/package.json` 仍直接依赖 `vite-vue-path-map@^1.0.2`；
+- `web/pnpm-lock.yaml` 仍固定解析为恶意版本 `1.0.2`；
+- `web/vite.config.js` 仍导入并调用该插件；
+- 现有 `web/dist` 与包实现仍命中 `generateBundle`、`document.open()`、`document.write()` 和 `pathInfo` 注入特征。
 
-1. 为 Reader 身份/账号/邀请关系、Commerce 访问判定/权益/商品/钱包和 Novel 元数据/正文/SEO 等跨域能力定义最小稳定契约；
-2. 由初始化组合根注入契约实现，业务模块不直接构造或导入其他模块内部 Service、DTO 或帮助包；
-3. 保持冻结 Reader API 的路由、响应、错误语义和 Long ID 字符串合同不变；
-4. 上述 11 个文件不再直接读写其他模块拥有的表，跨域事务具备原子性或明确且经过测试的一致性保证；
-5. `TestModuleDependencyRules` 原样通过，不增加文件级或包级放行；
-6. 同范围普通测试、vet 和 Linux race 测试通过；
-7. 在固定验收提交上重新生成本报告，并由 CI 保存可定位日志。
+这些结果只证明安全阻断仍然存在，旧产物不得作为可信构建证据。
 
-该重构涉及多个既有模块边界，应先完成专项设计和批准，再实施；本报告只固定问题证据，不代表设计已经批准。
+## 剩余阻断
+
+1. 删除恶意管理端依赖、替换为可审计的本地路径映射实现并重新生成锁文件与镜像；
+2. 修复 Server、Web、Reader 镜像的 high/critical 漏洞并补齐 SBOM、许可证和安全扫描门；
+3. 在固定候选制品上执行约 8 GB 旧库副本的 M6 全量迁移、耗时、财务和对象一致性演练；
+4. 把 M3 真实依赖、浏览器、迁移、备份恢复和供应链检查纳入统一 CI 发布门。

@@ -4,6 +4,8 @@
 
 本文件记录 M0 的数据域范围，后续每个里程碑补齐目标 PostgreSQL 表、字段转换、MinIO 对象、校验 SQL 和迁移测试。旧 MySQL 只读，旧管理系统框架数据不迁移。
 
+2026-08-16 模块边界整改没有改变旧库表、目标表、ID 或字段映射。Reader 账号迁移仍在每批 PostgreSQL 事务内同步写入 Commerce 自有的 `commerce_reader_search_projection`，账号、投影和 checkpoint 同成同败；迁移和运行时业务代码均通过注入合同写入，不允许 Commerce 直接读取 `reader_accounts`。真实 MySQL 到 PostgreSQL 回归、回滚和幂等重跑通过，隔离验收库的 `id/username/nickname/status` 双向差异为 0。约 8 GB 完整副本演练仍属于 M6，未因本次整改提前关闭。
+
 | 数据域 | 主要旧表/来源 | 目标 | ID 规则 | 校验重点 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | 分类 | 现行 `sys_dict_data` 的 `novel_book_category` / `novel_book_sub_category`、历史 `book_category` | `novel_categories` | `dict_code`/历史分类 ID 原值写入 bigint；`dict_value` 保留为稳定 code | code、名称、类型、排序、启停及来源 | M2 元数据切片已实现 |
