@@ -93,7 +93,7 @@ func TestMockRechargeCreateConfirmAndFirstInviteReward(t *testing.T) {
 	})
 
 	readerAccounts := readerprovider.NewAccount(db)
-	service := NewService(SQLRepository{DB: db}, transaction.New(db), readerAccounts)
+	service := NewService(SQLRepository{DB: db, Invites: readerprovider.NewInvite(db)}, transaction.New(db), readerAccounts)
 	in := MockRechargeInput{ReaderID: fmt.Sprint(inviteeID), RechargeCoinAmount: "200", RequestID: "request-" + suffix, Remark: "集成模拟充值"}
 	created, err := service.CreateMockRecharge(ctx, in, 501)
 	if err != nil {

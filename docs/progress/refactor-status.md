@@ -220,6 +220,7 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 完成 M4 退出证据审计：现有支付测试仅证明成功回调幂等，Reader 下单没有网关创建调用，`creating/create_failed/gateway_unknown/superseded/expired/callback_exception` 状态路径及并发回调尚无完整证据；`commerce/reconcile.Wallets` 只核对钱包而非订单、支付和权益全域。旧管理 API 中两个未被旧页面调用的签到/邀请奖励记录查询已由用户选择补为可见审计页签，仍需按设计门槛实施。M4 保持实施中，详见 `docs/verification/m4-exit-audit.md`。
 - 完成 Commerce 管理端 Reader 查询边界整改：消费订单、充值订单和钱包列表全部改读 `commerce_reader_search_projection`，钱包列表可显示尚无钱包事实的读者；会员发放、模拟充值、人工补单和钱包调账通过实时 Reader Provider 加入平台事务并按统一锁序校验账号。真实 PostgreSQL 已覆盖筛选分页、幂等、余额保护、禁用/删除账号拒绝和失败无业务事实，Reader/Commerce 定向测试、模块宽范围测试、`go vet` 与依赖静态门均通过。
 - 完成商品目标与购买事务边界整改：Novel Purchase Provider 统一提供商品目标和事务内购买快照，商品管理与购买运行时代码不再读取 `novel_books` 或 `novel_chapters`。会员、章节和整书购买由 Commerce Service 发起平台事务，依次取得幂等锁、实时 Reader 锁和 Novel 目标锁，再写订单、钱包流水、会员授予或内容权益；重复请求仍返回原订单。真实 PostgreSQL 已覆盖未发布/禁用/缺失目标、免费章节、字数与固定价、报价变化、八路并发幂等、Reader 禁用、Provider 故障及失败无新增事实；完整模块测试、`go vet`、依赖静态门和 Reader 投影一致性复核均通过。
+- 完成首充邀请奖励事务边界整改：Reader Invite Provider 在调用方现有 PostgreSQL 事务中以共享锁读取有效邀请关系，Commerce 奖励写入不再查询 `reader_invite_relations`；模拟充值确认、EPUSDT 回调、主动同步和人工补单均由组合根注入同一 Provider。三入口并发真实库测试证明只生成一条首充奖励事实和一条奖励流水；Reader 合同故障及邀请人钱包溢出均不会留下充值入账、奖励、成功终态或回调成功日志。定向集成测试、完整模块测试、`go vet`、依赖静态门与 Reader 投影一致性复核均通过。
 
 ## M5 当前进度
 

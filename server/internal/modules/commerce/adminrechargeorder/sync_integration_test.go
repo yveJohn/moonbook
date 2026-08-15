@@ -12,6 +12,7 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
+	readerprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/provider"
 )
 
 func TestPaymentSyncSettlesVerifiedGatewayResponseAndIsIdempotent(t *testing.T) {
@@ -54,7 +55,7 @@ func TestPaymentSyncSettlesVerifiedGatewayResponseAndIsIdempotent(t *testing.T) 
 	}))
 	defer server.Close()
 	t.Setenv("MOONBOOK_EPUSDT_SYNC_URL", server.URL)
-	r := SQLRepository{DB: db}
+	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db)}
 	o, err := r.Sync(ctx, orderID)
 	if err != nil || o.Status != "paid" || o.GatewayTradeID != "trade-1" {
 		t.Fatalf("order=%+v err=%v", o, err)

@@ -11,11 +11,15 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
+	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
-type SQLRepository struct{ DB *sql.DB }
+type SQLRepository struct {
+	DB      *sql.DB
+	Invites readercontract.InviteRelationReader
+}
 
 const orderSelect = `SELECT o.id::text,o.reader_id::text,p.username,o.order_no,o.order_type,COALESCE(o.product_id::text,''),o.product_type,COALESCE(o.target_id::text,''),COALESCE(o.book_id_snapshot::text,''),o.product_name_snapshot,o.price_coin_snapshot::text,COALESCE(o.chapter_word_count_snapshot::text,''),COALESCE(o.pricing_word_unit_snapshot::text,''),COALESCE(o.pricing_coin_unit_snapshot::text,''),o.recharge_coin_amount::text,o.bonus_coin_amount::text,o.status,o.idempotency_key,COALESCE(o.remark,''),o.paid_time,o.created_at,o.updated_at FROM reader_purchase_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`
 
@@ -112,7 +116,9 @@ func (r SQLRepository) ConfirmMockRecharge(ctx context.Context, orderID, operato
 	if _, err = wallet.MutateTx(ctx, tx, wallet.Mutation{ReaderID: readerID, LedgerNo: "MR-" + orderIDText, BizType: "mock_recharge", BizID: &orderIDText, OrderNo: &orderNo, Direction: "income", CoinType: "recharge", Amount: amount, Remark: &remark, IdempotencyKey: &confirmKey}); err != nil {
 		return Order{}, err
 	}
-	if err = invitereward.GrantFirstRechargeTx(ctx, tx, readerID); err != nil {
+	if err = transaction.WithExisting(ctx, tx, func(txCtx context.Context) error {
+		return invitereward.GrantFirstRechargeTx(txCtx, tx, r.Invites, readerID)
+	}); err != nil {
 		return Order{}, err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE reader_purchase_orders SET status='paid',operator_id=$2,paid_time=now(),updated_at=now() WHERE id=$1`, orderID, operatorID); err != nil {

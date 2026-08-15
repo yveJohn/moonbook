@@ -15,11 +15,15 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
+	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
-type SQLRepository struct{ DB *sql.DB }
+type SQLRepository struct {
+	DB      *sql.DB
+	Invites readercontract.InviteRelationReader
+}
 
 const selectOrder = `SELECT o.id::text,o.reader_id::text,o.diamond_amount::text,COALESCE(o.product_id::text,''),p.username,o.order_no,o.source_type,o.price_usdt::text,o.provider,o.currency,o.token,o.network,COALESCE(o.gateway_trade_id,''),COALESCE(o.actual_amount::text,''),COALESCE(o.receive_address,''),COALESCE(o.payment_url,''),COALESCE(o.block_transaction_id,''),o.status,o.gateway_status,o.created_at,o.paid_time FROM reader_recharge_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`
 
@@ -117,7 +121,7 @@ func (r SQLRepository) ManualPay(ctx context.Context, id, expectedReaderID int64
 	if err != nil {
 		return Order{}, err
 	}
-	if err = invitereward.GrantFirstRechargeTx(ctx, executor, readerID); err != nil {
+	if err = invitereward.GrantFirstRechargeTx(ctx, executor, r.Invites, readerID); err != nil {
 		return Order{}, err
 	}
 	if _, err = executor.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_trade_id=NULLIF($1,''),actual_amount=$2,status='paid',wallet_ledger_id=$3,paid_time=now(),updated_at=now() WHERE id=$4`, in.GatewayTradeID, in.ActualAmount, ledger.ID, orderID); err != nil {

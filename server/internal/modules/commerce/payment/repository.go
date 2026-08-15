@@ -12,11 +12,16 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/invitereward"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
+	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
 var ErrRejected = errors.New("payment callback rejected")
 
-type SQLRepository struct{ DB *sql.DB }
+type SQLRepository struct {
+	DB      *sql.DB
+	Invites readercontract.InviteRelationReader
+}
 
 func (r SQLRepository) Process(ctx context.Context, c Callback) error {
 	if c.Status != 2 || !strings.EqualFold(c.Token, "usdt") || c.OrderNo == "" || c.TransactionID == "" {
@@ -55,7 +60,9 @@ func (r SQLRepository) Process(ctx context.Context, c Callback) error {
 	if e != nil {
 		return e
 	}
-	if e = invitereward.GrantFirstRechargeTx(ctx, tx, readerID); e != nil {
+	if e = transaction.WithExisting(ctx, tx, func(txCtx context.Context) error {
+		return invitereward.GrantFirstRechargeTx(txCtx, tx, r.Invites, readerID)
+	}); e != nil {
 		return e
 	}
 	if _, e = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_trade_id=$1,actual_amount=$2,receive_address=$3,block_transaction_id=$4,gateway_status=2,status='paid',wallet_ledger_id=$5,paid_time=now(),updated_at=now() WHERE id=$6`, c.TradeID, c.ActualAmount, c.ReceiveAddress, c.TransactionID, ledger.ID, orderID); e != nil {

@@ -6,12 +6,14 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminorder"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminrechargeorder"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
 	readerprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
@@ -22,7 +24,7 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 	defer cancel()
 
 	base := time.Now().UnixNano()
-	inviterID, inviteeID, inviteCodeID, rechargeOrderID := base, base+1, base+2, base+3
+	inviterID, inviteeID, inviteCodeID, rechargeOrderID, paymentOrderID := base, base+1, base+2, base+3, base+4
 	suffix := strconv.FormatInt(base, 10)
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash) VALUES($1,$2,'fixture'),($3,$4,'fixture')`, inviterID, "cross-inviter-"+suffix, inviteeID, "cross-invitee-"+suffix); err != nil {
 		t.Fatal(err)
@@ -39,20 +41,16 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_recharge_orders(id,order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status) VALUES($1,$2,$3,$4,'custom',100,'1.00','epusdt','usd','usdt','tron','gateway_unknown')`, rechargeOrderID, "CROSS-MANUAL-"+suffix, inviteeID, "cross-manual-"+suffix); err != nil {
 		t.Fatal(err)
 	}
-
-	transactor := transaction.New(db)
-	readerAccounts := readerprovider.NewAccount(db)
-	manualService := adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db}, transactor, readerAccounts)
-	if _, err := manualService.ManualPay(ctx, rechargeOrderID, adminrechargeorder.ManualPayInput{
-		RequestID:      "cross-manual-request-" + suffix,
-		GatewayTradeID: "cross-manual-trade-" + suffix,
-		ActualAmount:   "1.00",
-		Remark:         "跨入口首充奖励测试",
-	}); err != nil {
+	paymentOrderNo := "CROSS-PAYMENT-" + suffix
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_recharge_orders(id,order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status) VALUES($1,$2,$3,$4,'custom',40,'2.00','epusdt','usd','usdt','tron','pending')`, paymentOrderID, paymentOrderNo, inviteeID, "cross-payment-"+suffix); err != nil {
 		t.Fatal(err)
 	}
 
-	mockService := adminorder.NewService(adminorder.SQLRepository{DB: db}, transactor, readerAccounts)
+	transactor := transaction.New(db)
+	readerAccounts := readerprovider.NewAccount(db)
+	readerInvites := readerprovider.NewInvite(db)
+	manualService := adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts)
+	mockService := adminorder.NewService(adminorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts)
 	mockOrder, err := mockService.CreateMockRecharge(ctx, adminorder.MockRechargeInput{
 		ReaderID:           fmt.Sprint(inviteeID),
 		RechargeCoinAmount: "25",
@@ -66,8 +64,36 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = mockService.ConfirmMockRecharge(ctx, mockOrderID, 501); err != nil {
-		t.Fatal(err)
+	callback := payment.Callback{TradeID: "cross-payment-trade-" + suffix, OrderNo: paymentOrderNo, Amount: "2.00", ActualAmount: "2.00", ReceiveAddress: "T-cross", Token: "usdt", TransactionID: "cross-payment-tx-" + suffix, Status: 2, Fields: map[string]string{"order_id": paymentOrderNo}}
+	paymentRepository := payment.SQLRepository{DB: db, Invites: readerInvites}
+	start := make(chan struct{})
+	errs := make(chan error, 3)
+	var workers sync.WaitGroup
+	workers.Add(3)
+	go func() {
+		defer workers.Done()
+		<-start
+		_, err := manualService.ManualPay(ctx, rechargeOrderID, adminrechargeorder.ManualPayInput{RequestID: "cross-manual-request-" + suffix, GatewayTradeID: "cross-manual-trade-" + suffix, ActualAmount: "1.00", Remark: "跨入口首充奖励测试"})
+		errs <- err
+	}()
+	go func() {
+		defer workers.Done()
+		<-start
+		_, err := mockService.ConfirmMockRecharge(ctx, mockOrderID, 501)
+		errs <- err
+	}()
+	go func() {
+		defer workers.Done()
+		<-start
+		errs <- paymentRepository.Process(ctx, callback)
+	}()
+	close(start)
+	workers.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	var rewardRows, rewardLedgers int
@@ -84,7 +110,7 @@ func TestFirstRechargeRewardIsIdempotentAcrossRechargeEntries(t *testing.T) {
 	if err = db.QueryRowContext(ctx, `SELECT recharge_coin_balance FROM reader_wallets WHERE reader_id=$1`, inviteeID).Scan(&inviteeRecharge); err != nil {
 		t.Fatal(err)
 	}
-	if rewardRows != 1 || rewardLedgers != 1 || inviterBonus != 100 || inviteeRecharge != 125 {
+	if rewardRows != 1 || rewardLedgers != 1 || inviterBonus != 100 || inviteeRecharge != 165 {
 		t.Fatalf("rewardRows=%d rewardLedgers=%d inviterBonus=%d inviteeRecharge=%d", rewardRows, rewardLedgers, inviterBonus, inviteeRecharge)
 	}
 }

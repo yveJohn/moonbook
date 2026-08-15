@@ -258,11 +258,11 @@
 - Modify: `server/internal/modules/commerce/adminrechargeorder/sync_integration_test.go`
 - Create: `server/internal/modules/reader/provider/invite.go`
 
-- [ ] **Step 1：补跨入口并发测试。** 模拟充值、支付回调和人工补单同时完成时只产生一份首充奖励事实和流水。
-- [ ] **Step 2：替换邀请关系 SQL。** Commerce 通过 Reader 合同读取有效邀请关系并加入当前事务，不直接查询 `reader_invite_relations`。
-- [ ] **Step 3：保持既有幂等事实。** 充值订单锁、首充奖励唯一键和钱包流水唯一键继续共同防重。
-- [ ] **Step 4：故障回滚。** Reader 合同、奖励事实或钱包任一失败，订单终态和入账全部回滚。
-- [ ] **Step 5：真实 PostgreSQL 验证并提交。** 提交信息：`重构首充邀请奖励事务`。
+- [x] **Step 1：补跨入口并发测试。** 模拟充值、支付回调和人工补单同时完成时只产生一份首充奖励事实和流水。
+- [x] **Step 2：替换邀请关系 SQL。** Commerce 通过 Reader 合同读取有效邀请关系并加入当前事务，不直接查询 `reader_invite_relations`。
+- [x] **Step 3：保持既有幂等事实。** 充值订单锁、首充奖励唯一键和钱包流水唯一键继续共同防重。
+- [x] **Step 4：故障回滚。** Reader 合同、奖励事实或钱包任一失败，订单终态和入账全部回滚。
+- [x] **Step 5：真实 PostgreSQL 验证并提交。** 提交信息：`重构首充邀请奖励事务`。
 
 ## Task 13：增加 SQL 所有权与组合根静态门
 
