@@ -40,6 +40,7 @@
 - M7 已新增固定 commit/tag/digest、配置与 Secret 门禁、升级前备份、一次性迁移、应用替换、冒烟和回退兼容边界明确的 Compose 升级 Runbook，并在 `3058fee` 到 `a8c209d` 两个固定 Server 镜像间完成隔离演练。升级迁移 `applied=0`，版本 58/59 条记录和 `sys_params` 夹具保持不变，目标镜像新增财务核对返回 `mismatches=0`，升级及应用镜像回退后的 gateway/API/Reader 健康均通过。该版本对无迁移差异，只关闭命令级升级和特定兼容回退缺口；真实业务、含迁移版本兼容、TLS/可信代理、资源限制和生产观察阈值仍待完成，详见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
 - M7 依赖与供应链审计确认当前三个应用镜像均为生产 No-Go：管理端 `vite-vue-path-map@1.0.2` 是已公告的 critical 恶意包且注入逻辑实际进入生产构建产物；Server 镜像由 Go 1.24.2 构建，`moonbook-server` 为 34 high/3 critical；管理端 Alpine 层为 30 high/2 critical；Reader 的 Alpine 层为 17 high/2 critical、Node 层为 32 high/3 critical。冻结 Reader 锁文件当前 npm audit 为 5 high，均可由 React Router 7.18.2 修复。恶意插件替换、依赖/基础镜像升级、SBOM、许可证和 CI 安全门仍待实施，详见 `docs/verification/m7-security-supply-chain-audit.md`。
 - M7 已在独立空库 Compose 项目建立公开读取入口的本地短时性能基线：网关 health 为 9859.95 RPS，API readiness 为 3924.92 RPS，Reader 书籍列表为 7984.91 RPS，Reader SSR 为 546.54 RPS，纳入报告的请求全部零失败，负载后依赖 readiness 和容器健康不变。该环境无业务数据、资源限额、鉴权路径、MinIO 正文、支付、Worker、持续压测或约 8 GB 副本，不能外推生产容量或关闭 M7 性能门，详见 `docs/verification/m7-performance-baseline.md`。
+- M7 后端质量基线在固定提交 `c88052f` 验证格式、Go 模块和 vet 通过，本地监听相关测试在允许回环监听后通过；但 `TestModuleDependencyRules` 确定发现 Reader、Commerce 与 Novel 之间 15 处跨域实现引用，当前 CI 后端测试应失败。该缺口必须通过最小契约和组合根重构关闭，禁止跳过或放宽边界测试，详见 `docs/verification/m7-backend-quality-baseline.md`。
 
 ## M1 已验证单元
 
