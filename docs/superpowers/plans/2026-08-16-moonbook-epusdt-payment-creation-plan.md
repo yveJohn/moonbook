@@ -86,13 +86,13 @@
 - Modify: `server/internal/modules/commerce/recharge/repository_integration_test.go`
 - Modify: `server/initialize/router_biz.go`
 
-- [ ] **Step 1：应用服务测试先失败。** Repository 替身固定“已存在同请求”“返回活动未知订单”“新建订单”三种结果；只有新建结果允许调用网关。
-- [ ] **Step 2：真实事务测试先失败。** 覆盖 Reader advisory lock、相同请求幂等、不同请求替换 `pending`、`creating/gateway_unknown` 不替换、到期活动订单释放和唯一冲突重读。
-- [ ] **Step 3：实现 Start。** 报价、通道与配置验证在创建前完成；替换旧单和插入 `creating` 同事务；订单号使用 `RC{id}` 且不超过 32 字符。
-- [ ] **Step 4：实现 Service 编排。** 事务外调用 Client，成功/失败由 Repository 在新事务按订单锁提交；完成事务失败绝不重新调用网关。
-- [ ] **Step 5：保持兼容 DTO。** `credential_ref`、PID 和内部错误不进入 Reader；Long ID、空值、八状态和日期格式不变。
-- [ ] **Step 6：组合根注入。** `initialize` 是唯一构造配置、凭据、Client、Repository 和 Service 的位置。
-- [ ] **Step 7：验证并提交。** 运行 Recharge、Provider、Reader Commerce 兼容测试及真实 PostgreSQL 集成；提交信息：`补齐充值订单创建状态机`。
+- [x] **Step 1：应用服务测试先失败。** Repository 替身固定“已存在同请求”“返回活动未知订单”“新建订单”三种结果；只有新建结果允许调用网关。
+- [x] **Step 2：真实事务测试先失败。** 覆盖 Reader advisory lock、相同请求幂等、不同请求替换 `pending`、`creating/gateway_unknown` 不替换、到期活动订单释放和唯一冲突重读。
+- [x] **Step 3：实现 Start。** 报价、通道与配置验证在创建前完成；替换旧单和插入 `creating` 同事务；订单号使用 `RC{id}` 且不超过 32 字符。
+- [x] **Step 4：实现 Service 编排。** 事务外调用 Client，成功/失败由 Repository 在新事务按订单锁提交；完成事务失败绝不重新调用网关。
+- [x] **Step 5：保持兼容 DTO。** `credential_ref`、PID 和内部错误不进入 Reader；Long ID、空值、八状态和日期格式不变。
+- [x] **Step 6：组合根注入。** `initialize` 是唯一构造配置、凭据、Client、Repository 和 Service 的位置。
+- [x] **Step 7：验证并提交。** 运行 Recharge、Provider、Reader Commerce 兼容测试及真实 PostgreSQL 集成；提交信息：`补齐充值订单创建状态机`。
 
 ## Task 5：补齐并发创建与网关完成原子性
 

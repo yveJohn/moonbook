@@ -11,6 +11,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/checkin"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/purchase"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/recharge"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
@@ -137,9 +138,18 @@ func (stub *rechargeRepositoryStub) Catalog(context.Context) (recharge.Catalog, 
 func (stub *rechargeRepositoryStub) Quote(context.Context, int64) (recharge.Quote, error) {
 	return recharge.Quote{DiamondAmount: "6", PriceUSDT: "1.2"}, stub.err
 }
-func (stub *rechargeRepositoryStub) CreateOrder(_ context.Context, request recharge.CreateRequest) (recharge.Order, error) {
+func (stub *rechargeRepositoryStub) Prepare(_ context.Context, request recharge.CreateRequest) (recharge.PreparedOrder, error) {
 	stub.request = request
-	return recharge.Order{ID: "8", ReaderID: "7", DiamondAmount: "6", ProductID: "4", WalletLedgerID: stringPointer("9")}, stub.err
+	return recharge.PreparedOrder{ReaderID: request.ReaderID, RequestID: request.RequestID, ProductID: request.ProductID}, stub.err
+}
+func (stub *rechargeRepositoryStub) Start(context.Context, recharge.PreparedOrder) (recharge.StartResult, error) {
+	return recharge.StartResult{Order: recharge.Order{ID: "8", ReaderID: "7", DiamondAmount: "6", ProductID: "4", WalletLedgerID: stringPointer("9")}}, stub.err
+}
+func (stub *rechargeRepositoryStub) Complete(context.Context, string, epusdt.CreateResponse) (recharge.Order, error) {
+	return recharge.Order{}, stub.err
+}
+func (stub *rechargeRepositoryStub) Fail(context.Context, string, *epusdt.GatewayError) (recharge.Order, error) {
+	return recharge.Order{}, stub.err
 }
 func (stub *rechargeRepositoryStub) GetOrder(_ context.Context, _ int64, orderID string) (recharge.Order, error) {
 	stub.orderID = orderID
@@ -148,7 +158,7 @@ func (stub *rechargeRepositoryStub) GetOrder(_ context.Context, _ int64, orderID
 
 func TestRechargeProviderConvertsRequestsOrdersAndErrors(t *testing.T) {
 	repository := &rechargeRepositoryStub{}
-	provider := NewRecharge(recharge.NewService(repository))
+	provider := NewRecharge(recharge.NewService(repository, providerRechargeGateway{}, recharge.GatewaySnapshot{CredentialRef: "primary", MerchantPID: "merchant"}, nil))
 	productID, amount := int64(4), int64(6)
 	order, err := provider.CreateRechargeOrder(context.Background(), contract.RechargeCreateRequest{ReaderID: 7, ProductID: &productID, CustomDiamondAmount: &amount, RequestID: "request"})
 	if err != nil || repository.request.CustomDiamondAmount != "6" || order.ID != 8 || order.ProductID == nil || *order.ProductID != 4 || order.WalletLedgerID == nil || *order.WalletLedgerID != 9 {
@@ -161,6 +171,12 @@ func TestRechargeProviderConvertsRequestsOrdersAndErrors(t *testing.T) {
 	if _, err := provider.RechargeOrder(context.Background(), 7, 1); !errors.Is(err, contract.ErrNotFound) {
 		t.Fatalf("error=%v", err)
 	}
+}
+
+type providerRechargeGateway struct{}
+
+func (providerRechargeGateway) Create(context.Context, epusdt.CreateRequest) (epusdt.CreateResponse, error) {
+	return epusdt.CreateResponse{}, nil
 }
 
 func stringPointer(value string) *string { return &value }

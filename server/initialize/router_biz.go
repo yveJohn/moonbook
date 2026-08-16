@@ -13,6 +13,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminwallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/catalog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/checkin"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
 	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/purchase"
@@ -86,7 +87,20 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	readerInvites := readerprovider.NewInvite(db)
 	purchaseTargets := novelprovider.NewPurchase(db)
 	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
-	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewService(recharge.SQLRepository{DB: db})), readerService)
+	paymentConfig, paymentConfigErr := epusdt.LoadConfig(true, os.LookupEnv)
+	var paymentGateway recharge.Gateway
+	var paymentSnapshot recharge.GatewaySnapshot
+	if paymentConfigErr == nil {
+		client, clientErr := epusdt.NewClient(paymentConfig)
+		if clientErr != nil {
+			paymentConfigErr = clientErr
+		} else {
+			credential := paymentConfig.Credentials.Current()
+			paymentGateway = client
+			paymentSnapshot = recharge.GatewaySnapshot{CredentialRef: credential.Ref(), MerchantPID: credential.PID()}
+		}
+	}
+	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewService(recharge.SQLRepository{DB: db}, paymentGateway, paymentSnapshot, paymentConfigErr)), readerService)
 	commercecompat.RegisterCheckinRoutes(publicGroup, commerceprovider.NewCheckin(checkin.NewService(checkin.SQLRepository{DB: db})), readerService)
 	commercecompat.RegisterPurchaseRoutes(publicGroup, commerceprovider.NewPurchase(purchase.NewService(purchase.SQLRepository{DB: db}, transactor, readerAccounts, purchaseTargets)), readerService)
 	payment.RegisterRoutes(publicGroup, payment.NewService(payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, os.Getenv("MOONBOOK_EPUSDT_PID"), os.Getenv("MOONBOOK_EPUSDT_SECRET")))
