@@ -49,12 +49,12 @@
 - Modify: `compose.yaml`
 - Modify: `server/config/config_contract_test.go`
 
-- [ ] **Step 1：编写失败测试。** 覆盖禁用通道无需支付配置、启用时必填项、当前凭据、历史 JSON、重复/空标识、URL、超时、安全窗口和错误脱敏。
-- [ ] **Step 2：实现 CredentialProvider。** 当前凭据可创建和验签；历史凭据只可按 `credential_ref` 验签；订单引用为空时仅兼容当前凭据。不得输出 PID、Secret 或原始 JSON。
-- [ ] **Step 3：实现配置解析。** URL 必须为绝对 HTTP/HTTPS 且无用户信息/片段；超时和安全窗口有明确上下限，总超时不得小于连接超时。
-- [ ] **Step 4：更新环境合同。** Compose Server/Migrate/Bootstrap 使用同一环境锚点透传变量；示例文件不写秘密，历史 JSON 默认 `[]`。
-- [ ] **Step 5：验证。** 运行定向 Go 测试、配置渲染测试、`docker compose config`、Shell 语法和秘密扫描。
-- [ ] **Step 6：提交。** 提交信息：`增加EPUSDT环境凭据配置`。
+- [x] **Step 1：编写失败测试。** 覆盖禁用通道无需支付配置、启用时必填项、当前凭据、历史 JSON、重复/空标识、URL、超时、安全窗口和错误脱敏。
+- [x] **Step 2：实现 CredentialProvider。** 当前凭据可创建和验签；历史凭据只可按 `credential_ref` 验签；订单引用为空时仅兼容当前凭据。不得输出 PID、Secret 或原始 JSON。
+- [x] **Step 3：实现配置解析。** URL 必须为绝对 HTTP/HTTPS 且无用户信息/片段；超时和安全窗口有明确上下限，总超时不得小于连接超时。
+- [x] **Step 4：更新环境合同。** Compose Server/Migrate/Bootstrap 使用同一环境锚点透传变量；示例文件不写秘密，历史 JSON 默认 `[]`。
+- [x] **Step 5：验证。** 运行定向 Go 测试、配置渲染测试、`docker compose config`、Shell 语法和秘密扫描。
+- [x] **Step 6：提交。** 提交信息：`增加EPUSDT环境凭据配置`。
 
 ## Task 3：实现 EPUSDT 协议客户端
 

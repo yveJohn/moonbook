@@ -3,6 +3,7 @@ package config
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -75,4 +76,74 @@ func TestShippedServerConfigsMatchSchema(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEPUSDTEnvironmentContract(t *testing.T) {
+	const envExamplePath = "../../.env.example"
+	content, err := os.ReadFile(envExamplePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := parseEnvironmentExample(string(content))
+	wantDefaults := map[string]string{
+		"MOONBOOK_EPUSDT_PID":                     "",
+		"MOONBOOK_EPUSDT_SECRET":                  "",
+		"MOONBOOK_EPUSDT_CREDENTIAL_REF":          "primary",
+		"MOONBOOK_EPUSDT_VERIFY_CREDENTIALS_JSON": "[]",
+		"MOONBOOK_EPUSDT_CREATE_URL":              "",
+		"MOONBOOK_EPUSDT_NOTIFY_URL":              "",
+		"MOONBOOK_EPUSDT_REDIRECT_URL":            "",
+		"MOONBOOK_EPUSDT_CONNECT_TIMEOUT_MS":      "3000",
+		"MOONBOOK_EPUSDT_REQUEST_TIMEOUT_MS":      "10000",
+		"MOONBOOK_EPUSDT_UNKNOWN_RELEASE_MINUTES": "15",
+		"MOONBOOK_EPUSDT_HEALTH_URL":              "",
+		"MOONBOOK_EPUSDT_SYNC_URL":                "",
+	}
+	for key, want := range wantDefaults {
+		if got, exists := values[key]; !exists || got != want {
+			t.Errorf("%s default=%q exists=%t, want %q", key, got, exists, want)
+		}
+	}
+
+	composeContent, err := os.ReadFile("../../compose.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compose struct {
+		Services map[string]struct {
+			Environment map[string]any `yaml:"environment"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(composeContent, &compose); err != nil {
+		t.Fatal(err)
+	}
+	for _, serviceName := range []string{"migrate", "admin-bootstrap", "server"} {
+		environment := compose.Services[serviceName].Environment
+		for key := range wantDefaults {
+			if _, exists := environment[key]; !exists {
+				t.Errorf("service %s does not receive %s", serviceName, key)
+			}
+		}
+	}
+	for _, secretKey := range []string{"MOONBOOK_EPUSDT_PID", "MOONBOOK_EPUSDT_SECRET", "MOONBOOK_EPUSDT_VERIFY_CREDENTIALS_JSON"} {
+		value := fmt.Sprint(compose.Services["migrate"].Environment[secretKey])
+		if !strings.Contains(value, "${"+secretKey) {
+			t.Errorf("compose hard-codes %s instead of environment injection", secretKey)
+		}
+	}
+}
+
+func parseEnvironmentExample(content string) map[string]string {
+	values := make(map[string]string)
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if ok {
+			values[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		}
+	}
+	return values
 }
