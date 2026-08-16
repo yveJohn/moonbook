@@ -47,7 +47,7 @@
 | 会员人工发放 | `reader/user` / `ReaderMembershipGrantController` | 限时或永久会员发放、幂等请求、备注审计 | M4 | `POST /reader/users/:id/membership` 已实现；事务锁定读者账号，会员授予独立叠加且不修改购买订单 |
 | 充值产品与设置 | `reader/payment/product` / `ReaderRechargeProductAdminController` | 预设档位、自定义兑换范围 | M4 | 充值档位 CRUD、自定义充值开关/汇率/最小最大范围管理已实现；真实 PostgreSQL 集成测试覆盖非法规则 |
 | 支付渠道 | `reader/payment/channel` / `ReaderPaymentChannelAdminController` | 配置、启停、连通性检查、凭据保护 | M4 | 渠道查询、启停、凭据状态和脱敏连通性检查已实现；真实生产网关连通性仍需切换前使用受控凭据验收 |
-| 充值订单与回调 | `reader/payment/order` / `ReaderRechargeOrderAdminController` | 创建、详情、回调日志、主动同步、异常状态 | M4 | 列表、筛选、详情、成功回调入账、人工补单和受控主动同步已实现；Reader 下单尚未调用 EPUSDT 创建交易，拒绝回调未完整记录，失败/替换/过期/并发状态机仍待补齐，详见 `docs/verification/m4-exit-audit.md` |
+| 充值订单与回调 | `reader/payment/order` / `ReaderRechargeOrderAdminController` | 创建、详情、回调日志、主动同步、异常状态 | M4 | 列表、筛选、详情、EPUSDT 同步创建、失败分类、活动订单替换、过期释放、历史凭据回调、防重放、人工补单和主动同步已实现；16 路并发和隔离 HTTP 替身冒烟通过。回调全尝试审计、真实最小金额支付和财务全域核对仍待完成，详见 `docs/verification/m4-exit-audit.md` |
 
 ## 内容生产（M5）
 
