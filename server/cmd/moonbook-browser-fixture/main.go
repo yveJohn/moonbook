@@ -28,6 +28,11 @@ type config struct {
 	dsn, endpoint, accessKey, secretKey, bucket, confirmation string
 }
 
+type cleanupStatement struct {
+	query string
+	args  []any
+}
+
 func main() { os.Exit(run(os.Args[1:], os.LookupEnv)) }
 
 func run(args []string, lookup func(string) (string, bool)) int {
@@ -196,41 +201,19 @@ func cleanup(ctx context.Context, db *sql.DB, blobs objectstore.BlobStore) error
 		return err
 	}
 	defer tx.Rollback()
-	type cleanupStatement struct {
-		query string
-		args  []any
-	}
 	readerPattern := fixtureReaderPrefix + "%"
 	bookArgs := []any{fixtureBookName, fixtureAuthorName}
-	statements := []cleanupStatement{
-		{`DELETE FROM reader_payment_callback_logs WHERE recharge_order_id IN (SELECT id FROM reader_recharge_orders WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1))`, []any{readerPattern}},
-		{`DELETE FROM reader_recharge_orders WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_purchase_orders WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM commerce_entitlements WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM commerce_membership_grants WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_checkin_records WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_wallet_ledgers WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_wallets WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_feedback WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_reading_preferences WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_reading_history WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_book_likes WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_bookshelf_entries WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_sessions WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_invite_relations WHERE inviter_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1) OR invitee_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_invite_codes WHERE inviter_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
-		{`DELETE FROM reader_accounts WHERE username LIKE $1`, []any{readerPattern}},
-		{`DELETE FROM reader_invite_codes WHERE code=$1`, []any{fixtureInviteCode}},
-		{`DELETE FROM novel_object_references WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
-		{`DELETE FROM novel_object_events WHERE object_id IN (SELECT id FROM novel_objects WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2))`, bookArgs},
-		{`DELETE FROM novel_objects WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
-		{`DELETE FROM novel_chapters WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
-		{`DELETE FROM novel_book_tags WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
-		{`DELETE FROM novel_book_sub_categories WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
-		{`DELETE FROM novel_books WHERE book_name=$1 AND author_name=$2`, bookArgs},
-		{`DELETE FROM novel_authors WHERE pen_name=$1 AND normalized_name=$1`, []any{fixtureAuthorName}},
-		{`DELETE FROM novel_categories WHERE code=$1 AND kind='primary'`, []any{fixtureCategoryCode}},
-	}
+	statements := append(readerCleanupStatements(readerPattern),
+		cleanupStatement{`DELETE FROM novel_object_references WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
+		cleanupStatement{`DELETE FROM novel_object_events WHERE object_id IN (SELECT id FROM novel_objects WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2))`, bookArgs},
+		cleanupStatement{`DELETE FROM novel_objects WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
+		cleanupStatement{`DELETE FROM novel_chapters WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
+		cleanupStatement{`DELETE FROM novel_book_tags WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
+		cleanupStatement{`DELETE FROM novel_book_sub_categories WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
+		cleanupStatement{`DELETE FROM novel_books WHERE book_name=$1 AND author_name=$2`, bookArgs},
+		cleanupStatement{`DELETE FROM novel_authors WHERE pen_name=$1 AND normalized_name=$1`, []any{fixtureAuthorName}},
+		cleanupStatement{`DELETE FROM novel_categories WHERE code=$1 AND kind='primary'`, []any{fixtureCategoryCode}},
+	)
 	for _, statement := range statements {
 		if _, err = tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
 			return err
@@ -246,4 +229,33 @@ func cleanup(ctx context.Context, db *sql.DB, blobs objectstore.BlobStore) error
 	}
 	fmt.Printf("fixture_cleaned=true removed_objects=%d reader_username_prefix=%s\n", len(keys), fixtureReaderPrefix)
 	return nil
+}
+
+func readerCleanupStatements(readerPattern string) []cleanupStatement {
+	readerIDs := `SELECT id FROM reader_accounts WHERE username LIKE $1`
+	return []cleanupStatement{
+		{`DELETE FROM reader_payment_callback_logs WHERE recharge_order_id IN (SELECT id FROM reader_recharge_orders WHERE reader_id IN (` + readerIDs + `) OR active_reader_id IN (` + readerIDs + `))`, []any{readerPattern}},
+		{`DELETE FROM reader_recharge_orders WHERE reader_id IN (` + readerIDs + `) OR active_reader_id IN (` + readerIDs + `)`, []any{readerPattern}},
+		{`DELETE FROM reader_purchase_orders WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM commerce_entitlements WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM commerce_membership_grants WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_checkin_records WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_invite_reward_records WHERE inviter_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1) OR invitee_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_wallet_adjustments WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_bonus_coin_buckets WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_daily_activity WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_wallet_ledgers WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_wallets WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_feedback WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_reading_preferences WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_reading_history WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_book_likes WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_bookshelf_entries WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_sessions WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_invite_relations WHERE inviter_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1) OR invitee_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_invite_codes WHERE inviter_reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM commerce_reader_search_projection WHERE reader_id IN (SELECT id FROM reader_accounts WHERE username LIKE $1)`, []any{readerPattern}},
+		{`DELETE FROM reader_accounts WHERE username LIKE $1`, []any{readerPattern}},
+		{`DELETE FROM reader_invite_codes WHERE code=$1`, []any{fixtureInviteCode}},
+	}
 }

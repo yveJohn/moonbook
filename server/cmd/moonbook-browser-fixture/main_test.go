@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestConfigValidateRequiresExplicitLocalTarget(t *testing.T) {
 	valid := config{
@@ -28,5 +31,35 @@ func TestConfigValidateRequiresExplicitLocalTarget(t *testing.T) {
 				t.Fatal("unsafe fixture target accepted")
 			}
 		})
+	}
+}
+
+func TestReaderCleanupCoversAccountReferencesBeforeDeletingAccount(t *testing.T) {
+	statements := readerCleanupStatements(fixtureReaderPrefix + "%")
+	requiredTables := []string{
+		"reader_payment_callback_logs", "reader_recharge_orders", "reader_purchase_orders",
+		"commerce_entitlements", "commerce_membership_grants", "reader_checkin_records",
+		"reader_invite_reward_records", "reader_wallet_adjustments", "reader_bonus_coin_buckets",
+		"reader_daily_activity", "reader_wallet_ledgers", "reader_wallets", "reader_feedback",
+		"reader_reading_preferences", "reader_reading_history", "reader_book_likes",
+		"reader_bookshelf_entries", "reader_sessions", "reader_invite_relations",
+		"reader_invite_codes", "commerce_reader_search_projection", "reader_accounts",
+	}
+	joined := make([]string, 0, len(statements))
+	accountDelete := -1
+	for index, statement := range statements {
+		joined = append(joined, statement.query)
+		if strings.HasPrefix(statement.query, "DELETE FROM reader_accounts ") {
+			accountDelete = index
+		}
+	}
+	queries := strings.Join(joined, "\n")
+	for _, table := range requiredTables {
+		if !strings.Contains(queries, "DELETE FROM "+table) {
+			t.Errorf("cleanup does not cover %s", table)
+		}
+	}
+	if accountDelete < 0 || accountDelete != len(statements)-2 {
+		t.Fatalf("reader account must be deleted after dependent rows, index=%d len=%d", accountDelete, len(statements))
 	}
 }
