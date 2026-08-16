@@ -138,12 +138,12 @@
 - Modify: `server/internal/modules/commerce/payment/repository_integration_test.go`
 - Modify: `server/initialize/router_biz.go`
 
-- [ ] **Step 1：凭据解析失败测试。** 新订单必须按 `credential_ref` 和 PID 快照选择 Secret；历史订单空引用使用当前凭据；未知或 PID 不匹配拒绝且不入账。
-- [ ] **Step 2：晚到状态测试。** 合法回调允许 `pending/gateway_unknown/superseded/expired/callback_exception -> paid`，仍拒绝 `create_failed`；重复回调幂等。
-- [ ] **Step 3：资金事务测试。** 每种允许状态只产生一条充值流水、一条首充奖励事实和一个 `paid` 终态，失败全部回滚。
-- [ ] **Step 4：防重放测试。** 网关交易号、链上交易哈希和已支付订单不同哈希均不能重复入账。
-- [ ] **Step 5：实现并验证。** 回调仍不记录 Secret/完整签名；本任务只补凭据选择和状态允许面，全尝试审计留在下一切片。
-- [ ] **Step 6：提交。** 提交信息：`支持EPUSDT历史凭据回调`。
+- [x] **Step 1：凭据解析失败测试。** 新订单必须按 `credential_ref` 和 PID 快照选择 Secret；历史订单空引用使用当前凭据；未知或 PID 不匹配拒绝且不入账。
+- [x] **Step 2：晚到状态测试。** 合法回调允许 `pending/gateway_unknown/superseded/expired/callback_exception -> paid`，仍拒绝 `create_failed`；重复回调幂等。
+- [x] **Step 3：资金事务测试。** 每种允许状态只产生一条充值流水、一条首充奖励事实和一个 `paid` 终态，失败全部回滚。
+- [x] **Step 4：防重放测试。** 网关交易号、链上交易哈希和已支付订单不同哈希均不能重复入账。
+- [x] **Step 5：实现并验证。** 回调仍不记录 Secret/完整签名；本任务只补凭据选择和状态允许面，全尝试审计留在下一切片。
+- [x] **Step 6：提交。** 提交信息：`支持EPUSDT历史凭据回调`。
 
 ## Task 8：全量回归与验收证据
 

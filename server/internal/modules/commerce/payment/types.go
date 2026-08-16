@@ -7,6 +7,13 @@ type Callback struct {
 	Status                                                                                       int
 	Fields                                                                                       map[string]string
 }
+
+type VerificationSnapshot struct {
+	CredentialRef string
+	MerchantPID   string
+}
+
 type Repository interface {
+	VerificationSnapshot(context.Context, string) (VerificationSnapshot, error)
 	Process(context.Context, Callback) error
 }

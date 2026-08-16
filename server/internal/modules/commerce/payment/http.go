@@ -2,9 +2,10 @@ package payment
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -43,14 +44,17 @@ func handle(c *gin.Context, s *Service) {
 			return
 		}
 	}
-	if fields["pid"] != s.PID || !Verify(fields, fields["signature"], s.Secret) {
-		c.String(http.StatusUnauthorized, "fail")
+	status, parseErr := strconv.Atoi(fields["status"])
+	if parseErr != nil {
+		c.String(http.StatusBadRequest, "fail")
 		return
 	}
-	status := 0
-	_, _ = fmt.Sscanf(fields["status"], "%d", &status)
 	cb := Callback{PID: fields["pid"], TradeID: fields["trade_id"], OrderNo: fields["order_id"], Amount: fields["amount"], ActualAmount: fields["actual_amount"], ReceiveAddress: fields["receive_address"], Token: fields["token"], TransactionID: fields["block_transaction_id"], Signature: fields["signature"], Status: status, Fields: fields}
 	if e = s.Process(c, cb); e != nil {
+		if errors.Is(e, ErrUnauthorized) {
+			c.String(http.StatusUnauthorized, "fail")
+			return
+		}
 		c.String(http.StatusBadRequest, "fail")
 		return
 	}

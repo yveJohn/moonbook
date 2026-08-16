@@ -31,6 +31,23 @@ func TestLoadUnknownReleaseWindow(t *testing.T) {
 	}
 }
 
+func TestLoadCredentialProviderDoesNotRequireCreateEndpoints(t *testing.T) {
+	env := map[string]string{
+		EnvPID: "merchant", EnvSecret: "secret", EnvCredentialRef: "primary",
+		EnvVerifyCredentialsJSON: `[{"ref":"previous","pid":"old-merchant","secret":"old-secret"}]`,
+	}
+	provider, err := LoadCredentialProvider(mapLookup(env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider.Current().PID() != "merchant" {
+		t.Fatalf("current credential=%+v", provider.Current())
+	}
+	if historical, ok := provider.Verification("previous"); !ok || historical.PID() != "old-merchant" {
+		t.Fatalf("historical credential found=%t value=%+v", ok, historical)
+	}
+}
+
 func TestLoadConfigEnabled(t *testing.T) {
 	env := validEnvironment()
 	config, err := LoadConfig(true, mapLookup(env))

@@ -88,6 +88,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	purchaseTargets := novelprovider.NewPurchase(db)
 	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
 	paymentConfig, paymentConfigErr := epusdt.LoadConfig(true, os.LookupEnv)
+	callbackCredentials, _ := epusdt.LoadCredentialProvider(os.LookupEnv)
 	unknownReleaseWindow, unknownReleaseErr := epusdt.LoadUnknownReleaseWindow(os.LookupEnv)
 	if paymentConfigErr == nil && unknownReleaseErr != nil {
 		paymentConfigErr = unknownReleaseErr
@@ -107,7 +108,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewService(recharge.SQLRepository{DB: db, UnknownReleaseWindow: unknownReleaseWindow}, paymentGateway, paymentSnapshot, paymentConfigErr)), readerService)
 	commercecompat.RegisterCheckinRoutes(publicGroup, commerceprovider.NewCheckin(checkin.NewService(checkin.SQLRepository{DB: db})), readerService)
 	commercecompat.RegisterPurchaseRoutes(publicGroup, commerceprovider.NewPurchase(purchase.NewService(purchase.SQLRepository{DB: db}, transactor, readerAccounts, purchaseTargets)), readerService)
-	payment.RegisterRoutes(publicGroup, payment.NewService(payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, os.Getenv("MOONBOOK_EPUSDT_PID"), os.Getenv("MOONBOOK_EPUSDT_SECRET")))
+	payment.RegisterRoutes(publicGroup, payment.NewService(payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, callbackCredentials))
 	adminrecharge.RegisterRoutes(privateGroup, adminrecharge.NewService(adminrecharge.SQLRepository{DB: db}))
 	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))
 	adminorder.RegisterRoutes(privateGroup, adminorder.NewService(adminorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts))

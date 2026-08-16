@@ -54,22 +54,9 @@ func LoadConfig(enabled bool, lookup LookupEnv) (Config, error) {
 	if lookup == nil {
 		lookup = func(string) (string, bool) { return "", false }
 	}
-	pid, err := requiredEnvironment(lookup, EnvPID, true)
+	credentials, err := LoadCredentialProvider(lookup)
 	if err != nil {
 		return Config{}, err
-	}
-	secret, err := requiredEnvironment(lookup, EnvSecret, false)
-	if err != nil {
-		return Config{}, err
-	}
-	credentialRef, err := requiredEnvironment(lookup, EnvCredentialRef, true)
-	if err != nil {
-		return Config{}, err
-	}
-	history, _ := lookup(EnvVerifyCredentialsJSON)
-	credentials, err := NewCredentialProvider(credentialRef, pid, secret, history)
-	if err != nil {
-		return Config{}, fmt.Errorf("invalid EPUSDT credential configuration: %w", err)
 	}
 
 	createURL, err := configuredURL(lookup, EnvCreateURL)
@@ -109,6 +96,30 @@ func LoadConfig(enabled bool, lookup LookupEnv) (Config, error) {
 		RequestTimeout:       requestTimeout,
 		UnknownReleaseWindow: unknownRelease,
 	}, nil
+}
+
+func LoadCredentialProvider(lookup LookupEnv) (*CredentialProvider, error) {
+	if lookup == nil {
+		lookup = func(string) (string, bool) { return "", false }
+	}
+	pid, err := requiredEnvironment(lookup, EnvPID, true)
+	if err != nil {
+		return nil, err
+	}
+	secret, err := requiredEnvironment(lookup, EnvSecret, false)
+	if err != nil {
+		return nil, err
+	}
+	credentialRef, err := requiredEnvironment(lookup, EnvCredentialRef, true)
+	if err != nil {
+		return nil, err
+	}
+	history, _ := lookup(EnvVerifyCredentialsJSON)
+	credentials, err := NewCredentialProvider(credentialRef, pid, secret, history)
+	if err != nil {
+		return nil, fmt.Errorf("invalid EPUSDT credential configuration: %w", err)
+	}
+	return credentials, nil
 }
 
 func LoadUnknownReleaseWindow(lookup LookupEnv) (time.Duration, error) {
