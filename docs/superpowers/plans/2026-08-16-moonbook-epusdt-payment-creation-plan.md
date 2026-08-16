@@ -66,12 +66,12 @@
 - Create: `server/internal/modules/commerce/epusdt/signer_test.go`
 - Create: `server/internal/modules/commerce/epusdt/client_test.go`
 
-- [ ] **Step 1：签名测试先失败。** 固定旧实现向量、ASCII 字段排序、空值/签名排除、`1.00` 尾零、Unicode 名称和常量时间验签。
-- [ ] **Step 2：HTTP 替身测试先失败。** 固定表单字段、Content-Type、禁止重试、同源重定向、跨主机/HTTPS 降级拒绝及有限响应体。
-- [ ] **Step 3：响应与错误测试先失败。** 覆盖成功、明确业务拒绝、非 2xx、连接/读取失败、超时、非法/过大 JSON，以及订单号、金额、币种、Token、状态、地址、实际金额、过期时间和支付 URL 不匹配。
-- [ ] **Step 4：实现精确协议。** 金额使用字符串与 `math/big`，禁止浮点；请求固定 `usd/usdt/tron` 和两位基础金额；响应实际金额最多八位。
-- [ ] **Step 5：实现稳定错误分类。** 明确未创建为 definite，其他发出请求后的不可证明结果为 uncertain；错误只保留稳定代码和脱敏摘要。
-- [ ] **Step 6：验证并提交。** 运行 `go test ./internal/modules/commerce/epusdt -v`、race 和 vet；提交信息：`实现EPUSDT支付协议客户端`。
+- [x] **Step 1：签名测试先失败。** 固定旧实现向量、ASCII 字段排序、空值/签名排除、`1.00` 尾零、Unicode 名称和常量时间验签。
+- [x] **Step 2：HTTP 替身测试先失败。** 固定表单字段、Content-Type、禁止重试、同源重定向、跨主机/HTTPS 降级拒绝及有限响应体。
+- [x] **Step 3：响应与错误测试先失败。** 覆盖成功、明确业务拒绝、非 2xx、连接/读取失败、超时、非法/过大 JSON，以及订单号、金额、币种、Token、状态、地址、实际金额、过期时间和支付 URL 不匹配。
+- [x] **Step 4：实现精确协议。** 金额使用字符串与 `math/big`，禁止浮点；请求固定 `usd/usdt/tron` 和两位基础金额；响应实际金额最多八位。
+- [x] **Step 5：实现稳定错误分类。** 明确未创建为 definite，其他发出请求后的不可证明结果为 uncertain；错误只保留稳定代码和脱敏摘要。
+- [x] **Step 6：验证并提交。** 运行 `go test ./internal/modules/commerce/epusdt -v`、race 和 vet；提交信息：`实现EPUSDT支付协议客户端`。
 
 ## Task 4：重构订单开始事务与幂等替换
 
