@@ -16,6 +16,7 @@ func Reload() error {
 	}
 	StopObjectGC()
 	StopImportWorker()
+	StopRechargeExpiry()
 
 	// 重新初始化数据库连接
 	if global.GVA_DB != nil {
@@ -49,6 +50,9 @@ func Reload() error {
 			return err
 		}
 		if err := StartImportWorker(); err != nil {
+			return err
+		}
+		if err := StartRechargeExpiry(); err != nil {
 			return err
 		}
 	}

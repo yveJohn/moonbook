@@ -24,7 +24,6 @@ const (
 const (
 	defaultConnectTimeout      = 3 * time.Second
 	defaultRequestTimeout      = 10 * time.Second
-	defaultUnknownRelease      = 15 * time.Minute
 	minimumHTTPTimeout         = 100 * time.Millisecond
 	maximumConnectTimeout      = 30 * time.Second
 	maximumRequestTimeout      = 2 * time.Minute
@@ -32,6 +31,8 @@ const (
 	maximumUnknownRelease      = 24 * time.Hour
 	maximumConfiguredURLLength = 2048
 )
+
+const DefaultUnknownReleaseWindow = 15 * time.Minute
 
 type LookupEnv func(string) (string, bool)
 
@@ -94,7 +95,7 @@ func LoadConfig(enabled bool, lookup LookupEnv) (Config, error) {
 	if requestTimeout < connectTimeout {
 		return Config{}, fmt.Errorf("%s must be greater than or equal to %s", EnvRequestTimeoutMS, EnvConnectTimeoutMS)
 	}
-	unknownRelease, err := configuredDuration(lookup, EnvUnknownReleaseMinutes, defaultUnknownRelease, minimumUnknownRelease, maximumUnknownRelease, time.Minute)
+	unknownRelease, err := LoadUnknownReleaseWindow(lookup)
 	if err != nil {
 		return Config{}, err
 	}
@@ -108,6 +109,13 @@ func LoadConfig(enabled bool, lookup LookupEnv) (Config, error) {
 		RequestTimeout:       requestTimeout,
 		UnknownReleaseWindow: unknownRelease,
 	}, nil
+}
+
+func LoadUnknownReleaseWindow(lookup LookupEnv) (time.Duration, error) {
+	if lookup == nil {
+		lookup = func(string) (string, bool) { return "", false }
+	}
+	return configuredDuration(lookup, EnvUnknownReleaseMinutes, DefaultUnknownReleaseWindow, minimumUnknownRelease, maximumUnknownRelease, time.Minute)
 }
 
 func requiredEnvironment(lookup LookupEnv, key string, trim bool) (string, error) {

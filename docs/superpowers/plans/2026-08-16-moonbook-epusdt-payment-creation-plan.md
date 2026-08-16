@@ -120,12 +120,12 @@
 - Modify: `server/initialize/reload.go`
 - Modify: `server/core/server.go`
 
-- [ ] **Step 1：失败测试。** 覆盖启动即扫描、有限批量、周期运行、Context 停止、重复运行幂等和错误后继续下一周期。
-- [ ] **Step 2：状态测试。** `pending` 按网关过期时间、无交易号 `gateway_unknown` 和陈旧 `creating` 按安全窗口转 `expired` 并释放活动读者；未到期及 `paid/create_failed` 不变。
-- [ ] **Step 3：实现惰性兜底。** Create/Get 在读者锁内先过期该读者到期活动单，周期任务延迟不阻塞新订单。
-- [ ] **Step 4：实现生命周期。** 启动和配置重载前停止旧 Worker，启动新 Worker；优雅停机等待退出，不泄漏 goroutine。
-- [ ] **Step 5：真实 PostgreSQL 验证。** 周期和惰性路径均证明订单释放且新订单可创建。
-- [ ] **Step 6：提交。** 提交信息：`增加充值订单过期任务`。
+- [x] **Step 1：失败测试。** 覆盖启动即扫描、有限批量、周期运行、Context 停止、重复运行幂等和错误后继续下一周期。
+- [x] **Step 2：状态测试。** `pending` 按网关过期时间、无交易号 `gateway_unknown` 和陈旧 `creating` 按安全窗口转 `expired` 并释放活动读者；未到期及 `paid/create_failed` 不变。
+- [x] **Step 3：实现惰性兜底。** Create/Get 在读者锁内先过期该读者到期活动单，周期任务延迟不阻塞新订单。
+- [x] **Step 4：实现生命周期。** 启动和配置重载前停止旧 Worker，启动新 Worker；优雅停机等待退出，不泄漏 goroutine。
+- [x] **Step 5：真实 PostgreSQL 验证。** 周期和惰性路径均证明订单释放且新订单可创建。
+- [x] **Step 6：提交。** 提交信息：`增加充值订单过期任务`。
 
 ## Task 7：按订单凭据验证晚到回调
 

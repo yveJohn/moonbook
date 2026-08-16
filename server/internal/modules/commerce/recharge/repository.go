@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
 )
@@ -16,7 +17,11 @@ var ErrInvalidRecharge = errors.New("invalid recharge request")
 var ErrRechargeProductUnavailable = errors.New("recharge product unavailable")
 var ErrPaymentChannelUnavailable = errors.New("payment channel unavailable")
 
-type SQLRepository struct{ DB *sql.DB }
+type SQLRepository struct {
+	DB                   *sql.DB
+	UnknownReleaseWindow time.Duration
+	Now                  func() time.Time
+}
 
 func (r SQLRepository) Catalog(ctx context.Context) (Catalog, error) {
 	var c Catalog
@@ -126,6 +131,9 @@ func (r SQLRepository) Start(ctx context.Context, prepared PreparedOrder) (resul
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, prepared.ReaderID); err != nil {
 		return StartResult{}, err
 	}
+	if _, err = r.expireReader(ctx, tx, prepared.ReaderID, r.now()); err != nil {
+		return StartResult{}, err
+	}
 	if order, found, queryErr := findOrder(tx, ctx, ` WHERE o.reader_id=$1 AND o.request_id=$2 FOR UPDATE`, prepared.ReaderID, prepared.RequestID); queryErr != nil {
 		return StartResult{}, queryErr
 	} else if found {
@@ -133,9 +141,6 @@ func (r SQLRepository) Start(ctx context.Context, prepared PreparedOrder) (resul
 			return StartResult{}, err
 		}
 		return StartResult{Order: order}, nil
-	}
-	if _, err = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET status='expired',active_reader_id=NULL,failure_code='ORDER_EXPIRED',failure_message='Payment order expired',updated_at=now() WHERE active_reader_id=$1 AND status IN ('creating','pending','gateway_unknown') AND expire_time IS NOT NULL AND expire_time<=now()`, prepared.ReaderID); err != nil {
-		return StartResult{}, err
 	}
 	active, found, err := findOrder(tx, ctx, ` WHERE o.active_reader_id=$1 FOR UPDATE`, prepared.ReaderID)
 	if err != nil {
@@ -271,9 +276,25 @@ func (r SQLRepository) Fail(ctx context.Context, orderID string, failure *epusdt
 const orderSelect = `SELECT o.id,o.reader_id,o.diamond_amount::text,COALESCE(o.product_id::text,''),o.order_no,o.source_type,o.price_usdt::text,o.provider,o.currency,o.token,o.network,o.gateway_trade_id,o.actual_amount::text,o.receive_address,o.payment_url,o.block_transaction_id,o.status,o.gateway_status,o.wallet_ledger_id::text,o.expire_time,o.paid_time,o.failure_code,o.failure_message,o.created_at,o.updated_at FROM reader_recharge_orders o`
 
 func (r SQLRepository) GetOrder(ctx context.Context, readerID int64, orderID string) (Order, error) {
-	var o Order
-	err := scanOrder(r.DB.QueryRowContext(ctx, orderSelect+` WHERE o.reader_id=$1 AND o.id=$2::bigint`, readerID, orderID), &o)
-	return o, err
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Order{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, readerID); err != nil {
+		return Order{}, err
+	}
+	if _, err = r.expireReader(ctx, tx, readerID, r.now()); err != nil {
+		return Order{}, err
+	}
+	var order Order
+	if err = scanOrder(tx.QueryRowContext(ctx, orderSelect+` WHERE o.reader_id=$1 AND o.id=$2::bigint`, readerID, orderID), &order); err != nil {
+		return Order{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Order{}, err
+	}
+	return order, nil
 }
 func scanOrder(s interface{ Scan(...any) error }, o *Order) error {
 	return s.Scan(&o.ID, &o.ReaderID, &o.DiamondAmount, &o.ProductID, &o.OrderNo, &o.SourceType, &o.PriceUSDT, &o.Provider, &o.Currency, &o.Token, &o.Network, &o.GatewayTradeID, &o.ActualAmount, &o.ReceiveAddress, &o.PaymentURL, &o.BlockTransactionID, &o.Status, &o.GatewayStatus, &o.WalletLedgerID, &o.ExpireTime, &o.PaidTime, &o.FailureCode, &o.FailureMessage, &o.CreateTime, &o.UpdateTime)

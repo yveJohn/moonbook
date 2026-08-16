@@ -22,6 +22,10 @@ func RunServer() {
 			zap.L().Fatal("启动小说导入任务失败", zap.Error(err))
 		}
 		defer initialize.StopImportWorker()
+		if err := initialize.StartRechargeExpiry(); err != nil {
+			zap.L().Fatal("启动充值订单过期任务失败", zap.Error(err))
+		}
+		defer initialize.StopRechargeExpiry()
 	}
 	if global.GVA_CONFIG.System.UseRedis {
 		initialize.Redis()

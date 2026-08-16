@@ -17,6 +17,20 @@ func TestLoadConfigDisabledDoesNotRequirePaymentEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadUnknownReleaseWindow(t *testing.T) {
+	window, err := LoadUnknownReleaseWindow(mapLookup(nil))
+	if err != nil || window != DefaultUnknownReleaseWindow {
+		t.Fatalf("default window=%s err=%v", window, err)
+	}
+	window, err = LoadUnknownReleaseWindow(mapLookup(map[string]string{EnvUnknownReleaseMinutes: "23"}))
+	if err != nil || window != 23*time.Minute {
+		t.Fatalf("configured window=%s err=%v", window, err)
+	}
+	if _, err = LoadUnknownReleaseWindow(mapLookup(map[string]string{EnvUnknownReleaseMinutes: "0"})); err == nil {
+		t.Fatal("expected invalid window error")
+	}
+}
+
 func TestLoadConfigEnabled(t *testing.T) {
 	env := validEnvironment()
 	config, err := LoadConfig(true, mapLookup(env))
