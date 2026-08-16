@@ -2,6 +2,7 @@ package recharge
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
@@ -51,6 +52,26 @@ type StartResult struct {
 	Order   Order
 	Created bool
 }
+type GatewayPersistenceError struct {
+	OrderID string
+	OrderNo string
+	cause   error
+}
+
+func (err *GatewayPersistenceError) Error() string {
+	if err == nil {
+		return ""
+	}
+	return fmt.Sprintf("persist recharge gateway result for order %s failed", err.OrderNo)
+}
+
+func (err *GatewayPersistenceError) Unwrap() error {
+	if err == nil {
+		return nil
+	}
+	return err.cause
+}
+
 type Repository interface {
 	Catalog(context.Context) (Catalog, error)
 	Quote(context.Context, int64) (Quote, error)

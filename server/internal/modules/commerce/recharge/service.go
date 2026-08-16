@@ -52,16 +52,20 @@ func (s *Service) CreateOrder(ctx context.Context, req CreateRequest) (Order, er
 	if gatewayErr == nil {
 		completed, completeErr := s.Repo.Complete(ctx, started.Order.ID, response)
 		if completeErr != nil {
-			return started.Order, completeErr
+			return started.Order, persistenceError(started.Order, completeErr)
 		}
 		return completed, nil
 	}
 	failure := gatewayFailure(gatewayErr)
 	failed, failErr := s.Repo.Fail(ctx, started.Order.ID, failure)
 	if failErr != nil {
-		return started.Order, failErr
+		return started.Order, persistenceError(started.Order, failErr)
 	}
 	return failed, nil
+}
+
+func persistenceError(order Order, cause error) error {
+	return &GatewayPersistenceError{OrderID: order.ID, OrderNo: order.OrderNo, cause: cause}
 }
 func (s *Service) GetOrder(ctx context.Context, readerID int64, orderID string) (Order, error) {
 	return s.Repo.GetOrder(ctx, readerID, orderID)

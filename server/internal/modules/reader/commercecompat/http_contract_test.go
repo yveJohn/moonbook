@@ -215,6 +215,7 @@ func TestPurchaseHTTPErrorContracts(t *testing.T) {
 
 type rechargeContract struct {
 	err                 error
+	order               *commercecontract.RechargeOrder
 	quoted              int64
 	created             commercecontract.RechargeCreateRequest
 	getReader, getOrder int64
@@ -245,7 +246,70 @@ func (stub *rechargeContract) CreateRechargeOrder(_ context.Context, request com
 		return commercecontract.RechargeOrder{}, stub.err
 	}
 	stub.created = request
+	if stub.order != nil {
+		return *stub.order, nil
+	}
 	return contractRechargeOrder(contractMaxID, request.ProductID), nil
+}
+
+func TestRechargeCreateHTTPContractKeepsGatewayFailureStatesPrivate(t *testing.T) {
+	codeRejected, messageRejected := "GATEWAY_REJECTED", "EPUSDT rejected the create request"
+	codeTimeout, messageTimeout := "REQUEST_TIMEOUT", "EPUSDT create request timed out"
+	tests := []struct {
+		name           string
+		status         string
+		failureCode    *string
+		failureMessage *string
+	}{
+		{name: "success", status: "pending"},
+		{name: "definite failure", status: "create_failed", failureCode: &codeRejected, failureMessage: &messageRejected},
+		{name: "uncertain result", status: "gateway_unknown", failureCode: &codeTimeout, failureMessage: &messageTimeout},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			order := contractRechargeOrder(contractMaxID, nil)
+			order.Status = test.status
+			order.FailureCode = test.failureCode
+			order.FailureMessage = test.failureMessage
+			if test.status != "pending" {
+				order.GatewayTradeID = nil
+				order.ReceiveAddress = nil
+				order.ExpiresAt = nil
+			}
+			router := contractRouter()
+			handler := rechargeHandler{service: &rechargeContract{order: &order}}
+			router.POST("/reader/me/recharge/orders", handler.create)
+			request := httptest.NewRequest(http.MethodPost, "/reader/me/recharge/orders", bytes.NewBufferString(`{"customDiamondAmount":"100","requestId":"state-contract"}`))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+
+			var body struct {
+				Code int            `json:"code"`
+				Msg  string         `json:"msg"`
+				Data map[string]any `json:"data"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Code != 200 || body.Msg != "订单创建成功" || body.Data["status"] != test.status || body.Data["id"] != "9223372036854775807" {
+				t.Fatalf("body=%s", response.Body.String())
+			}
+			wantCode, wantMessage := any(nil), any(nil)
+			if test.failureCode != nil {
+				wantCode = *test.failureCode
+				wantMessage = *test.failureMessage
+			}
+			if body.Data["failureCode"] != wantCode || body.Data["failureMessage"] != wantMessage {
+				t.Fatalf("body=%s", response.Body.String())
+			}
+			for _, privateField := range []string{"credentialRef", "merchantPidSnapshot", "secret", "signature"} {
+				if _, exists := body.Data[privateField]; exists {
+					t.Fatalf("private field %q leaked: %s", privateField, response.Body.String())
+				}
+			}
+		})
+	}
 }
 func (stub *rechargeContract) RechargeOrder(_ context.Context, readerID, orderID int64) (commercecontract.RechargeOrder, error) {
 	if stub.err != nil {

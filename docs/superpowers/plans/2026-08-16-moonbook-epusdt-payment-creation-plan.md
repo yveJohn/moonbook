@@ -102,12 +102,12 @@
 - Create: `server/internal/modules/commerce/recharge/create_gateway_integration_test.go`
 - Modify: `server/internal/modules/reader/commercecompat/http_contract_test.go`
 
-- [ ] **Step 1：八路并发测试。** 同一 `reader_id + request_id` 八路创建只产生一条订单并只调用一次本地网关替身。
-- [ ] **Step 2：不同请求并发测试。** 最终最多一条活动订单；旧 `pending` 被替换，`creating/gateway_unknown` 不能被覆盖；不得把其他金额订单作为同请求结果。
-- [ ] **Step 3：完成失败测试。** 网关已成功而数据库完成事务失败时，响应为可关联错误，订单保持可同步状态且网关调用次数仍为一。
-- [ ] **Step 4：协议快照测试。** 成功订单完整保存交易号、实际金额、地址、支付 URL、网关状态、过期时间、凭据引用和 PID 快照。
-- [ ] **Step 5：Reader 合同测试。** 创建成功、确定失败和结果未知返回冻结 JSON；内部字段和秘密不泄漏。
-- [ ] **Step 6：验证并提交。** 提交信息：`验证EPUSDT并发创建幂等`。
+- [x] **Step 1：八路并发测试。** 同一 `reader_id + request_id` 八路创建只产生一条订单并只调用一次本地网关替身。
+- [x] **Step 2：不同请求并发测试。** 最终最多一条活动订单；旧 `pending` 被替换，`creating/gateway_unknown` 不能被覆盖；不得把其他金额订单作为同请求结果。
+- [x] **Step 3：完成失败测试。** 网关已成功而数据库完成事务失败时，响应为可关联错误，订单保持可同步状态且网关调用次数仍为一。
+- [x] **Step 4：协议快照测试。** 成功订单完整保存交易号、实际金额、地址、支付 URL、网关状态、过期时间、凭据引用和 PID 快照。
+- [x] **Step 5：Reader 合同测试。** 创建成功、确定失败和结果未知返回冻结 JSON；内部字段和秘密不泄漏。
+- [x] **Step 6：验证并提交。** 提交信息：`验证EPUSDT并发创建幂等`。
 
 ## Task 6：接入订单过期生命周期
 

@@ -161,7 +161,8 @@ func TestCreateOrderNeverRetriesGatewayWhenPersistenceFails(t *testing.T) {
 			service := NewService(repository, gateway, GatewaySnapshot{CredentialRef: "primary", MerchantPID: "merchant"}, nil)
 
 			order, err := service.CreateOrder(context.Background(), CreateRequest{ReaderID: 7, CustomDiamondAmount: "100", RequestID: test.name})
-			if !errors.Is(err, persistErr) || order.ID != "14" || gateway.calls != 1 {
+			var persistenceErr *GatewayPersistenceError
+			if !errors.Is(err, persistErr) || !errors.As(err, &persistenceErr) || persistenceErr.OrderID != "14" || persistenceErr.OrderNo != "RC14" || err.Error() != "persist recharge gateway result for order RC14 failed" || order.ID != "14" || gateway.calls != 1 {
 				t.Fatalf("order=%+v err=%v gateway=%d", order, err, gateway.calls)
 			}
 		})
