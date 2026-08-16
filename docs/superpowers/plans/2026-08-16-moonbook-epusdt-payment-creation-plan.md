@@ -29,14 +29,14 @@
 
 - Create: `server/internal/platform/migrate/migrations/00060_epusdt_payment_creation.sql`
 - Modify: `server/internal/platform/migrate/migrate_test.go`
-- Create: `server/internal/modules/commerce/recharge/migration_integration_test.go`
+- Modify: `server/internal/platform/migrate/migrate_integration_test.go`
 
-- [ ] **Step 1：确认版本。** 检查迁移目录最高版本仍为 `00059`；若已被并发工作占用，按真实最高版本顺延，禁止重复或倒序。
-- [ ] **Step 2：编写失败合同测试。** 要求迁移新增 `credential_ref`、`merchant_pid_snapshot`、`active_reader_id`、三类部分唯一索引、历史活动订单确定性收敛和 forward-only Down。
-- [ ] **Step 3：验证预期失败。** 运行迁移清单/合同测试，失败原因只能是 `00060` 尚不存在或合同未实现。
-- [ ] **Step 4：实现前向迁移。** 不删除事实；重复网关交易号或链上哈希必须显式失败；每个读者仅保留最新活动订单，其余转 `superseded` 并记录稳定原因。
-- [ ] **Step 5：真实 PostgreSQL 验证。** 覆盖空库、从 `00059` 带多活动订单升级、重复执行 `applied=0`、索引拒绝重复、关键订单/钱包/流水/权益行数不减少。
-- [ ] **Step 6：提交。** 提交信息：`新增EPUSDT支付创建迁移`。
+- [x] **Step 1：确认版本。** 检查迁移目录最高版本仍为 `00059`；若已被并发工作占用，按真实最高版本顺延，禁止重复或倒序。
+- [x] **Step 2：编写失败合同测试。** 要求迁移新增 `credential_ref`、`merchant_pid_snapshot`、`active_reader_id`、三类部分唯一索引、历史活动订单确定性收敛和 forward-only Down。
+- [x] **Step 3：验证预期失败。** 运行迁移清单/合同测试，失败原因只能是 `00060` 尚不存在或合同未实现。
+- [x] **Step 4：实现前向迁移。** 不删除事实；重复网关交易号或链上哈希必须显式失败；每个读者仅保留最新活动订单，其余转 `superseded` 并记录稳定原因。
+- [x] **Step 5：真实 PostgreSQL 验证。** 覆盖空库、从 `00059` 带多活动订单升级、重复执行 `applied=0`、索引拒绝重复、关键订单/钱包/流水/权益行数不减少。
+- [x] **Step 6：提交。** 提交信息：`新增EPUSDT支付创建迁移`。
 
 ## Task 2：建立环境凭据与配置合同
 

@@ -105,9 +105,42 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00057_reader_invite_edit.sql",
 		"00058_casbin_policy_unique.sql",
 		"00059_commerce_reader_search_projection.sql",
+		"00060_epusdt_payment_creation.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestEPUSDTPaymentCreationMigrationContract(t *testing.T) {
+	data, err := migrationFS.ReadFile("migrations/00060_epusdt_payment_creation.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migration := strings.ToLower(string(data))
+
+	for _, required := range []string{
+		"add column credential_ref varchar(100)",
+		"add column merchant_pid_snapshot varchar(255)",
+		"add column active_reader_id bigint references reader_accounts(id)",
+		"row_number() over",
+		"partition by reader_id",
+		"order by created_at desc, id desc",
+		"status = 'superseded'",
+		"failure_code = 'order_replaced'",
+		"status in ('creating', 'pending', 'gateway_unknown')",
+		"active_reader_id = reader_id",
+		"create unique index reader_recharge_orders_gateway_trade_id_uidx",
+		"where gateway_trade_id is not null and btrim(gateway_trade_id) <> ''",
+		"create unique index reader_recharge_orders_block_transaction_id_uidx",
+		"where block_transaction_id is not null and btrim(block_transaction_id) <> ''",
+		"create unique index reader_recharge_orders_active_reader_id_uidx",
+		"where active_reader_id is not null",
+		"moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(migration, required) {
+			t.Errorf("migration missing %q", required)
+		}
 	}
 }
 
