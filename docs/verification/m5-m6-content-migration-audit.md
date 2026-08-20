@@ -17,7 +17,7 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 - AI 配置：`novel_ai_config`、`novel_ai_config_model`；
 - 章节清洗：`novel_chapter_clean_config`、`novel_chapter_clean_task`、`novel_chapter_clean_result`；更早版本使用 `ai_chapter_clean_config`、`ai_chapter_clean_task`、`ai_chapter_clean_result`，现已由清洗 stage 自动识别并映射；
 - 章节摘要：`novel_chapter_summary_config`、`novel_chapter_summary_task_log`；现已接入摘要配置和任务日志阶段，敏感 API Key/原始响应不迁移；
-- 作品画像：`novel_book_profile_config`、`novel_book_profile_suggestion`。
+- 作品画像：`novel_book_profile_config`、`novel_book_profile_suggestion`；现已接入配置和建议阶段，使用 `00065` 来源键迁移，原始 AI 响应不迁移而保留结构化 JSON 快照。
 
 更早的 `crawl_source`、`crawl_single_task`、`crawl_batch_task`、`crawl_board`、`crawl_board_thread`、`crawl_forum_source_state` 仍需由 M6 完整副本盘点确定行数和启用状态，再逐表给出迁移目标或“不迁移”理由。不得仅凭当前 Java 模块未引用就静默忽略。
 
@@ -27,7 +27,7 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 
 `novel-metadata`、`novel-books`、`novel-chapters`、`novel-chapter-clean`、`novel-reader-seo`、`reader-identity`、`reader-commerce`、`reader-finance`、`reader-activity`。
 
-`all` 已在小说章节之后组合 AI 配置、章节清洗任务/结果、章节摘要配置/任务、书籍合并任务/源书/章节明细、四个论坛 stage 和 `novel-txt-imports`；`novel-chapter-clean`、`novel-chapter-summary` 与 `novel-book-merge` 可按依赖顺序独立重跑。清洗结果正文经 MinIO 大小/SHA-256 校验并以 `chapter_clean` 对象激活，旧 `raw_response` 不迁移。作品画像配置/建议和其他内容生产 stage 仍待补齐。
+`all` 已在小说章节之后组合 AI 配置、章节清洗任务/结果、章节摘要配置/任务、作品画像配置/建议、书籍合并任务/源书/章节明细、四个论坛 stage 和 `novel-txt-imports`；`novel-chapter-clean`、`novel-chapter-summary`、`novel-book-profile` 与 `novel-book-merge` 可按依赖顺序独立重跑。清洗结果正文经 MinIO 大小/SHA-256 校验并以 `chapter_clean` 对象激活，旧 `raw_response` 不迁移。运行时发现、AI 真实调用沙箱和全域核对器仍是待补齐的内容生产验收项。
 
 内容生产迁移必须在已有小说、章节和 Reader stage 之后按外键依赖执行，并至少拆为可独立重跑的阶段。建议依赖顺序由后续设计确定，但必须满足：
 

@@ -22,8 +22,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-chapter-clean" && flag.Arg(0) != "novel-chapter-summary" && flag.Arg(0) != "novel-book-merge" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-crawl-import-tasks" && flag.Arg(0) != "novel-crawl-fetch-logs" && flag.Arg(0) != "novel-txt-imports" && flag.Arg(0) != "novel-ai-configs" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-chapter-clean|novel-chapter-summary|novel-book-merge|novel-crawl-sources|novel-crawl-candidates|novel-crawl-import-tasks|novel-crawl-fetch-logs|novel-txt-imports|novel-ai-configs|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-chapter-clean" && flag.Arg(0) != "novel-chapter-summary" && flag.Arg(0) != "novel-book-profile" && flag.Arg(0) != "novel-book-merge" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-crawl-import-tasks" && flag.Arg(0) != "novel-crawl-fetch-logs" && flag.Arg(0) != "novel-txt-imports" && flag.Arg(0) != "novel-ai-configs" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-chapter-clean|novel-chapter-summary|novel-book-profile|novel-book-merge|novel-crawl-sources|novel-crawl-candidates|novel-crawl-import-tasks|novel-crawl-fetch-logs|novel-txt-imports|novel-ai-configs|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -99,6 +99,8 @@ func run() int {
 			legacymigrate.NovelChapterCleanResultsStage{Objects: objects},
 			legacymigrate.NovelChapterSummaryConfigStage{},
 			legacymigrate.NovelChapterSummaryTaskStage{},
+			legacymigrate.NovelBookProfileConfigStage{},
+			legacymigrate.NovelBookProfileSuggestionsStage{},
 			legacymigrate.NovelBookMergeTasksStage{},
 			legacymigrate.NovelBookMergeSourcesStage{},
 			legacymigrate.NovelBookMergeChaptersStage{},
@@ -142,6 +144,9 @@ func run() int {
 	}
 	if command == "novel-chapter-summary" {
 		stages = append(stages, legacymigrate.NovelAIConfigsStage{}, legacymigrate.NovelChapterSummaryConfigStage{}, legacymigrate.NovelChapterSummaryTaskStage{})
+	}
+	if command == "novel-book-profile" {
+		stages = append(stages, legacymigrate.NovelAIConfigsStage{}, legacymigrate.NovelBookProfileConfigStage{}, legacymigrate.NovelBookProfileSuggestionsStage{})
 	}
 	if command == "novel-book-merge" {
 		objects, _, err := coverDependencies(target)

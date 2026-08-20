@@ -51,6 +51,15 @@ go run ./cmd/moonbook-legacy-migrate novel-chapter-summary
 
 该命令迁移摘要配置和执行日志。旧配置的 `api_key` 与任务日志的 `latest_raw_response` 均不写入目标；旧配置缺少有效 AI 配置 ID 时，仅在目标已有可选配置的情况下选择第一条并写入结构化警告。运行中日志转为失败，状态、计数和当前结果/书籍/章节引用按已迁移记录保留。
 
+作品画像配置和建议可单独执行：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-book-profile
+```
+
+该阶段使用 `00065` 的来源键约束，保留建议状态、触发类型、输入摘要、原始/建议/审核 JSON 快照和重试血缘；`raw_response`、`input_snapshot` 中的历史正文不迁移。缺失或非法输入摘要会基于脱敏后的原始快照重算 SHA-256，历史重复 pending/running 建议降为 `expired` 并记录错误，避免破坏目标按书籍的阻塞唯一约束。
+
 M2 小说分类与作者迁移：
 
 ```bash
