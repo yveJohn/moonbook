@@ -35,13 +35,13 @@
 - Modify: `compose.yaml`
 - Modify: `server/config/config_contract_test.go`
 
-- [ ] **Step 1：确认迁移版本。** 检查最高版本仍为 `00060`；若已被其他工作占用，按真实最高版本顺延，不得重复、倒序或改写已执行迁移。
-- [ ] **Step 2：编写失败合同测试。** 要求新增 `failure_code/request_id/trace_id/payload_bytes/payload_truncated/completed_at`，字段类型、空值策略、实际查询索引和 forward-only Down 均符合规格。
-- [ ] **Step 3：验证预期失败。** 运行迁移清单和合同测试，失败原因只能是新迁移或新配置尚不存在。
-- [ ] **Step 4：实现前向迁移。** 不删除、不重写、不重新分类历史 `manual_success`、主动同步和 legacy 日志；运行时新字段允许历史兼容空值。
-- [ ] **Step 5：增加滞留配置。** 注入 `MOONBOOK_EPUSDT_CALLBACK_STALE_MINUTES=5`，解析范围固定 1 至 1440；示例和 Compose 不包含秘密。
-- [ ] **Step 6：真实 PostgreSQL 验证。** 覆盖空库、`00060 -> 00061`、重复执行 `applied=0`、历史日志保持及订单/钱包/流水/奖励/权益行数不减少。
-- [ ] **Step 7：提交。** 提交信息：`新增EPUSDT回调审计迁移`。
+- [x] **Step 1：确认迁移版本。** 检查最高版本仍为 `00060`；若已被其他工作占用，按真实最高版本顺延，不得重复、倒序或改写已执行迁移。
+- [x] **Step 2：编写失败合同测试。** 要求新增 `failure_code/request_id/trace_id/payload_bytes/payload_truncated/completed_at`，字段类型、空值策略、实际查询索引和 forward-only Down 均符合规格。
+- [x] **Step 3：验证预期失败。** 运行迁移清单和合同测试，失败原因只能是新迁移或新配置尚不存在。
+- [x] **Step 4：实现前向迁移。** 不删除、不重写、不重新分类历史 `manual_success`、主动同步和 legacy 日志；运行时新字段允许历史兼容空值。
+- [x] **Step 5：增加滞留配置。** 注入 `MOONBOOK_EPUSDT_CALLBACK_STALE_MINUTES=5`，解析范围固定 1 至 1440；示例和 Compose 不包含秘密。
+- [x] **Step 6：真实 PostgreSQL 验证。** 覆盖空库、`00060 -> 00061`、重复执行 `applied=0`、历史日志保持及订单/钱包/流水/奖励/权益行数不减少。
+- [x] **Step 7：提交。** 提交信息：`新增EPUSDT回调审计迁移`。
 
 ## Task 2：建立审计领域模型与持久化边界
 

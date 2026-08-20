@@ -66,7 +66,7 @@ func TestCommerceReaderSearchProjectionMigrationScenarios(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if scenario.prepare == nil && len(results) != 60 || scenario.prepare != nil && len(results) != 2 {
+			if scenario.prepare == nil && len(results) != 61 || scenario.prepare != nil && len(results) != 3 {
 				t.Fatalf("unexpected applied migrations: %d", len(results))
 			}
 			scenario.verify(t, ctx, db)
@@ -97,7 +97,7 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 			t.Fatal(err)
 		}
 		results, err := provider.Up(ctx)
-		if err != nil || len(results) != 60 {
+		if err != nil || len(results) != 61 {
 			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
 		}
 		verifyEPUSDTSchema(t, ctx, db)
@@ -121,8 +121,8 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 		before := countProtectedFacts(t, ctx, db)
 
 		results, err = provider.Up(ctx)
-		if err != nil || len(results) != 1 {
-			t.Fatalf("migrate to 60: applied=%d err=%v", len(results), err)
+		if err != nil || len(results) != 2 {
+			t.Fatalf("migrate through 61: applied=%d err=%v", len(results), err)
 		}
 		if after := countProtectedFacts(t, ctx, db); fmt.Sprint(after) != fmt.Sprint(before) {
 			t.Fatalf("protected fact counts changed: before=%v after=%v", before, after)
@@ -151,6 +151,59 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEPUSDTCallbackAttemptAuditMigrationScenarios(t *testing.T) {
+	adminDSN := strings.TrimSpace(os.Getenv("MOONBOOK_MIGRATION_TEST_ADMIN_DSN"))
+	if adminDSN == "" {
+		t.Skip("MOONBOOK_MIGRATION_TEST_ADMIN_DSN 未配置")
+	}
+	adminDB, err := sql.Open("pgx", adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	t.Run("empty database and replay", func(t *testing.T) {
+		db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+		provider, err := NewProvider(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results, err := provider.Up(ctx)
+		if err != nil || len(results) != 61 {
+			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
+		}
+		verifyCallbackAuditSchema(t, ctx, db)
+		replayed, err := provider.Up(ctx)
+		if err != nil || len(replayed) != 0 {
+			t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
+		}
+	})
+
+	t.Run("upgrade preserves historical callback logs and finance facts", func(t *testing.T) {
+		db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+		provider, err := NewProvider(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results, err := provider.UpTo(ctx, 60)
+		if err != nil || len(results) != 60 {
+			t.Fatalf("migrate to 60: applied=%d err=%v", len(results), err)
+		}
+		prepareCallbackAuditUpgradeFixture(t, ctx, db)
+		before := countProtectedFacts(t, ctx, db)
+
+		results, err = provider.Up(ctx)
+		if err != nil || len(results) != 1 {
+			t.Fatalf("migrate to 61: applied=%d err=%v", len(results), err)
+		}
+		if after := countProtectedFacts(t, ctx, db); fmt.Sprint(after) != fmt.Sprint(before) {
+			t.Fatalf("protected fact counts changed: before=%v after=%v", before, after)
+		}
+		verifyCallbackAuditSchema(t, ctx, db)
+		verifyCallbackAuditUpgradeFixture(t, ctx, db)
+	})
 }
 
 func createMigrationTestDatabase(t *testing.T, adminDB *sql.DB, adminDSN string) (*sql.DB, context.Context) {
@@ -220,7 +273,7 @@ VALUES
 func countProtectedFacts(t *testing.T, ctx context.Context, db *sql.DB) map[string]int {
 	t.Helper()
 	counts := make(map[string]int)
-	for _, table := range []string{"reader_recharge_orders", "reader_wallets", "reader_wallet_ledgers", "commerce_membership_grants", "commerce_entitlements"} {
+	for _, table := range []string{"reader_recharge_orders", "reader_payment_callback_logs", "reader_wallets", "reader_wallet_ledgers", "commerce_membership_grants", "commerce_entitlements"} {
 		var count int
 		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM `+table).Scan(&count); err != nil {
 			t.Fatal(err)
@@ -228,6 +281,97 @@ func countProtectedFacts(t *testing.T, ctx context.Context, db *sql.DB) map[stri
 		counts[table] = count
 	}
 	return counts
+}
+
+func prepareCallbackAuditUpgradeFixture(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	_, err := db.ExecContext(ctx, `
+INSERT INTO reader_accounts (id, username, password_hash, status)
+VALUES (8400000000001, 'callback-audit-upgrade', 'fixture', 'enabled');
+INSERT INTO reader_wallets (reader_id, recharge_coin_balance) VALUES (8400000000001, 10);
+INSERT INTO reader_wallet_ledgers
+    (id, reader_id, ledger_no, biz_type, direction, coin_type, amount, balance_before, balance_after)
+VALUES (8400000000101, 8400000000001, 'CALLBACK-AUDIT-LEDGER', 'recharge', 'income', 'recharge', 10, 0, 10);
+INSERT INTO commerce_membership_grants
+    (id, reader_id, grant_type, starts_at, permanent, status, source_ref)
+VALUES (8400000000201, 8400000000001, 'legacy', '2026-01-01T00:00:00Z', true, 'active', 'callback-audit');
+INSERT INTO commerce_entitlements
+    (id, reader_id, entitlement_type, target_id, starts_at, permanent, status, source_ref)
+VALUES (8400000000301, 8400000000001, 'membership', 0, '2026-01-01T00:00:00Z', true, 'active', 'callback-audit');
+INSERT INTO reader_recharge_orders
+    (id, order_no, reader_id, request_id, source_type, diamond_amount, price_usdt, provider, currency, token, network, status)
+VALUES (8400000000401, 'CALLBACK-AUDIT-ORDER', 8400000000001, 'callback-audit-request', 'custom', 10, 1.00, 'epusdt', 'usd', 'usdt', 'tron', 'paid');
+INSERT INTO reader_payment_callback_logs
+    (id, provider, recharge_order_id, merchant_order_no, gateway_trade_id, payload_hash, payload_snapshot, signature_valid, processing_result, failure_reason, response_status, response_body, request_time, source_type, source_ref)
+VALUES
+    (8400000000501, 'manual', 8400000000401, 'CALLBACK-AUDIT-ORDER', 'manual-trade', repeat('a', 64), NULL, false, 'manual_success', '', 200, 'success', '2026-01-01T00:00:00Z', 'runtime', NULL),
+    (8400000000502, 'epusdt', 8400000000401, 'CALLBACK-AUDIT-ORDER', 'sync-trade', repeat('b', 64), '{"trade_id":"sync-trade"}', false, 'sync_pending', 'Payment is pending', 200, 'sync', '2026-01-02T00:00:00Z', 'runtime', NULL),
+    (8400000000503, 'epusdt', 8400000000401, 'CALLBACK-AUDIT-ORDER', 'legacy-trade', repeat('c', 64), '{"trade_id":"legacy-trade"}', true, 'success', '', 200, 'success', '2026-01-03T00:00:00Z', 'legacy', '8400000000503');`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func verifyCallbackAuditSchema(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	for _, column := range []string{"failure_code", "request_id", "trace_id", "payload_bytes", "payload_truncated", "completed_at"} {
+		var exists bool
+		if err := db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='reader_payment_callback_logs' AND column_name=$1)`, column).Scan(&exists); err != nil || !exists {
+			t.Fatalf("column %s exists=%t err=%v", column, exists, err)
+		}
+	}
+	for _, index := range []string{
+		"reader_payment_callback_logs_result_created_idx",
+		"reader_payment_callback_logs_failure_created_idx",
+		"reader_payment_callback_logs_response_created_idx",
+		"reader_payment_callback_logs_request_time_idx",
+		"reader_payment_callback_logs_runtime_received_idx",
+	} {
+		var exists bool
+		if err := db.QueryRowContext(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+index).Scan(&exists); err != nil || !exists {
+			t.Fatalf("index %s exists=%t err=%v", index, exists, err)
+		}
+	}
+}
+
+func verifyCallbackAuditUpgradeFixture(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	rows, err := db.QueryContext(ctx, `
+SELECT id, processing_result, response_status, response_body,
+       failure_code, request_id, trace_id, payload_bytes, payload_truncated, completed_at
+FROM reader_payment_callback_logs
+WHERE id BETWEEN 8400000000501 AND 8400000000503
+ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	wantResults := []string{"manual_success", "sync_pending", "success"}
+	wantBodies := []string{"success", "sync", "success"}
+	index := 0
+	for rows.Next() {
+		var id int64
+		var result, responseBody string
+		var responseStatus int
+		var failureCode, requestID, traceID sql.NullString
+		var payloadBytes sql.NullInt64
+		var payloadTruncated sql.NullBool
+		var completedAt sql.NullTime
+		if err := rows.Scan(&id, &result, &responseStatus, &responseBody, &failureCode, &requestID, &traceID, &payloadBytes, &payloadTruncated, &completedAt); err != nil {
+			t.Fatal(err)
+		}
+		if index >= len(wantResults) || result != wantResults[index] || responseStatus != 200 || responseBody != wantBodies[index] ||
+			failureCode.Valid || requestID.Valid || traceID.Valid || payloadBytes.Valid || payloadTruncated.Valid || completedAt.Valid {
+			t.Fatalf("historical callback changed: id=%d result=%s status=%d body=%s new=%+v/%+v/%+v/%+v/%+v/%+v", id, result, responseStatus, responseBody, failureCode, requestID, traceID, payloadBytes, payloadTruncated, completedAt)
+		}
+		index++
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if index != len(wantResults) {
+		t.Fatalf("historical callback count=%d want=%d", index, len(wantResults))
+	}
 }
 
 func verifyEPUSDTSchema(t *testing.T, ctx context.Context, db *sql.DB) {

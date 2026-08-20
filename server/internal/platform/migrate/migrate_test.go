@@ -106,9 +106,46 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00058_casbin_policy_unique.sql",
 		"00059_commerce_reader_search_projection.sql",
 		"00060_epusdt_payment_creation.sql",
+		"00061_epusdt_callback_attempt_audit.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestEPUSDTCallbackAttemptAuditMigrationContract(t *testing.T) {
+	data, err := migrationFS.ReadFile("migrations/00061_epusdt_callback_attempt_audit.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migration := strings.ToLower(string(data))
+
+	for _, required := range []string{
+		"add column failure_code varchar(64)",
+		"add column request_id varchar(64)",
+		"add column trace_id varchar(64)",
+		"add column payload_bytes integer",
+		"add column payload_truncated boolean",
+		"add column completed_at timestamptz",
+		"reader_payment_callback_logs_payload_bytes_check",
+		"payload_bytes between 0 and 16385",
+		"reader_payment_callback_logs_failure_code_check",
+		"create index reader_payment_callback_logs_result_created_idx",
+		"create index reader_payment_callback_logs_failure_created_idx",
+		"create index reader_payment_callback_logs_response_created_idx",
+		"create index reader_payment_callback_logs_request_time_idx",
+		"create index reader_payment_callback_logs_runtime_received_idx",
+		"where source_type = 'runtime' and processing_result = 'received'",
+		"moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(migration, required) {
+			t.Errorf("migration missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"update reader_payment_callback_logs", "delete from reader_payment_callback_logs"} {
+		if strings.Contains(migration, forbidden) {
+			t.Errorf("migration rewrites historical callback logs with %q", forbidden)
+		}
 	}
 }
 
