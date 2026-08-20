@@ -236,12 +236,14 @@
 - Modify: `.github/workflows/ci.yml`
 - Modify: `docs/verification/m7-ci-coverage-audit.md`
 
-- [ ] **Step 1：定义分层门。** `make verify` 汇总 quality、management、reader、integration、migration、e2e、compose、monitoring 和 security；本地可按阶段运行，最终汇总不能遗漏。
-- [ ] **Step 2：固定产物。** 每个阶段输出结构化摘要、工具版本、commit、开始/结束时间和退出状态，敏感日志只保留脱敏摘要。
-- [ ] **Step 3：CI 分 job。** 真实依赖使用独立 Compose 项目；完整副本和真实外部验收不进入普通 PR CI，但对应脚本合同、合成数据和报告校验必须进入。
-- [ ] **Step 4：失败传播。** 任一必需 job 失败时最终门失败，不使用 `continue-on-error`；报告上传不掩盖退出码。
-- [ ] **Step 5：本地和 CI 等价验证。** 在当前固定 commit 运行所有不需要外部凭据的入口并记录耗时。
-- [ ] **Step 6：提交。** 提交信息：`建立全量重构统一验收入口`。
+- [x] **Step 1：定义分层门。** `make verify` 汇总 quality、management、reader、integration、migration、e2e、compose、monitoring 和 security；本地可按阶段运行，最终汇总不能遗漏。
+- [x] **Step 2：固定产物。** 每个阶段输出结构化摘要、工具版本、commit、开始/结束时间和退出状态，敏感日志只保留脱敏摘要。
+- [x] **Step 3：CI 分 job。** 真实依赖使用独立 Compose 项目；完整副本和真实外部验收不进入普通 PR CI，但对应脚本合同、合成数据和报告校验必须进入。
+- [x] **Step 4：失败传播。** 任一必需 job 失败时最终门失败，不使用 `continue-on-error`；报告上传不掩盖退出码。
+- [x] **Step 5：本地和 CI 等价验证。** 九阶段本地入口已逐项通过并记录耗时；CI YAML、Shell 和 Make 合同已验证，远程 Actions 留待提交后运行。
+- [x] **Step 6：提交。** 提交信息：`建立全量重构统一验收入口`。
+
+验收记录见 `docs/verification/m7-ci-coverage-audit.md`。Linux CI 保留 race 门；macOS arm64 因第三方 `go-m1cpu` CGO 初始化崩溃执行同范围 `CGO_ENABLED=0` 测试，并在输出中明确说明。完整副本、真实第三方和生产动作继续由 Task 11/13 的受控入口收敛。
 
 ## Task 11：完善生产部署、故障、切换和回退 Runbook
 
