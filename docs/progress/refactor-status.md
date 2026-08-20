@@ -1,6 +1,6 @@
 # Moonbook 重构进度
 
-更新时间：2026-08-16
+更新时间：2026-08-20
 
 ## 总览
 
@@ -10,7 +10,7 @@
 | M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
 | M3 读者域与零修改兼容 | 已完成 | 冻结 Reader 树、全部调用面契约、真实 PostgreSQL/Redis/MinIO、SSR 异常、生产构建和 Playwright 关键旅程均通过统一验收；8GB 副本容量演练归属 M6 |
-| M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览、财务表迁移及 EPUSDT 本地创建闭环已实现；完整回调审计、财务全域核对、两个只读运营页签和真实最小金额支付仍待补齐 |
+| M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览、财务表迁移、EPUSDT 本地创建及每次回调尝试审计已实现；财务全域核对、两个只读运营页签和真实最小金额支付仍待补齐 |
 | M5 内容生产与长任务 | 实施中 | 论坛、TXT、清洗、摘要和画像 Worker 的租约续期、失租停止、重启接管与结果唯一性已通过真实 PostgreSQL/MinIO 验证；内容生产旧数据迁移映射仍待补齐 |
 | M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；约 8 GB 候选副本已只读定位，内容生产 stage、完整性校验、全量演练和差异报告仍待完成 |
 | M7 生产切换就绪验收 | 审计中 | 备份恢复、Compose 升级和空库短时性能基线已有隔离证据；真实数据容量、监控告警、安全、统一 CI 和最终报告仍存在明确缺口 |
@@ -32,7 +32,7 @@
 - 冻结 reader-ui 的 npm 依赖存在 9 个 high 漏洞，必须在 M7 前升级或形成批准的缓解记录。
 - 冻结旧仓库已只读定位 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节，结合 gzip ISIZE 模值和用户提供信息推算单成员原始大小约 8,129,574,556 字节。Moonbook PostgreSQL 与 MinIO 数据目录所在 Docker 文件系统当前可用约 934.68 GiB，容量不是当前直接阻断项；文件仍未解压、未校验、未导入且保持未跟踪，完整副本演练仍须先完成内容生产 stage、对象转换和全域核对器，详见 `docs/verification/m6-data-copy-discovery.md`。
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
-- M4 已关闭 Reader EPUSDT 创建、失败分类、替换、过期、并发和历史凭据回调缺口；拒绝回调仍不会完整落“每次尝试”审计日志，两个运营审计页签、财务全域核对及受控真实最小金额支付仍未完成。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
+- M4 已关闭 Reader EPUSDT 创建、失败分类、替换、过期、并发、历史凭据回调和每次 HTTP 回调尝试审计缺口；两个运营审计页签、财务全域核对及受控真实最小金额支付仍未完成。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
 - M5/M6 审计确认内容生产旧表尚未进入 `moonbook-legacy-migrate all`，目标表缺少通用 legacy 幂等来源键，TXT/清洗/合并对象迁移及核对器未实现；论坛 Cookie 当前仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
 - M7 首次审计确认最终报告仍是模板，备份恢复文档包含错误迁移表名、一次性容器 `exec`、未挂载 MinIO 备份目录和可能校验错误 Compose 项目等不可执行步骤；性能、安全、告警、故障处理、升级和统一最终验收均无闭环报告。详细证据见 `docs/verification/m7-readiness-audit.md`。
 - M7 GVA 基座审计确认通用 `/system/getSystemConfig` 会回显 JWT、Redis、数据库、邮件和 MinIO 等 Secret，`setSystemConfig` 还能改写运行配置，生产前必须关闭或白名单化；平台任务无统一只读监控，旧在线状态和通知公告也没有确定等价结论。详细证据见 `docs/verification/m7-gva-foundation-audit.md`。
@@ -233,6 +233,7 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 完成首充邀请奖励事务边界整改：Reader Invite Provider 在调用方现有 PostgreSQL 事务中以共享锁读取有效邀请关系，Commerce 奖励写入不再查询 `reader_invite_relations`；模拟充值确认、EPUSDT 回调、主动同步和人工补单均由组合根注入同一 Provider。三入口并发真实库测试证明只生成一条首充奖励事实和一条奖励流水；Reader 合同故障及邀请人钱包溢出均不会留下充值入账、奖励、成功终态或回调成功日志。定向集成测试、完整模块测试、`go vet`、依赖静态门与 Reader 投影一致性复核均通过。
 - 新增模块数据所有权静态门：类型化注册表固定 Reader、Commerce、Novel 表归属，Go AST 扫描业务运行时字符串常量、包级常量和可解析拼接，拒绝跨域 SQL、未登记域表及动态表名；迁移、CLI 与测试 fixture 明确不在业务运行时扫描范围。组合根测试禁止业务模块构造其他领域 Provider，并确认三域 Provider 由 `initialize/router_biz.go` 装配；Commerce Reader 搜索投影只允许出现在同步仓储和三个管理展示仓储。原样依赖规则、SQL 所有权、组合根、投影范围测试及 `go vet ./internal/modules` 全部通过。
 - 完成 EPUSDT 支付创建闭环（迁移 `00060`）：订单以 `creating` 落库后在事务外调用网关，严格校验响应并区分 `create_failed` 与 `gateway_unknown`；同请求 16 路并发只调用一次网关，新活动订单替换旧单，过期 Worker 释放活动槽位。订单保存当前凭据引用和 PID 快照，回调支持当前、历史及 legacy 空引用凭据，五种晚到状态可安全入账，网关交易号与链上哈希跨订单防重放。空库/升级/重跑迁移、真实 PostgreSQL/Redis/MinIO、race、vet、冻结 Reader 536 项与生产构建、Compose/配置/Shell/秘密扫描和隔离 HTTP 替身创建/查询/管理数据源可见性全部通过；真实付款未执行，回调全尝试审计、两个运营页签及财务全域核对仍未完成，M4 保持实施中。
+- 完成 EPUSDT 回调全尝试审计（迁移 `00061`）：每次 HTTP 尝试先独立持久化脱敏记录，再进入验签与资金事务；成功、合法幂等、拒绝、跨订单重放、依赖故障和 panic 均有稳定终态，审计故障返回 `503 fail` 由 EPUSDT 重试且不产生资金事实。隔离替身 2 次调用分别产生 `failed`/`success` 审计且只入账一次；Prometheus 增加结果、失败码、503、持久化失败和滞留指标，Runbook 固定只有 `200 ok/success` 停止重试。`00060 -> 00061`、空库 61 迁移、重跑与财务事实保护，Payment 真实 PostgreSQL、Commerce/Reader 全包、官方 Go 1.24.2 容器 race、完整 `make verify-m3`、管理端 29 项自动门均通过；Playwright 在 `1440x1000` 与 `390x844` 验证“处理中断”“无效”“未校验”、Long ID 字符串、详情白名单和无危险操作，夹具及 2 个 MinIO 对象已清理。真实付款未执行，两个运营页签和财务全域核对仍未完成，M4 保持实施中。
 
 ## M5 当前进度
 

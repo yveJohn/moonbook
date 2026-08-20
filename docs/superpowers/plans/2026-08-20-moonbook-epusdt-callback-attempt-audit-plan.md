@@ -152,16 +152,16 @@
 - Modify: `docs/verification/final-report.md`
 - Modify: this plan
 
-- [ ] **Step 1：迁移门。** 空库、`00060 -> 00061`、重复执行、历史兼容和关键财务行数保护全部通过。
-- [ ] **Step 2：后端质量门。** Payment/Recharge/Wallet/InviteReward/AdminRechargeOrder 定向测试、完整 Commerce/Reader、race、vet、模块边界和 SQL 所有权通过。
-- [ ] **Step 3：真实依赖门。** 使用项目专用 PostgreSQL、Redis、MinIO 完成资金事务、回调重试、指标和管理查询回归。
-- [ ] **Step 4：冻结 Reader 门。** 冻结树差异为零，536 项测试、树外 SSR/SEO、充值合同和生产构建通过。
-- [ ] **Step 5：管理前端门。** Node 测试、ESLint、生产构建、桌面与移动浏览器验收通过，产物不含敏感 payload。
-- [ ] **Step 6：Compose 与安全门。** 配置合同、Compose 模型、Shell、模块边界、秘密扫描和临时凭据/数据清理通过。
-- [ ] **Step 7：更新证据。** 记录固定 commit、工具版本、命令摘要、迁移结果、故障矩阵、重试次数、指标样例和浏览器验收；不伪造真实付款结果。
-- [ ] **Step 8：更新 M4 结论。** 只勾选“每次回调尝试完整审计”；两个运营页签、全域核对和受控真实支付继续为 No-Go。
-- [ ] **Step 9：最终检查与提交。** 检查全部 tracked/untracked、敏感信息、`git diff --check` 和暂存区；提交信息：`补充EPUSDT回调审计验收证据`。
-- [ ] **Step 10：状态确认。** `git status` 干净且未 push，继续下一个最靠前的 M4 退出项。
+- [x] **Step 1：迁移门。** 空库、`00060 -> 00061`、重复执行、历史兼容和关键财务行数保护全部通过。
+- [x] **Step 2：后端质量门。** Payment/Recharge/Wallet/InviteReward/AdminRechargeOrder 定向测试、完整 Commerce/Reader、race、vet、模块边界和 SQL 所有权通过。
+- [x] **Step 3：真实依赖门。** 使用项目专用 PostgreSQL、Redis、MinIO 完成资金事务、回调重试、指标和管理查询回归。
+- [x] **Step 4：冻结 Reader 门。** 冻结树差异为零，536 项测试、树外 SSR/SEO、充值合同和生产构建通过。
+- [x] **Step 5：管理前端门。** Node 测试、ESLint、生产构建、桌面与移动浏览器验收通过，产物不含敏感 payload。
+- [x] **Step 6：Compose 与安全门。** 配置合同、Compose 模型、Shell、模块边界、秘密扫描和临时凭据/数据清理通过。
+- [x] **Step 7：更新证据。** 记录固定 commit、工具版本、命令摘要、迁移结果、故障矩阵、重试次数、指标样例和浏览器验收；不伪造真实付款结果。
+- [x] **Step 8：更新 M4 结论。** 只勾选“每次回调尝试完整审计”；两个运营页签、全域核对和受控真实支付继续为 No-Go。
+- [x] **Step 9：最终检查与提交。** 检查全部 tracked/untracked、敏感信息、`git diff --check` 和暂存区；提交信息：`补充EPUSDT回调审计验收证据`。
+- [x] **Step 10：状态确认。** `git status` 干净且未 push，继续下一个最靠前的 M4 退出项。
 
 ## 服务影响
 
