@@ -10,10 +10,11 @@ import (
 )
 
 type verificationRepositoryStub struct {
-	snapshot  VerificationSnapshot
-	err       error
-	processed int
-	attemptID int64
+	snapshot   VerificationSnapshot
+	err        error
+	processErr error
+	processed  int
+	attemptID  int64
 }
 
 func (stub *verificationRepositoryStub) VerificationSnapshot(context.Context, string) (VerificationSnapshot, error) {
@@ -28,7 +29,31 @@ func (stub *verificationRepositoryStub) Process(context.Context, Callback) error
 func (stub *verificationRepositoryStub) ProcessAttempt(_ context.Context, attemptID int64, _ Callback) error {
 	stub.processed++
 	stub.attemptID = attemptID
-	return stub.err
+	return stub.processErr
+}
+
+func TestServiceAttachesKnownOrderAndSignatureStateToFailures(t *testing.T) {
+	credentials, err := epusdt.NewCredentialProvider("primary", "merchant", "secret", "[]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]string{"pid": "merchant", "order_id": "RC1", "trade_id": "trade", "amount": "2.00", "actual_amount": "2.00", "receive_address": "T-address", "token": "usdt", "block_transaction_id": "tx", "status": "2"}
+	fields["signature"] = Sign(fields, "secret")
+	callback := Callback{PID: "merchant", OrderNo: "RC1", Signature: fields["signature"], Fields: fields}
+
+	repository := &verificationRepositoryStub{snapshot: VerificationSnapshot{OrderID: 9223372036854775000}, processErr: newProcessingError(FailureTransaction, ErrRejected)}
+	err = NewService(repository, credentials).ProcessAttempt(context.Background(), 9, callback)
+	code, signatureValid, orderID := processingErrorDetails(err)
+	if code != FailureTransaction || !signatureValid || orderID == nil || *orderID != 9223372036854775000 {
+		t.Fatalf("code=%s signature=%t orderID=%v err=%v", code, signatureValid, orderID, err)
+	}
+
+	repository = &verificationRepositoryStub{snapshot: VerificationSnapshot{OrderID: 9223372036854775001, CredentialRef: "missing"}}
+	err = NewService(repository, credentials).ProcessAttempt(context.Background(), 10, callback)
+	code, signatureValid, orderID = processingErrorDetails(err)
+	if code != FailureUnknownCredential || signatureValid || orderID == nil || *orderID != 9223372036854775001 {
+		t.Fatalf("code=%s signature=%t orderID=%v err=%v", code, signatureValid, orderID, err)
+	}
 }
 
 func TestServiceVerifiesCallbackWithOrderCredential(t *testing.T) {

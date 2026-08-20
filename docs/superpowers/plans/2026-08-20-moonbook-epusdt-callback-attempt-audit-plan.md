@@ -89,14 +89,14 @@
 - Modify: `server/initialize/router_biz.go`
 - Modify: `server/initialize/router.go`
 
-- [ ] **Step 1：编写有限读取失败测试。** 覆盖空请求、合法 JSON、非 JSON、嵌套值、恰好 16 KiB、16 KiB + 1 字节、底层读取错误和 payload 哈希/字节/截断结果。
-- [ ] **Step 2：复用 RequestMeta。** 从 logger Context 取得已校验的 request ID、trace ID 和 Client IP；测试路由必须显式安装 `middleware.RequestMeta()`，业务 Handler 不再自行信任原始头。
-- [ ] **Step 3：先 Begin 后解析。** Begin 失败直接 `503 fail`；超限、格式和业务拒绝只有最终化成功后返回 400/401；请求读取、依赖、事务或最终化失败返回 `503 fail`。
-- [ ] **Step 4：局部 panic 恢复。** Begin 后 panic 最终化为 `failed/PANIC`，结构化日志只含审计/request/trace ID 和固定码；最终化失败仍返回 503。
-- [ ] **Step 5：严格响应合同。** Content-Type 为纯文本；首次成功和完全一致幂等返回 `200 success`，其余按规格返回 `400/401/503 fail`。
-- [ ] **Step 6：本地重试替身。** 用回环 HTTP 客户端模拟 EPUSDT：仅在 `200 success` 停止，非 200 或非成功正文创建下一次独立审计；不连接真实支付服务。
-- [ ] **Step 7：组合根注入。** `initialize` 构造审计配置、Repository、Handler 和可选观察器；不引入 Redis、消息队列或 Worker。
-- [ ] **Step 8：验证并提交。** 运行 HTTP 单元/真实 PostgreSQL 集成、路由合同和 `go vet`；提交信息：`完善EPUSDT回调失败重试`。
+- [x] **Step 1：编写有限读取失败测试。** 覆盖空请求、合法 JSON、非 JSON、嵌套值、恰好 16 KiB、16 KiB + 1 字节、底层读取错误和 payload 哈希/字节/截断结果。
+- [x] **Step 2：复用 RequestMeta。** 从 logger Context 取得已校验的 request ID、trace ID 和 Client IP；测试路由必须显式安装 `middleware.RequestMeta()`，业务 Handler 不再自行信任原始头。
+- [x] **Step 3：先 Begin 后解析。** Begin 失败直接 `503 fail`；超限、格式和业务拒绝只有最终化成功后返回 400/401；请求读取、依赖、事务或最终化失败返回 `503 fail`。
+- [x] **Step 4：局部 panic 恢复。** Begin 后 panic 最终化为 `failed/PANIC`，结构化日志只含审计/request/trace ID 和固定码；最终化失败仍返回 503。
+- [x] **Step 5：严格响应合同。** Content-Type 为纯文本；首次成功和完全一致幂等返回 `200 success`，其余按规格返回 `400/401/503 fail`。
+- [x] **Step 6：本地重试替身。** 用回环 HTTP 客户端模拟 EPUSDT：仅在 `200 success` 停止，非 200 或非成功正文创建下一次独立审计；不连接真实支付服务。
+- [x] **Step 7：组合根注入。** `initialize` 构造审计配置、Repository、Handler 和可选观察器；不引入 Redis、消息队列或 Worker。
+- [x] **Step 8：验证并提交。** 运行 HTTP 单元/真实 PostgreSQL 集成、路由合同和 `go vet`；提交信息：`完善EPUSDT回调失败重试`。
 
 ## Task 5：扩展管理查询与脱敏详情
 

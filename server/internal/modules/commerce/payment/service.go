@@ -50,29 +50,29 @@ func (s *Service) process(ctx context.Context, callback Callback, process func(R
 		return newProcessingError(FailureDependency, readerDependencyUnavailable)
 	}
 	if s.Credentials == nil {
-		return newProcessingError(FailureUnknownCredential, ErrUnauthorized)
+		return enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
 	}
 	credential, ok := s.Credentials.Verification(snapshot.CredentialRef)
 	if !ok {
-		return newProcessingError(FailureUnknownCredential, ErrUnauthorized)
+		return enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
 	}
 	expectedPID := strings.TrimSpace(snapshot.MerchantPID)
 	if expectedPID == "" {
 		if strings.TrimSpace(snapshot.CredentialRef) != "" {
-			return newProcessingError(FailurePIDMismatch, ErrUnauthorized)
+			return enrichProcessingError(newProcessingError(FailurePIDMismatch, ErrUnauthorized), false, snapshot.OrderID)
 		}
 		expectedPID = credential.PID()
 	}
 	if credential.PID() != expectedPID || callback.PID != expectedPID || callback.Fields["pid"] != callback.PID {
-		return newProcessingError(FailurePIDMismatch, ErrUnauthorized)
+		return enrichProcessingError(newProcessingError(FailurePIDMismatch, ErrUnauthorized), false, snapshot.OrderID)
 	}
 	if callback.Fields["order_id"] != callback.OrderNo {
-		return newProcessingError(FailureSnapshotMismatch, ErrRejected)
+		return enrichProcessingError(newProcessingError(FailureSnapshotMismatch, ErrRejected), false, snapshot.OrderID)
 	}
 	if callback.Fields["signature"] != callback.Signature || !Verify(callback.Fields, callback.Signature, credential.Secret()) {
-		return newProcessingError(FailureSignatureInvalid, ErrUnauthorized)
+		return enrichProcessingError(newProcessingError(FailureSignatureInvalid, ErrUnauthorized), false, snapshot.OrderID)
 	}
-	return process(s.Repo)
+	return enrichProcessingError(process(s.Repo), true, snapshot.OrderID)
 }
 
 var readerDependencyUnavailable = errors.New("payment callback dependency unavailable")

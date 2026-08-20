@@ -12,6 +12,7 @@ type Callback struct {
 }
 
 type VerificationSnapshot struct {
+	OrderID       int64
 	CredentialRef string
 	MerchantPID   string
 }
@@ -28,8 +29,10 @@ type CallbackAuditRepository interface {
 }
 
 type ProcessingError struct {
-	Code FailureCode
-	kind error
+	Code           FailureCode
+	kind           error
+	signatureValid bool
+	orderID        int64
 }
 
 func (e *ProcessingError) Error() string {
@@ -51,4 +54,27 @@ func FailureCodeOf(err error) FailureCode {
 		return classified.Code
 	}
 	return ""
+}
+
+func processingErrorDetails(err error) (FailureCode, bool, *int64) {
+	var classified *ProcessingError
+	if !errors.As(err, &classified) {
+		return "", false, nil
+	}
+	if classified.orderID <= 0 {
+		return classified.Code, classified.signatureValid, nil
+	}
+	orderID := classified.orderID
+	return classified.Code, classified.signatureValid, &orderID
+}
+
+func enrichProcessingError(err error, signatureValid bool, orderID int64) error {
+	var classified *ProcessingError
+	if !errors.As(err, &classified) {
+		return err
+	}
+	copy := *classified
+	copy.signatureValid = signatureValid
+	copy.orderID = orderID
+	return &copy
 }

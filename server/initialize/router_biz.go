@@ -1,6 +1,10 @@
 package initialize
 
 import (
+	"context"
+	"os"
+	"strconv"
+
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/admincheckin"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/admininvitereward"
@@ -50,8 +54,9 @@ import (
 	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
+	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
 	"github.com/gin-gonic/gin"
-	"os"
+	"go.uber.org/zap"
 )
 
 // 占位方法，保证文件可以正确加载，避免go空变量检测报错，请勿删除。
@@ -108,7 +113,9 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewService(recharge.SQLRepository{DB: db, UnknownReleaseWindow: unknownReleaseWindow}, paymentGateway, paymentSnapshot, paymentConfigErr)), readerService)
 	commercecompat.RegisterCheckinRoutes(publicGroup, commerceprovider.NewCheckin(checkin.NewService(checkin.SQLRepository{DB: db})), readerService)
 	commercecompat.RegisterPurchaseRoutes(publicGroup, commerceprovider.NewPurchase(purchase.NewService(purchase.SQLRepository{DB: db}, transactor, readerAccounts, purchaseTargets)), readerService)
-	payment.RegisterRoutes(publicGroup, payment.NewService(payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, callbackCredentials))
+	paymentRepository := payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}
+	paymentService := payment.NewService(paymentRepository, callbackCredentials)
+	payment.RegisterRoutes(publicGroup, payment.NewHandler(paymentService, paymentRepository, paymentRequestMetadata, observePaymentCallbackPanic))
 	adminrecharge.RegisterRoutes(privateGroup, adminrecharge.NewService(adminrecharge.SQLRepository{DB: db}))
 	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))
 	adminorder.RegisterRoutes(privateGroup, adminorder.NewService(adminorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts))
@@ -148,4 +155,25 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	readerPublic := readerpublic.NewService(db, novelPublic, novelPublic, novelPublic, commerceprovider.NewAccess(commerce))
 	readerpublic.RegisterRoutes(publicGroup, readerPublic, readerService)
 
+}
+
+func paymentRequestMetadata(ctx context.Context) payment.RequestMetadata {
+	fields := logger.FromCtx(ctx)
+	if fields == nil {
+		return payment.RequestMetadata{}
+	}
+	return payment.RequestMetadata{RequestID: fields.RequestID, TraceID: fields.TraceID, ClientIP: fields.ClientIP}
+}
+
+func observePaymentCallbackPanic(ctx context.Context, attemptID int64) {
+	if global.GVA_LOG == nil {
+		return
+	}
+	metadata := paymentRequestMetadata(ctx)
+	global.GVA_LOG.Error("payment callback panic recovered",
+		zap.String("attempt_id", strconv.FormatInt(attemptID, 10)),
+		zap.String("request_id", metadata.RequestID),
+		zap.String("trace_id", metadata.TraceID),
+		zap.String("failure_code", string(payment.FailurePanic)),
+	)
 }

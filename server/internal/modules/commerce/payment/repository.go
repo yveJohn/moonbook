@@ -29,7 +29,7 @@ func (r SQLRepository) VerificationSnapshot(ctx context.Context, orderNo string)
 		return VerificationSnapshot{}, readerDependencyUnavailable
 	}
 	var snapshot VerificationSnapshot
-	err := r.DB.QueryRowContext(ctx, `SELECT COALESCE(credential_ref,''),COALESCE(merchant_pid_snapshot,'') FROM reader_recharge_orders WHERE provider='epusdt' AND order_no=$1`, orderNo).Scan(&snapshot.CredentialRef, &snapshot.MerchantPID)
+	err := r.DB.QueryRowContext(ctx, `SELECT id,COALESCE(credential_ref,''),COALESCE(merchant_pid_snapshot,'') FROM reader_recharge_orders WHERE provider='epusdt' AND order_no=$1`, orderNo).Scan(&snapshot.OrderID, &snapshot.CredentialRef, &snapshot.MerchantPID)
 	return snapshot, err
 }
 
