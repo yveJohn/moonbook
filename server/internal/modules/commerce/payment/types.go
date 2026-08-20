@@ -17,3 +17,8 @@ type Repository interface {
 	VerificationSnapshot(context.Context, string) (VerificationSnapshot, error)
 	Process(context.Context, Callback) error
 }
+
+type CallbackAuditRepository interface {
+	BeginAttempt(context.Context, AttemptStart) (int64, error)
+	FinalizeAttempt(context.Context, int64, AttemptCompletion) error
+}

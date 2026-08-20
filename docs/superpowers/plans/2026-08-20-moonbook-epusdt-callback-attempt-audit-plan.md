@@ -53,12 +53,12 @@
 - Modify: `server/internal/modules/commerce/payment/repository.go`
 - Modify: `server/internal/modules/commerce/payment/repository_integration_test.go`
 
-- [ ] **Step 1：编写失败模型测试。** 固定五种结果、封闭失败码、响应状态/正文、snapshot 八字段白名单、16 KiB 上限和 SHA-256 行为。
-- [ ] **Step 2：定义窄接口。** `AuditRepository.Begin` 独立提交 `received`；拒绝/失败最终化使用审计 ID 与 `processing_result='received'` 条件更新；资金处理接收审计 ID，不暴露 HTTP 或 Gin 类型。
-- [ ] **Step 3：实现 Begin。** 只写安全元数据、payload 哈希/捕获字节、截断标记、IP 哈希及 RequestMeta 关联 ID；`response_status=0`、`completed_at=NULL`，不得业务解析。
-- [ ] **Step 4：实现条件最终化。** 受影响行数必须为 1；终态不得覆盖；固定失败码映射固定脱敏文案，禁止拼接 SQL、解析器或网络错误。
-- [ ] **Step 5：真实 PostgreSQL 验证。** 每次 Begin 产生独立行，重复 payload 不合并；终态不可二次更新；历史/manual/sync 记录继续可读。
-- [ ] **Step 6：验证并提交。** 运行 payment 单元测试和真实 PostgreSQL 定向测试；提交信息：`建立支付回调审计持久化`。
+- [x] **Step 1：编写失败模型测试。** 固定五种结果、封闭失败码、响应状态/正文、snapshot 八字段白名单、16 KiB 上限和 SHA-256 行为。
+- [x] **Step 2：定义窄接口。** `AuditRepository.Begin` 独立提交 `received`；拒绝/失败最终化使用审计 ID 与 `processing_result='received'` 条件更新；资金处理接收审计 ID，不暴露 HTTP 或 Gin 类型。
+- [x] **Step 3：实现 Begin。** 只写安全元数据、payload 哈希/捕获字节、截断标记、IP 哈希及 RequestMeta 关联 ID；`response_status=0`、`completed_at=NULL`，不得业务解析。
+- [x] **Step 4：实现条件最终化。** 受影响行数必须为 1；终态不得覆盖；固定失败码映射固定脱敏文案，禁止拼接 SQL、解析器或网络错误。
+- [x] **Step 5：真实 PostgreSQL 验证。** 每次 Begin 产生独立行，重复 payload 不合并；终态不可二次更新；历史/manual/sync 记录继续可读。
+- [x] **Step 6：验证并提交。** 运行 payment 单元测试和真实 PostgreSQL 定向测试；提交信息：`建立支付回调审计持久化`。
 
 ## Task 3：把审计终态纳入支付事务
 

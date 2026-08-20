@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,5 +135,66 @@ func TestCallbackRollsBackWhenInviteDependencyOrRewardWalletFails(t *testing.T) 
 	}
 	if status != "pending" || inviteeWallets != 0 || inviteeLedgers != 0 || rewards != 0 || callbacks != 0 {
 		t.Fatalf("status=%s wallets=%d ledgers=%d rewards=%d callbacks=%d", status, inviteeWallets, inviteeLedgers, rewards, callbacks)
+	}
+}
+
+func TestCallbackAuditBeginAndConditionalFinalize(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	repository := SQLRepository{DB: db}
+	requestedAt := time.Now().UTC().Truncate(time.Microsecond)
+	start, err := NewAttemptStart([]byte(`{"order_id":"RC-audit"}`), false, "request-audit", "trace-audit", "203.0.113.10", requestedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstID, err := repository.BeginAttempt(ctx, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondID, err := repository.BeginAttempt(ctx, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_payment_callback_logs WHERE id IN ($1,$2)`, firstID, secondID)
+	})
+	if firstID <= 0 || secondID <= 0 || firstID == secondID {
+		t.Fatalf("attempt ids=%d/%d", firstID, secondID)
+	}
+	snapshot := SnapshotFromCallback(Callback{OrderNo: "RC-audit", TradeID: "trade-audit", Amount: "2.00", ActualAmount: "1.9999", ReceiveAddress: "T-audit", Token: "usdt", TransactionID: "tx-audit", Status: 2})
+	completion := AttemptCompletion{Result: ResultRejected, FailureCode: FailureSignatureInvalid, ResponseStatus: 401, Snapshot: &snapshot}
+	if err := repository.FinalizeAttempt(ctx, firstID, completion); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.FinalizeAttempt(ctx, firstID, completion); !errors.Is(err, ErrAttemptStateConflict) {
+		t.Fatalf("second finalization err=%v", err)
+	}
+	if err := repository.FinalizeAttempt(ctx, secondID, AttemptCompletion{Result: ResultFailed, FailureCode: FailureDependency, ResponseStatus: 503}); err != nil {
+		t.Fatal(err)
+	}
+
+	var result, failureCode, failureReason, responseBody, payloadHash, sourceIPHash, requestID, traceID string
+	var responseStatus, payloadBytes int
+	var payloadTruncated, signatureValid bool
+	var completedAt time.Time
+	var storedSnapshot []byte
+	if err := db.QueryRowContext(ctx, `
+SELECT processing_result,failure_code,failure_reason,response_status,response_body,payload_hash,source_ip_sha256,
+       request_id,trace_id,payload_bytes,payload_truncated,signature_valid,payload_snapshot,completed_at
+FROM reader_payment_callback_logs WHERE id=$1`, firstID).Scan(
+		&result, &failureCode, &failureReason, &responseStatus, &responseBody, &payloadHash, &sourceIPHash,
+		&requestID, &traceID, &payloadBytes, &payloadTruncated, &signatureValid, &storedSnapshot, &completedAt,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if result != string(ResultRejected) || failureCode != string(FailureSignatureInvalid) || failureReason != "Callback signature validation failed" || responseStatus != 401 || responseBody != "fail" {
+		t.Fatalf("terminal audit=%s/%s/%s/%d/%s", result, failureCode, failureReason, responseStatus, responseBody)
+	}
+	if payloadHash != start.PayloadHash || sourceIPHash != start.SourceIPSHA256 || requestID != "request-audit" || traceID != "trace-audit" || payloadBytes != start.PayloadBytes || payloadTruncated || signatureValid || completedAt.IsZero() {
+		t.Fatalf("stored metadata hash=%s ip=%s ids=%s/%s bytes=%d truncated=%t signature=%t completed=%s", payloadHash, sourceIPHash, requestID, traceID, payloadBytes, payloadTruncated, signatureValid, completedAt)
+	}
+	if text := string(storedSnapshot); !strings.Contains(text, `"order_id": "RC-audit"`) || strings.Contains(text, "signature") || strings.Contains(text, "pid") {
+		t.Fatalf("unsafe snapshot=%s", text)
 	}
 }
