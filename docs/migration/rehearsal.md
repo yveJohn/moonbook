@@ -30,3 +30,16 @@ go test -count=1 -run '^TestReaderMigrationWithMySQLAndPostgres$' -v ./internal/
 冻结旧仓库已定位到 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节；结合 gzip ISIZE 模值和用户提供的约 8 GB 信息，单成员候选原始大小约为 8,129,574,556 字节。本次没有读取、校验或导入 SQL，完整元数据和安全门见 `docs/verification/m6-data-copy-discovery.md`。
 
 完整演练仍需先关闭内容生产 stage、对象转换和全域核对器缺口，再在受控隔离环境执行。验收必须记录源表容量/行数、各阶段耗时和吞吐、峰值磁盘与连接、目标行数/主键/关联/枚举、财务零差异、MinIO 对象数量/字节/哈希、全量重跑结果，以及是否稳定低于 12 小时并保留回退余量。在取得这些证据前，M6 不得关闭。
+
+## 可重复的只读核对命令
+
+内容迁移 stage 完成后，在同一隔离源库和目标库执行：
+
+```bash
+cd server
+MOONBOOK_LEGACY_MYSQL_DSN='受控只读 MySQL DSN' \
+MOONBOOK_DATABASE_DSN='隔离 PostgreSQL DSN' \
+go run ./cmd/moonbook-migration-audit moonbook-v1 > /tmp/moonbook-migration-audit.json
+```
+
+命令只读访问两端，输出脱敏 JSON，包含固定映射表的源/目标行数、最大 ID、目标来源键数、checkpoint/错误数、MinIO 注册对象按来源和状态的数量/字节数，以及清洗、合并、画像的孤儿关联检查。它不会连接 MinIO 或修改任何数据库；对象内容逐对象 SHA-256 仍需使用对象存储核对脚本补充，报告中不得把缺失副本或失败 stage 计为通过。
