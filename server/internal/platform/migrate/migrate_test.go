@@ -112,9 +112,35 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00064_legacy_txt_import_nullable_book.sql",
 		"00065_content_ai_legacy_source_keys.sql",
 		"00066_disable_system_config_write.sql",
+		"00067_platform_job_monitor_admin.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestPlatformJobMonitorMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00067_platform_job_monitor_admin.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"VALUES(1724,now(),now(),2,1000,'platformJobs','PlatformJobs'",
+		"VALUES(1724,888)",
+		"(1820,now(),now(),'/platform/jobs'",
+		"(1821,now(),now(),'/platform/jobs/:id'",
+		"('p','888','/platform/jobs','GET'",
+		"('p','888','/platform/jobs/:id','GET'",
+		"GREATEST((SELECT max(id) FROM sys_base_menus),1724)",
+		"GREATEST((SELECT max(id) FROM sys_apis),1821)",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("platform job monitor migration missing %q", required)
+		}
+	}
+	if strings.Contains(text, "VALUES(1722,") {
+		t.Fatal("platform job monitor must not reuse menu id 1722")
 	}
 }
 

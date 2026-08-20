@@ -62,7 +62,7 @@ func TestCommerceReaderSearchProjectionMigrationScenarios(t *testing.T) {
 				}
 				scenario.prepare(t, ctx, db)
 			}
-			results, err := provider.Up(ctx)
+			results, err := provider.UpTo(ctx, 61)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,8 +96,8 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		results, err := provider.Up(ctx)
-		if err != nil || len(results) != 61 {
+		results, err := provider.UpTo(ctx, 60)
+		if err != nil || len(results) != 60 {
 			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
 		}
 		verifyEPUSDTSchema(t, ctx, db)
@@ -120,9 +120,9 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 		prepareEPUSDTUpgradeFixture(t, ctx, db)
 		before := countProtectedFacts(t, ctx, db)
 
-		results, err = provider.Up(ctx)
-		if err != nil || len(results) != 2 {
-			t.Fatalf("migrate through 61: applied=%d err=%v", len(results), err)
+		results, err = provider.UpTo(ctx, 60)
+		if err != nil || len(results) != 1 {
+			t.Fatalf("migrate to 60: applied=%d err=%v", len(results), err)
 		}
 		if after := countProtectedFacts(t, ctx, db); fmt.Sprint(after) != fmt.Sprint(before) {
 			t.Fatalf("protected fact counts changed: before=%v after=%v", before, after)
@@ -142,7 +142,7 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 				t.Fatalf("migrate to 59: applied=%d err=%v", len(results), err)
 			}
 			prepareDuplicateGatewayFixture(t, ctx, db, column)
-			if results, err := provider.Up(ctx); err == nil || len(results) != 0 || !strings.Contains(err.Error(), "duplicate non-empty "+column) {
+			if results, err := provider.UpTo(ctx, 60); err == nil || len(results) != 0 || !strings.Contains(err.Error(), "duplicate non-empty "+column) {
 				t.Fatalf("duplicate %s migration: applied=%d err=%v", column, len(results), err)
 			}
 			var current int64
@@ -170,7 +170,7 @@ func TestEPUSDTCallbackAttemptAuditMigrationScenarios(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		results, err := provider.Up(ctx)
+		results, err := provider.UpTo(ctx, 61)
 		if err != nil || len(results) != 61 {
 			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
 		}
@@ -194,7 +194,7 @@ func TestEPUSDTCallbackAttemptAuditMigrationScenarios(t *testing.T) {
 		prepareCallbackAuditUpgradeFixture(t, ctx, db)
 		before := countProtectedFacts(t, ctx, db)
 
-		results, err = provider.Up(ctx)
+		results, err = provider.UpTo(ctx, 61)
 		if err != nil || len(results) != 1 {
 			t.Fatalf("migrate to 61: applied=%d err=%v", len(results), err)
 		}
@@ -204,6 +204,81 @@ func TestEPUSDTCallbackAttemptAuditMigrationScenarios(t *testing.T) {
 		verifyCallbackAuditSchema(t, ctx, db)
 		verifyCallbackAuditUpgradeFixture(t, ctx, db)
 	})
+}
+
+func TestPlatformJobMonitorMigrationScenarios(t *testing.T) {
+	adminDSN := strings.TrimSpace(os.Getenv("MOONBOOK_MIGRATION_TEST_ADMIN_DSN"))
+	if adminDSN == "" {
+		t.Skip("MOONBOOK_MIGRATION_TEST_ADMIN_DSN 未配置")
+	}
+	adminDB, err := sql.Open("pgx", adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	for _, scenario := range []struct {
+		name      string
+		from      int64
+		wantCount int
+	}{
+		{name: "empty database", from: 0, wantCount: 67},
+		{name: "upgrade from system config hardening", from: 66, wantCount: 1},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+			provider, err := NewProvider(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario.from > 0 {
+				results, err := provider.UpTo(ctx, scenario.from)
+				if err != nil || len(results) != int(scenario.from) {
+					t.Fatalf("migrate to %d: applied=%d err=%v", scenario.from, len(results), err)
+				}
+			}
+			results, err := provider.UpTo(ctx, 67)
+			if err != nil || len(results) != scenario.wantCount {
+				t.Fatalf("migrate to 67: applied=%d err=%v", len(results), err)
+			}
+			verifyPlatformJobMonitorMigration(t, ctx, db)
+			replayed, err := provider.UpTo(ctx, 67)
+			if err != nil || len(replayed) != 0 {
+				t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
+			}
+		})
+	}
+}
+
+func verifyPlatformJobMonitorMigration(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	var menuPath, component string
+	if err := db.QueryRowContext(ctx, `SELECT path,component FROM sys_base_menus WHERE id=1724`).Scan(&menuPath, &component); err != nil {
+		t.Fatal(err)
+	}
+	if menuPath != "platformJobs" || component != "view/platform/jobs/index.vue" {
+		t.Fatalf("unexpected platform menu path=%q component=%q", menuPath, component)
+	}
+	var chapterCleanPath string
+	if err := db.QueryRowContext(ctx, `SELECT path FROM sys_base_menus WHERE id=1722`).Scan(&chapterCleanPath); err != nil {
+		t.Fatal(err)
+	}
+	if chapterCleanPath != "novelChapterClean" {
+		t.Fatalf("menu 1722 changed to %q", chapterCleanPath)
+	}
+	for _, query := range []struct {
+		statement string
+		want      int
+	}{
+		{`SELECT count(*) FROM sys_authority_menus WHERE sys_base_menu_id=1724 AND sys_authority_authority_id=888`, 1},
+		{`SELECT count(*) FROM sys_apis WHERE id IN (1820,1821) AND path IN ('/platform/jobs','/platform/jobs/:id') AND method='GET'`, 2},
+		{`SELECT count(*) FROM casbin_rule WHERE ptype='p' AND v0='888' AND v1 IN ('/platform/jobs','/platform/jobs/:id') AND v2='GET'`, 2},
+	} {
+		var got int
+		if err := db.QueryRowContext(ctx, query.statement).Scan(&got); err != nil || got != query.want {
+			t.Fatalf("query %q count=%d want=%d err=%v", query.statement, got, query.want, err)
+		}
+	}
 }
 
 func createMigrationTestDatabase(t *testing.T, adminDB *sql.DB, adminDSN string) (*sql.DB, context.Context) {
