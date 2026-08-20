@@ -13,7 +13,6 @@ func TestPublicSystemConfigDoesNotExposeSecrets(t *testing.T) {
 	c := config.Server{
 		JWT:     config.JWT{SigningKey: "jwt-secret", ExpiresTime: "24h"},
 		Redis:   config.Redis{Addr: "redis:6379", Password: "redis-secret"},
-		Email:   config.Email{Secret: "smtp-secret"},
 		Minio:   config.Minio{AccessKeyId: "minio-key", AccessKeySecret: "minio-secret"},
 		Metrics: config.Metrics{Token: "metrics-secret"},
 		Pgsql:   config.Pgsql{GeneralDB: config.GeneralDB{Password: "db-secret", Path: "postgres"}},
@@ -23,7 +22,7 @@ func TestPublicSystemConfigDoesNotExposeSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(b)
-	for _, secret := range []string{"jwt-secret", "redis-secret", "smtp-secret", "minio-key", "minio-secret", "metrics-secret", "db-secret"} {
+	for _, secret := range []string{"jwt-secret", "redis-secret", "minio-key", "minio-secret", "metrics-secret", "db-secret"} {
 		if strings.Contains(body, secret) {
 			t.Fatalf("public config leaked secret %q: %s", secret, body)
 		}
@@ -31,6 +30,11 @@ func TestPublicSystemConfigDoesNotExposeSecrets(t *testing.T) {
 	for _, marker := range []string{"signing-key-configured", "password-configured", "secret-configured", "token-configured"} {
 		if !strings.Contains(body, marker) {
 			t.Fatalf("public config missing marker %q: %s", marker, body)
+		}
+	}
+	for _, removed := range []string{"email", "mysql", "mssql", "oracle", "sqlite", "autocode"} {
+		if strings.Contains(body, `"`+removed+`"`) {
+			t.Fatalf("public config contains out-of-scope section %q: %s", removed, body)
 		}
 	}
 }

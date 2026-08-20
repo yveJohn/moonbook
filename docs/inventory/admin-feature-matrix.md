@@ -10,12 +10,12 @@
 
 | 功能 | 旧来源 | 新系统验收 | 状态 |
 | --- | --- | --- | --- |
-| 管理员登录、JWT、验证码、登出 | RuoYi 系统模块 | 使用 GVA 认证并完成安全基线 | GVA 认证、首管理员、强制改密、真实登录和严格 CORS 已验证；最终 RBAC 越权、登录限流、会话与浏览器回归待 M7 固定 commit 验收 |
-| 管理员、角色、菜单、API 权限 | system user/role/menu | GVA 用户、角色、菜单、Casbin；不迁移旧管理员数据 | GVA 源码、页面、种子与 Casbin 已导入；旧框架数据按边界不迁移，角色授权与数据权限最终验收待补 |
-| 部门、岗位、字典、参数、通知 | system 页面与 Controller | 按实际管理需要保留 GVA 等价能力 | 部门、岗位、字典和参数实现存在但缺统一真实验收；旧通知公告无 GVA 等价模块，也未找到 Moonbook 业务使用证据，需按实际数据确认实现或移除 |
-| 操作日志、登录日志、在线状态 | monitor 页面 | 结构化审计、检索、脱敏 | 登录/操作/文件日志实现存在且业务写操作有抽样审计证据；旧在线管理员列表和强退入口无等价实现，需实现或经实际使用确认移除 |
-| 文件与对象存储配置 | system/oss | 固定 MinIO 业务存储和受控管理能力 | 业务对象已统一 MinIO 并有哈希/大小/回收证据；旧 OSS 配置不迁移，通用对象运维入口待确认；GVA 通用配置 API 当前会回显 MinIO 等 Secret，生产前必须关闭或脱敏 |
-| 系统健康、配置和任务监控 | monitor/admin/cache/snailjob | 健康、指标、持久化任务监控 | health、受保护 metrics、GVA 定时任务和分域任务页已有实现；通用配置 API 违反 Secret 注入边界，且 `platform_jobs` 无统一只读管理入口，详见 `docs/verification/m7-gva-foundation-audit.md` |
+| 管理员登录、JWT、验证码、登出 | RuoYi 系统模块 | 使用 GVA 认证并完成安全基线 | 真实 PostgreSQL/Redis HTTP 验收覆盖验证码登录、首次强制改密、重新登录、注销和 JWT 黑名单撤销；受限角色越权被 Casbin 拒绝 |
+| 管理员、角色、菜单、API 权限 | system user/role/menu | GVA 用户、角色、菜单、Casbin；不迁移旧管理员数据 | GVA 源码、页面、种子与 Casbin 已导入；真实 HTTP 验收覆盖角色策略和数据权限，旧管理员及角色数据按批准边界不迁移 |
+| 部门、岗位、字典、参数、通知 | system 页面与 Controller | 保留组织、岗位、字典和参数；移除旧通知公告 | 部门、岗位、字典和参数已通过真实管理员 HTTP；旧库 `sys_notice` 仅 2 条同批框架初始化公告，未发现 Moonbook 业务引用，通知公告明确移出范围 |
+| 操作日志、登录日志、在线状态 | monitor 页面 | 保留结构化审计；移除在线会话管理 UI | 登录、操作、文件和数据权限日志入口存在，真实 HTTP/浏览器验收通过；旧在线列表/强退为瞬态框架会话能力，明确移除，保留 JWT 注销黑名单、账号禁用及审计 |
+| 文件与对象存储配置 | system/oss | 固定 MinIO 业务存储，不迁移通用 OSS 管理 | 旧 `sys_oss` 为 0 行，5 条 `sys_oss_config` 均为框架配置；通用 OSS 页面/配置明确移除，业务对象继续使用 MinIO 大小、SHA-256、引用和回收闭环 |
+| 系统健康、配置和任务监控 | monitor/admin/cache/snailjob | 健康、指标、只读配置、持久化任务监控 | 配置 API 只返回白名单与 Secret 状态且不可写；平台任务列表/详情/attempt 只读页、health、metrics 和定时任务均已通过真实 HTTP/浏览器验收，见 `docs/verification/m7-gva-foundation-final.md` |
 
 旧 RuoYi 的租户、工作流、代码生成和 Demo 不是 Moonbook 业务必需项；只有 GVA 基座自身正常运行所需或经实际使用证据确认的能力才保留，不迁移旧框架数据。
 
@@ -72,7 +72,7 @@
 | --- | --- | --- |
 | EPUSDT | 充值、回调 Controller 及 Flyway 表 | 当前业务实现存在；生产是否启用待脱敏环境确认 |
 | OpenAI 兼容 AI | AI 配置、模型、清洗、摘要、画像模块 | 当前业务实现存在；具体供应商与模型由新配置迁移 |
-| SMTP 邮件 | RuoYi mail 配置和验证码能力 | 框架能力存在；Moonbook 生产是否启用待确认 |
+| SMTP 邮件 | 仅发现框架登录/工作流/Demo 引用，无 Moonbook 业务调用 | 邮件插件、API 元数据和 Casbin 策略已移除，不纳入重构范围 |
 | HTTP 代理 | 采集和 AI 外部请求配置 | 当前业务实现存在；只迁移实际启用配置 |
 | 对象存储 | RuoYi OSS 与历史文件字段 | 新系统统一为 MinIO，不迁移旧框架 OSS 配置 |
 | Redis | 登录、缓存、任务协调 | 新系统继续使用，但不迁移缓存数据 |

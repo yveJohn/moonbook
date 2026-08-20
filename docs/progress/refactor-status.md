@@ -1,6 +1,6 @@
 # Moonbook 重构进度
 
-更新时间：2026-08-20
+更新时间：2026-08-21
 
 ## 总览
 
@@ -35,7 +35,7 @@
 - M4 已关闭 Reader EPUSDT 创建、失败分类、替换、过期、并发、历史凭据回调和每次 HTTP 回调尝试审计缺口；两个运营审计页签、财务全域核对及受控真实最小金额支付仍未完成。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
 - M5/M6 已接入论坛全链路和基于受控文件清单的 TXT 对象迁移；清洗/合并/AI 迁移及全域核对器仍未实现，论坛运行时 Cookie 仍以明文存 PostgreSQL。自动发现调度器已接入应用生命周期并按到期板块执行，但真实第三方沙箱、Cookie Secret 引用和全量对象核对仍未完成。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
 - M7 首次审计确认最终报告仍是模板，备份恢复文档包含错误迁移表名、一次性容器 `exec`、未挂载 MinIO 备份目录和可能校验错误 Compose 项目等不可执行步骤；性能、安全、告警、故障处理、升级和统一最终验收均无闭环报告。详细证据见 `docs/verification/m7-readiness-audit.md`。
-- M7 GVA 基座审计发现的通用配置 Secret 回显/写入缺口已修复：`/system/getSystemConfig` 仅返回逐字段白名单和 Secret 配置状态，`setSystemConfig` 路由已移除，服务层拒绝写入，管理页面只读；定向脱敏测试和隔离 PostgreSQL 00001→00066 首次/重复迁移通过，历史 API/策略残留为 0。平台任务无统一只读监控，旧在线状态和通知公告也没有确定等价结论，管理员真实 HTTP/浏览器旅程仍待最终验收。详细证据见 `docs/verification/m7-gva-foundation-audit.md`。
+- M7 GVA 管理基座已完成本地最终验收：系统配置仅返回安全白名单和 Secret 配置状态且不可写，邮件插件/API/策略由 `00068` 精确移除；平台任务只读列表、筛选、详情与 attempt 审计已完成。真实 PostgreSQL/Redis HTTP 覆盖验证码登录、首次改密、JWT 撤销、RBAC、组织岗位、字典参数、日志、定时任务及数据权限；桌面和 `390x844` 浏览器覆盖配置、操作历史、定时任务及平台任务，控制台 0 error/0 warning。旧通知公告、通用 OSS、SMTP 和在线会话 UI 已依据旧库与代码证据明确移出范围，详见 `docs/verification/m7-gva-foundation-final.md`。
 - M7 已完成一次双项目、独立命名卷的本地合成备份恢复演练，修正 MinIO 客户端挂载、稳定 SHA-256 清单、空库恢复顺序、一次性迁移调用和版本表名，并把财务核对命令纳入 Server 镜像；恢复后 106 张表、版本 58/59 条记录、1 个 43 字节对象与源端一致，迁移 `applied=0`、基础设施 healthy、财务 `mismatches=0`，完整 Compose 栈及三项健康入口通过。该证据只关闭命令级可执行性和基础启动冒烟，真实业务数据、协调停写、支付回调和认证业务旅程仍待完成，详见 `docs/verification/m7-backup-restore-rehearsal.md`。
 - M7 已新增固定 commit/tag/digest、配置与 Secret 门禁、升级前备份、一次性迁移、应用替换、冒烟和回退兼容边界明确的 Compose 升级 Runbook，并在 `3058fee` 到 `a8c209d` 两个固定 Server 镜像间完成隔离演练。升级迁移 `applied=0`，版本 58/59 条记录和 `sys_params` 夹具保持不变，目标镜像新增财务核对返回 `mismatches=0`，升级及应用镜像回退后的 gateway/API/Reader 健康均通过。该版本对无迁移差异，只关闭命令级升级和特定兼容回退缺口；真实业务、含迁移版本兼容、TLS/可信代理、资源限制和生产观察阈值仍待完成，详见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
 - M7 管理端供应链专项整改已删除 `vite-vue-path-map@1.0.2`、`vite-auto-import-svg@2.9.8` 和 `vite-check-multiple-dom@0.2.1` 三个确定的恶意/破坏性直接构建依赖，以仓库内路径映射和 SVG sprite 插件替代，并增加覆盖声明、锁文件、源码、安装树和生产产物的 CI 安全门。固定 `8fd98ac` 下 28 个测试、ESLint、生产构建和供应链检查通过；最终容器产物 223 个 JS 文件通过独立扫描，镜像 ID 为 `ec3121be...`。Trivy 仍报告管理端 Alpine 3.21.5 为 30 high/2 critical，Server/Reader 漏洞、管理端其余依赖、SBOM、许可证和 GVA 商业授权仍待处理，生产继续 No-Go，详见 `docs/verification/m7-security-supply-chain-audit.md`。

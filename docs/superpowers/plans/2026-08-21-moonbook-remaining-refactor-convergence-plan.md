@@ -37,13 +37,13 @@
 - Create/Modify: `server/internal/platform/jobmonitor/service_test.go`
 - Create: `server/internal/platform/jobmonitor/repository_integration_test.go`
 
-- [ ] **Step 1：确认迁移状态。** 检查本项目全部开发/验收库的 `moonbook_schema_version`，确认 `00067`、`00068` 是否执行；未执行时合并为一个无冲突迁移，已执行时保留并新增更高版本修复，禁止静默改写历史。
-- [ ] **Step 2：增加迁移失败测试。** 固定菜单、API、Casbin、唯一 ID、序列推进、forward-only Down、空库和升级语义；模拟 ID 已占用时不得把平台任务权限关联到其他菜单。
-- [ ] **Step 3：固定查询合同。** 列表按 module、jobType、status、leaseOwner、from、to 筛选，稳定按 `updated_at,id` 排序；详情返回 attempts，所有 ID 为字符串。
-- [ ] **Step 4：实现 SQL 仓储。** 使用参数化 SQL、受控排序和明确分页上限；错误消息通过封闭敏感词和长度规则脱敏，不返回 payload/result JSON。
-- [ ] **Step 5：真实 PostgreSQL 验证。** 覆盖五种状态、空租约、过期租约、大 ID、多 attempt、时间边界、分页稳定性、缺失任务和敏感错误文本。
-- [ ] **Step 6：质量门。** 运行 `go test ./internal/platform/jobmonitor ./internal/platform/migrate -v`、`go vet` 和迁移空库/升级/重跑验证。
-- [ ] **Step 7：提交。** 提交信息：`完善平台任务监控后端`。
+- [x] **Step 1：确认迁移状态。** 检查本项目全部开发/验收库的 `moonbook_schema_version`，确认 `00067`、`00068` 是否执行；未执行时合并为一个无冲突迁移，已执行时保留并新增更高版本修复，禁止静默改写历史。
+- [x] **Step 2：增加迁移失败测试。** 固定菜单、API、Casbin、唯一 ID、序列推进、forward-only Down、空库和升级语义；模拟 ID 已占用时不得把平台任务权限关联到其他菜单。
+- [x] **Step 3：固定查询合同。** 列表按 module、jobType、status、leaseOwner、from、to 筛选，稳定按 `updated_at,id` 排序；详情返回 attempts，所有 ID 为字符串。
+- [x] **Step 4：实现 SQL 仓储。** 使用参数化 SQL、受控排序和明确分页上限；错误消息通过封闭敏感词和长度规则脱敏，不返回 payload/result JSON。
+- [x] **Step 5：真实 PostgreSQL 验证。** 覆盖五种状态、空租约、过期租约、大 ID、多 attempt、时间边界、分页稳定性、缺失任务和敏感错误文本。
+- [x] **Step 6：质量门。** 运行 `go test ./internal/platform/jobmonitor ./internal/platform/migrate -v`、`go vet` 和迁移空库/升级/重跑验证。
+- [x] **Step 7：提交。** 提交信息：`完善平台任务监控后端`。
 
 ## Task 2：完成平台任务管理 API 和页面
 
@@ -60,13 +60,13 @@
 - Modify: `server/cmd/moonbook-browser-fixture/main.go`
 - Modify: `server/cmd/moonbook-browser-fixture/main_test.go`
 
-- [ ] **Step 1：增加 HTTP 失败测试。** 固定 JWT、Casbin、非法分页/状态/时间、列表/详情响应、404 和 Long ID 字符串；证明无任何写路由。
-- [ ] **Step 2：完成 Handler。** 复用管理响应和 GVA 私有路由，错误对外脱敏；列表和详情不接受自由排序或业务状态变更。
-- [ ] **Step 3：完善页面。** 使用紧凑筛选栏、状态显示、任务详情和 attempt 表；时间筛选使用 Element Plus 日期时间控件并转 RFC3339，不要求管理员手写时间格式。
-- [ ] **Step 4：前端合同测试。** 证明页面只读、Long ID 无数字转换、错误详情不使用 `v-html`、移动端筛选和表格不产生页面级横向溢出。
-- [ ] **Step 5：真实管理员验收。** 在隔离 Compose 中完成登录、动态菜单、列表筛选、详情、权限拒绝、桌面 `1440x1000` 和移动 `390x844` 浏览器旅程；控制台 0 error/0 warning。
-- [ ] **Step 6：验证。** 运行后端 HTTP 集成、`pnpm run test:moonbook`、定向 ESLint、生产构建和供应链检查。
-- [ ] **Step 7：提交。** 提交信息：`新增平台任务监控页面`。
+- [x] **Step 1：增加 HTTP 失败测试。** 固定 JWT、Casbin、非法分页/状态/时间、列表/详情响应、404 和 Long ID 字符串；证明无任何写路由。
+- [x] **Step 2：完成 Handler。** 复用管理响应和 GVA 私有路由，错误对外脱敏；列表和详情不接受自由排序或业务状态变更。
+- [x] **Step 3：完善页面。** 使用紧凑筛选栏、状态显示、任务详情和 attempt 表；时间筛选使用 Element Plus 日期时间控件并转 RFC3339，不要求管理员手写时间格式。
+- [x] **Step 4：前端合同测试。** 证明页面只读、Long ID 无数字转换、错误详情不使用 `v-html`、移动端筛选和表格不产生页面级横向溢出。
+- [x] **Step 5：真实管理员验收。** 在隔离 Compose 中完成登录、动态菜单、列表筛选、详情、权限拒绝、桌面 `1440x1000` 和移动 `390x844` 浏览器旅程；控制台 0 error/0 warning。
+- [x] **Step 6：验证。** 运行后端 HTTP 集成、`pnpm run test:moonbook`、定向 ESLint、生产构建和供应链检查。
+- [x] **Step 7：提交。** 提交信息：`新增平台任务监控页面`。
 
 ## Task 3：收敛 GVA 管理基座范围和真实验收
 
@@ -79,12 +79,12 @@
 - Create: `web/test/managementFoundation.test.js`
 - Modify: `server/cmd/moonbook-browser-fixture/main.go`
 
-- [ ] **Step 1：冻结能力审计。** 对在线状态、通知公告、通用 OSS 和 SMTP 分别检查旧库表行数、旧 Controller/页面调用、当前配置和业务引用，形成可复核的实现或移除结论。
-- [ ] **Step 2：补管理 HTTP 验收。** 覆盖登录、强制改密、注销、会话撤销、RBAC 越权、角色授权、部门、岗位、字典、参数、登录日志、操作日志、定时任务和数据权限。
-- [ ] **Step 3：补系统配置安全回归。** 真实管理员请求只能读取白名单和 Secret 配置状态，写接口不存在或拒绝；响应与日志不含注入的测试 Secret。
-- [ ] **Step 4：浏览器旅程。** 覆盖动态菜单、页面切换、刷新、keep-alive、平台任务、系统配置、日志和定时任务；夹具创建和清理必须可重复。
-- [ ] **Step 5：更新矩阵。** 所有“基线已盘点”“待确认”和已经过时的缺口改为直接证据或批准移除记录。
-- [ ] **Step 6：提交。** 提交信息：`完成管理基座最终验收`。
+- [x] **Step 1：冻结能力审计。** 对在线状态、通知公告、通用 OSS 和 SMTP 分别检查旧库表行数、旧 Controller/页面调用、当前配置和业务引用，形成可复核的实现或移除结论。
+- [x] **Step 2：补管理 HTTP 验收。** 覆盖登录、强制改密、注销、会话撤销、RBAC 越权、角色授权、部门、岗位、字典、参数、登录日志、操作日志、定时任务和数据权限。
+- [x] **Step 3：补系统配置安全回归。** 真实管理员请求只能读取白名单和 Secret 配置状态，写接口不存在或拒绝；响应与日志不含注入的测试 Secret。
+- [x] **Step 4：浏览器旅程。** 覆盖动态菜单、页面切换、刷新、keep-alive、平台任务、系统配置、日志和定时任务；夹具创建和清理必须可重复。
+- [x] **Step 5：更新矩阵。** 所有“基线已盘点”“待确认”和已经过时的缺口改为直接证据或批准移除记录。
+- [x] **Step 6：提交。** 提交信息：`完成管理基座最终验收`。
 
 ## Task 4：将论坛 Cookie 改为 Secret 引用
 

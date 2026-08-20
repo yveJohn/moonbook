@@ -222,8 +222,9 @@ func TestPlatformJobMonitorMigrationScenarios(t *testing.T) {
 		from      int64
 		wantCount int
 	}{
-		{name: "empty database", from: 0, wantCount: 67},
-		{name: "upgrade from system config hardening", from: 66, wantCount: 1},
+		{name: "empty database", from: 0, wantCount: 68},
+		{name: "upgrade from system config hardening", from: 66, wantCount: 2},
+		{name: "upgrade from platform job monitor", from: 67, wantCount: 1},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
@@ -237,16 +238,30 @@ func TestPlatformJobMonitorMigrationScenarios(t *testing.T) {
 					t.Fatalf("migrate to %d: applied=%d err=%v", scenario.from, len(results), err)
 				}
 			}
-			results, err := provider.UpTo(ctx, 67)
+			results, err := provider.UpTo(ctx, 68)
 			if err != nil || len(results) != scenario.wantCount {
-				t.Fatalf("migrate to 67: applied=%d err=%v", len(results), err)
+				t.Fatalf("migrate to 68: applied=%d err=%v", len(results), err)
 			}
 			verifyPlatformJobMonitorMigration(t, ctx, db)
-			replayed, err := provider.UpTo(ctx, 67)
+			verifyUnusedEmailPluginRemoved(t, ctx, db)
+			replayed, err := provider.UpTo(ctx, 68)
 			if err != nil || len(replayed) != 0 {
 				t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
 			}
 		})
+	}
+}
+
+func verifyUnusedEmailPluginRemoved(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	for _, query := range []string{
+		`SELECT count(*) FROM sys_apis WHERE path IN ('/email/emailTest','/email/sendEmail') AND method='POST'`,
+		`SELECT count(*) FROM casbin_rule WHERE ptype='p' AND v1 IN ('/email/emailTest','/email/sendEmail') AND v2='POST'`,
+	} {
+		var got int
+		if err := db.QueryRowContext(ctx, query).Scan(&got); err != nil || got != 0 {
+			t.Fatalf("query %q count=%d want=0 err=%v", query, got, err)
+		}
 	}
 }
 

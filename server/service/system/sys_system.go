@@ -54,22 +54,15 @@ func publicSystemConfig(c config.Server) map[string]any {
 			"name": c.Redis.Name, "addr": c.Redis.Addr, "db": c.Redis.DB, "useCluster": c.Redis.UseCluster,
 			"clusterAddrs": c.Redis.ClusterAddrs, "password-configured": c.Redis.Password != "",
 		},
-		"email": map[string]any{
-			"to": c.Email.To, "from": c.Email.From, "host": c.Email.Host, "nickname": c.Email.Nickname,
-			"port": c.Email.Port, "is-ssl": c.Email.IsSSL, "is-loginauth": c.Email.IsLoginAuth,
-			"secret-configured": c.Email.Secret != "",
-		},
 		"metrics": map[string]any{"enabled": c.Metrics.Enabled, "token-configured": c.Metrics.Token != ""},
 		"minio": map[string]any{
 			"endpoint": c.Minio.Endpoint, "bucket-name": c.Minio.BucketName, "use-ssl": c.Minio.UseSSL,
 			"base-path": c.Minio.BasePath, "bucket-url": c.Minio.BucketUrl,
 			"access-key-configured": c.Minio.AccessKeyId != "", "secret-configured": c.Minio.AccessKeySecret != "",
 		},
-		"mysql": publicDBConfig(c.Mysql.GeneralDB), "pgsql": publicDBConfig(c.Pgsql.GeneralDB),
-		"mssql": publicDBConfig(c.Mssql.GeneralDB), "oracle": publicDBConfig(c.Oracle.GeneralDB), "sqlite": publicDBConfig(c.Sqlite.GeneralDB),
-		"autocode": map[string]any{"web": c.AutoCode.Web, "root": c.AutoCode.Root, "server": c.AutoCode.Server, "module": c.AutoCode.Module, "ai-path": c.AutoCode.AiPath},
-		"zap":      map[string]any{"level": c.Zap.Level, "format": c.Zap.Format, "encode-level": c.Zap.EncodeLevel, "stacktrace-key": c.Zap.StacktraceKey, "prefix": c.Zap.Prefix, "director": c.Zap.Director, "retention-day": c.Zap.RetentionDay, "show-line": c.Zap.ShowLine, "log-in-console": c.Zap.LogInConsole},
-		"cors":     map[string]any{"mode": c.Cors.Mode, "whitelist": c.Cors.Whitelist},
+		"pgsql": publicDBConfig(c.Pgsql.GeneralDB),
+		"zap":   map[string]any{"level": c.Zap.Level, "format": c.Zap.Format, "encode-level": c.Zap.EncodeLevel, "stacktrace-key": c.Zap.StacktraceKey, "prefix": c.Zap.Prefix, "director": c.Zap.Director, "retention-day": c.Zap.RetentionDay, "show-line": c.Zap.ShowLine, "log-in-console": c.Zap.LogInConsole},
+		"cors":  map[string]any{"mode": c.Cors.Mode, "whitelist": c.Cors.Whitelist},
 	}
 }
 

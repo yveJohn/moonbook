@@ -113,9 +113,23 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00065_content_ai_legacy_source_keys.sql",
 		"00066_disable_system_config_write.sql",
 		"00067_platform_job_monitor_admin.sql",
+		"00068_remove_unused_email_plugin.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestUnusedEmailPluginRemovalMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00068_remove_unused_email_plugin.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{"DELETE FROM casbin_rule", "DELETE FROM sys_apis", "/email/emailTest", "/email/sendEmail", "Moonbook migrations are forward-only"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("unused email plugin removal migration missing %q", required)
+		}
 	}
 }
 
@@ -271,12 +285,24 @@ func TestEmbeddedMigrationsAreForwardOnlyAndContainNoSecrets(t *testing.T) {
 		if forbidden.MatchString(sqlText) {
 			t.Errorf("%s contains destructive SQL", path)
 		}
-		if strings.Contains(strings.ToLower(sqlText), "delete from") && path != "migrations/00066_disable_system_config_write.sql" {
+		approvedCleanup := path == "migrations/00066_disable_system_config_write.sql" || path == "migrations/00068_remove_unused_email_plugin.sql"
+		if strings.Contains(strings.ToLower(sqlText), "delete from") && !approvedCleanup {
 			t.Errorf("%s contains an unapproved delete", path)
 		}
 		if path == "migrations/00066_disable_system_config_write.sql" {
 			lowerSQL := strings.ToLower(sqlText)
 			for _, required := range []string{"where ptype = 'p' and v1 = '/system/setsystemconfig' and v2 = 'post'", "where path = '/system/setsystemconfig' and method = 'post'"} {
+				if !strings.Contains(lowerSQL, required) {
+					t.Errorf("%s missing scoped cleanup %q", path, required)
+				}
+			}
+		}
+		if path == "migrations/00068_remove_unused_email_plugin.sql" {
+			lowerSQL := strings.ToLower(sqlText)
+			for _, required := range []string{
+				"where ptype='p' and v1 in ('/email/emailtest','/email/sendemail') and v2='post'",
+				"where path in ('/email/emailtest','/email/sendemail') and method='post'",
+			} {
 				if !strings.Contains(lowerSQL, required) {
 					t.Errorf("%s missing scoped cleanup %q", path, required)
 				}
