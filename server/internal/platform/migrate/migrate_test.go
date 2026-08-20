@@ -111,6 +111,7 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00063_content_legacy_source_keys.sql",
 		"00064_legacy_txt_import_nullable_book.sql",
 		"00065_content_ai_legacy_source_keys.sql",
+		"00066_disable_system_config_write.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
@@ -230,7 +231,7 @@ func TestCommerceReaderSearchProjectionMigrationBoundary(t *testing.T) {
 }
 
 func TestEmbeddedMigrationsAreForwardOnlyAndContainNoSecrets(t *testing.T) {
-	forbidden := regexp.MustCompile(`(?i)\b(drop\s+database|truncate|delete\s+from)\b`)
+	forbidden := regexp.MustCompile(`(?i)\b(drop\s+database|truncate)\b`)
 	credentialMarkers := regexp.MustCompile(`(?i)(MoonbookBaselineOnly|moonbook_local_|password\s*=)`)
 	err := fs.WalkDir(migrationFS, "migrations", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil || entry.IsDir() {
@@ -243,6 +244,17 @@ func TestEmbeddedMigrationsAreForwardOnlyAndContainNoSecrets(t *testing.T) {
 		sqlText := string(data)
 		if forbidden.MatchString(sqlText) {
 			t.Errorf("%s contains destructive SQL", path)
+		}
+		if strings.Contains(strings.ToLower(sqlText), "delete from") && path != "migrations/00066_disable_system_config_write.sql" {
+			t.Errorf("%s contains an unapproved delete", path)
+		}
+		if path == "migrations/00066_disable_system_config_write.sql" {
+			lowerSQL := strings.ToLower(sqlText)
+			for _, required := range []string{"where ptype = 'p' and v1 = '/system/setsystemconfig' and v2 = 'post'", "where path = '/system/setsystemconfig' and method = 'post'"} {
+				if !strings.Contains(lowerSQL, required) {
+					t.Errorf("%s missing scoped cleanup %q", path, required)
+				}
+			}
 		}
 		if credentialMarkers.MatchString(sqlText) {
 			t.Errorf("%s contains a credential marker", path)

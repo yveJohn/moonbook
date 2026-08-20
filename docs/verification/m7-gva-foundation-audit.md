@@ -45,7 +45,7 @@ Gin-Vue-Admin 固定基线已经完整导入，管理员认证、RBAC、组织�
 - `POST /system/getSystemConfig`
 - `POST /system/setSystemConfig`
 
-`SystemConfigService.GetSystemConfig` 直接返回完整 `global.GVA_CONFIG`。该结构的 JSON 字段包含 JWT signing key、Redis 密码、数据库密码、邮件 Secret、MinIO `access-key-secret` 以及其他对象存储凭据；管理页面也直接把这些字段绑定到可编辑输入框。
+历史基线中的 `SystemConfigService.GetSystemConfig` 直接返回完整 `global.GVA_CONFIG`，曾导致 JSON 回显 JWT signing key、Redis 密码、数据库密码、邮件 Secret、MinIO `access-key-secret` 以及其他对象存储凭据；管理页面也直接把这些字段绑定到可编辑输入框。
 
 Compose 容器启动时由环境变量把模板渲染到 `/run/moonbook/config.yaml`，应用再从该文件读取 Secret。通用配置 API 既能通过响应泄露已注入秘密，也能调用 Viper `WriteConfig` 改写运行配置文件，违反以下已批准边界：
 
@@ -53,7 +53,7 @@ Compose 容器启动时由环境变量把模板渲染到 `/run/moonbook/config.y
 - 管理响应不得回显敏感值；
 - 配置和 Secret 生命周期必须与镜像及业务数据分离。
 
-在生产切换前必须关闭整份配置读取/写入页面及 API，或改造成只暴露明确白名单非敏感项、Secret 仅返回“是否已配置”且不能通过 API 更新的 Moonbook 专用配置入口。仅依赖 Casbin 限制到超级管理员不足以关闭此问题。
+该缺口已在当前实现修复：`GetSystemConfig` 改为逐字段白名单，只返回非敏感运行参数和 `*-configured` 状态；`setSystemConfig` 路由已移除，服务层也拒绝写入，管理页面改为只读并保留重载入口。新增 `TestPublicSystemConfigDoesNotExposeSecrets` 和 `TestSetSystemConfigIsRejected` 覆盖值泄漏与写入拒绝，`00066_disable_system_config_write.sql` 清理历史 API/策略元数据。隔离本地 PostgreSQL 已完成 `current=0 target=66` 的首次迁移，重复执行 `applied=0`、`current=66 target=66 pending=false`，残留 API/策略均为 0。固定验收 commit 上仍需补充真实管理员 HTTP/浏览器旅程，不能仅凭单元测试关闭整个 M7。
 
 ## 确定缺口
 
@@ -87,7 +87,7 @@ Compose 容器启动时由环境变量把模板渲染到 `/run/moonbook/config.y
 
 ## M7 退出门
 
-1. 关闭或白名单化通用系统配置 API，自动化测试证明响应不含任何 Secret 且 API 不能更新 Secret。
+1. `[x]` 关闭或白名单化通用系统配置 API，自动化测试证明响应不含任何 Secret 且 API 不能更新 Secret；当前代码见 `server/service/system/sys_system.go`、`server/router/system/sys_system.go`。
 2. 在固定验收 commit 上执行管理员认证、RBAC、组织、岗位、字典、参数、登录日志、操作日志、定时任务和数据权限的真实 PostgreSQL HTTP/浏览器验收。
 3. 实现平台任务只读监控和 attempt 审计，或提供同等可复现的受控运维入口；业务状态变化仍走各模块服务。
 4. 对在线状态、通知公告、通用 OSS 管理和 SMTP 分别补充实际使用证据及“实现/明确移除”结论。

@@ -12,8 +12,7 @@ func (s *SysRouter) InitSystemRouter(Router *gin.RouterGroup) {
 	sysRouterWithoutRecord := Router.Group("system")
 
 	{
-		sysRouter.POST("setSystemConfig", systemApi.SetSystemConfig) // 设置配置文件内容
-		sysRouter.POST("reloadSystem", systemApi.ReloadSystem)       // 重启服务
+		sysRouter.POST("reloadSystem", systemApi.ReloadSystem) // 重启服务
 	}
 	{
 		sysRouterWithoutRecord.POST("getSystemConfig", systemApi.GetSystemConfig) // 获取配置文件内容

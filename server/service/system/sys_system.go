@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"errors"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/config"
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
@@ -19,8 +20,8 @@ type SystemConfigService struct{}
 
 var SystemConfigServiceApp = new(SystemConfigService)
 
-func (systemConfigService *SystemConfigService) GetSystemConfig(ctx context.Context) (conf config.Server, err error) {
-	return global.GVA_CONFIG, nil
+func (systemConfigService *SystemConfigService) GetSystemConfig(ctx context.Context) (map[string]any, error) {
+	return publicSystemConfig(global.GVA_CONFIG), nil
 }
 
 // @description   set system config,
@@ -31,12 +32,54 @@ func (systemConfigService *SystemConfigService) GetSystemConfig(ctx context.Cont
 //@return: err error
 
 func (systemConfigService *SystemConfigService) SetSystemConfig(ctx context.Context, system system.System) (err error) {
-	cs := utils.StructToMap(system.Config)
-	for k, v := range cs {
-		global.GVA_VP.Set(k, v)
+	return errors.New("系统配置由环境变量管理，禁止通过管理 API 修改")
+}
+
+// publicSystemConfig is deliberately assembled field by field. Reflecting the
+// full Server config would make a future secret field an accidental API leak.
+func publicSystemConfig(c config.Server) map[string]any {
+	return map[string]any{
+		"system": map[string]any{
+			"db-type": c.System.DbType, "oss-type": c.System.OssType, "router-prefix": c.System.RouterPrefix,
+			"addr": c.System.Addr, "iplimit-count": c.System.LimitCountIP, "iplimit-time": c.System.LimitTimeIP,
+			"use-multipoint": c.System.UseMultipoint, "use-redis": c.System.UseRedis, "use-mongo": c.System.UseMongo,
+			"use-strict-auth": c.System.UseStrictAuth, "disable-auto-migrate": c.System.DisableAutoMigrate,
+		},
+		"app": map[string]any{"node": c.App.Node, "app-id": c.App.AppID, "env": c.App.Env},
+		"jwt": map[string]any{
+			"expires-time": c.JWT.ExpiresTime, "buffer-time": c.JWT.BufferTime, "issuer": c.JWT.Issuer,
+			"signing-key-configured": c.JWT.SigningKey != "",
+		},
+		"redis": map[string]any{
+			"name": c.Redis.Name, "addr": c.Redis.Addr, "db": c.Redis.DB, "useCluster": c.Redis.UseCluster,
+			"clusterAddrs": c.Redis.ClusterAddrs, "password-configured": c.Redis.Password != "",
+		},
+		"email": map[string]any{
+			"to": c.Email.To, "from": c.Email.From, "host": c.Email.Host, "nickname": c.Email.Nickname,
+			"port": c.Email.Port, "is-ssl": c.Email.IsSSL, "is-loginauth": c.Email.IsLoginAuth,
+			"secret-configured": c.Email.Secret != "",
+		},
+		"metrics": map[string]any{"enabled": c.Metrics.Enabled, "token-configured": c.Metrics.Token != ""},
+		"minio": map[string]any{
+			"endpoint": c.Minio.Endpoint, "bucket-name": c.Minio.BucketName, "use-ssl": c.Minio.UseSSL,
+			"base-path": c.Minio.BasePath, "bucket-url": c.Minio.BucketUrl,
+			"access-key-configured": c.Minio.AccessKeyId != "", "secret-configured": c.Minio.AccessKeySecret != "",
+		},
+		"mysql": publicDBConfig(c.Mysql.GeneralDB), "pgsql": publicDBConfig(c.Pgsql.GeneralDB),
+		"mssql": publicDBConfig(c.Mssql.GeneralDB), "oracle": publicDBConfig(c.Oracle.GeneralDB), "sqlite": publicDBConfig(c.Sqlite.GeneralDB),
+		"autocode": map[string]any{"web": c.AutoCode.Web, "root": c.AutoCode.Root, "server": c.AutoCode.Server, "module": c.AutoCode.Module, "ai-path": c.AutoCode.AiPath},
+		"zap":      map[string]any{"level": c.Zap.Level, "format": c.Zap.Format, "encode-level": c.Zap.EncodeLevel, "stacktrace-key": c.Zap.StacktraceKey, "prefix": c.Zap.Prefix, "director": c.Zap.Director, "retention-day": c.Zap.RetentionDay, "show-line": c.Zap.ShowLine, "log-in-console": c.Zap.LogInConsole},
+		"cors":     map[string]any{"mode": c.Cors.Mode, "whitelist": c.Cors.Whitelist},
 	}
-	err = global.GVA_VP.WriteConfig()
-	return err
+}
+
+func publicDBConfig(db config.GeneralDB) map[string]any {
+	return map[string]any{
+		"username": db.Username, "path": db.Path, "port": db.Port, "db-name": db.Dbname, "prefix": db.Prefix,
+		"engine": db.Engine, "max-idle-conns": db.MaxIdleConns, "max-open-conns": db.MaxOpenConns,
+		"conn-max-lifetime": db.ConnMaxLifetime, "singular": db.Singular, "log-mode": db.LogMode,
+		"password-configured": db.Password != "",
+	}
 }
 
 //@author: [SliverHorn](https://github.com/SliverHorn)

@@ -89,12 +89,13 @@
 
     <div class="config-content">
       <div class="action-bar">
-        <el-button type="primary" @click="update">立即更新</el-button>
+        <el-tag type="info">配置由环境变量管理，只读查看</el-tag>
         <el-button type="primary" plain @click="reload">重载服务</el-button>
       </div>
       <el-form
         ref="form"
         :model="config"
+        disabled
         label-position="top"
         class="config-form"
       >
@@ -1228,7 +1229,7 @@
 </template>
 
 <script setup>
-  import { getSystemConfig, reloadSystem, setSystemConfig } from '@/api/system'
+  import { getSystemConfig, reloadSystem } from '@/api/system'
   import { ref, watch } from 'vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { Minus, Plus } from '@element-plus/icons-vue'
@@ -1327,17 +1328,6 @@
           message: '取消重启'
         })
       })
-  }
-
-  const update = async () => {
-    const res = await setSystemConfig({ config: config.value })
-    if (res.code === 0) {
-      ElMessage({
-        type: 'success',
-        message: '配置文件设置成功'
-      })
-      await initForm()
-    }
   }
 
   const email = async () => {
