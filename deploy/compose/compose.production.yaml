@@ -1,0 +1,73 @@
+x-production-logging: &production-logging
+  driver: json-file
+  options:
+    max-size: ${MOONBOOK_LOG_MAX_SIZE:-20m}
+    max-file: "${MOONBOOK_LOG_MAX_FILES:-5}"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${POSTGRES_CPU_LIMIT:-2.0}", memory: "${POSTGRES_MEMORY_LIMIT:-4G}", pids: 200 }
+
+  redis:
+    image: ${REDIS_IMAGE:?REDIS_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${REDIS_CPU_LIMIT:-1.0}", memory: "${REDIS_MEMORY_LIMIT:-1G}", pids: 100 }
+
+  minio:
+    image: ${MINIO_IMAGE:?MINIO_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${MINIO_CPU_LIMIT:-2.0}", memory: "${MINIO_MEMORY_LIMIT:-4G}", pids: 200 }
+
+  minio-init:
+    image: ${MINIO_MC_IMAGE:?MINIO_MC_IMAGE must be pinned by digest}
+    logging: *production-logging
+
+  migrate:
+    build: !reset null
+    image: ${MOONBOOK_SERVER_IMAGE:?MOONBOOK_SERVER_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${SERVER_CPU_LIMIT:-2.0}", memory: "${SERVER_MEMORY_LIMIT:-2G}", pids: 200 }
+
+  admin-bootstrap:
+    image: ${MOONBOOK_SERVER_IMAGE:?MOONBOOK_SERVER_IMAGE must be pinned by digest}
+    logging: *production-logging
+
+  server:
+    image: ${MOONBOOK_SERVER_IMAGE:?MOONBOOK_SERVER_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${SERVER_CPU_LIMIT:-2.0}", memory: "${SERVER_MEMORY_LIMIT:-2G}", pids: 300 }
+
+  web:
+    build: !reset null
+    image: ${MOONBOOK_WEB_IMAGE:?MOONBOOK_WEB_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${WEB_CPU_LIMIT:-0.5}", memory: "${WEB_MEMORY_LIMIT:-256M}", pids: 100 }
+
+  reader-ui:
+    build: !reset null
+    image: ${MOONBOOK_READER_IMAGE:?MOONBOOK_READER_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${READER_CPU_LIMIT:-1.0}", memory: "${READER_MEMORY_LIMIT:-1G}", pids: 200 }
+
+  gateway:
+    image: ${NGINX_IMAGE:?NGINX_IMAGE must be pinned by digest}
+    logging: *production-logging
+    deploy:
+      resources:
+        limits: { cpus: "${GATEWAY_CPU_LIMIT:-0.5}", memory: "${GATEWAY_MEMORY_LIMIT:-256M}", pids: 100 }

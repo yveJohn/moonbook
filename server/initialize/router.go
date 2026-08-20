@@ -11,6 +11,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/health"
 	platformmetrics "github.com/flipped-aurora/gin-vue-admin/server/internal/platform/metrics"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/runtimeconfig"
 	"github.com/flipped-aurora/gin-vue-admin/server/middleware"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
@@ -41,6 +42,13 @@ func (fs justFilesFilesystem) Open(name string) (http.File, error) {
 
 func Routers() *gin.Engine {
 	Router := gin.New()
+	trustedProxies, trustedProxiesErr := runtimeconfig.TrustedProxies(os.LookupEnv)
+	if trustedProxiesErr != nil {
+		panic("load trusted proxy config: " + trustedProxiesErr.Error())
+	}
+	if err := Router.SetTrustedProxies(trustedProxies); err != nil {
+		panic("configure trusted proxies: " + err.Error())
+	}
 	// RequestMeta 必须最先：保证 panic 日志与 X-Request-Id 响应头都带 request_id
 	Router.Use(middleware.RequestMeta())
 	callbackAuditConfig, callbackAuditConfigErr := payment.LoadAuditConfig(os.LookupEnv)

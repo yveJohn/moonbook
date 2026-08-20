@@ -3,6 +3,7 @@ package runtimeconfig
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -87,4 +88,29 @@ func DatabaseDSN(lookup Lookup) (string, error) {
 	query.Set("sslmode", "disable")
 	dsn.RawQuery = query.Encode()
 	return dsn.String(), nil
+}
+
+// TrustedProxies returns the explicitly configured proxy IPs and CIDRs. An
+// unset value disables forwarded-header trust for direct local runs.
+func TrustedProxies(lookup Lookup) ([]string, error) {
+	value, ok := lookup("MOONBOOK_TRUSTED_PROXIES")
+	if !ok || strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(value, ",")
+	proxies := make([]string, 0, len(parts))
+	for _, part := range parts {
+		proxy := strings.TrimSpace(part)
+		if proxy == "" {
+			return nil, errors.New("MOONBOOK_TRUSTED_PROXIES contains an empty entry")
+		}
+		if net.ParseIP(proxy) == nil {
+			if _, _, err := net.ParseCIDR(proxy); err != nil {
+				return nil, fmt.Errorf("MOONBOOK_TRUSTED_PROXIES contains invalid IP or CIDR %q", proxy)
+			}
+		}
+		proxies = append(proxies, proxy)
+	}
+	return proxies, nil
 }

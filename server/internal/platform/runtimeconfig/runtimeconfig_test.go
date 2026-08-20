@@ -84,6 +84,37 @@ func TestDatabaseDSNRoundTripsSpecialCharacters(t *testing.T) {
 	}
 }
 
+func TestTrustedProxies(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		value   string
+		present bool
+		want    []string
+		wantErr bool
+	}{
+		{name: "unset"},
+		{name: "blank", value: "  ", present: true},
+		{name: "list", value: "172.16.0.0/12, 127.0.0.1", present: true, want: []string{"172.16.0.0/12", "127.0.0.1"}},
+		{name: "empty entry", value: "172.16.0.0/12,", present: true, wantErr: true},
+		{name: "invalid", value: "not-a-network", present: true, wantErr: true},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			lookup := func(string) (string, bool) { return tt.value, tt.present }
+			got, err := TrustedProxies(lookup)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("TrustedProxies() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Fatalf("TrustedProxies() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func completeValues() map[string]string {
 	values := make(map[string]string, len(templateVariables))
 	for _, name := range templateVariables {
