@@ -24,6 +24,15 @@ go run ./cmd/moonbook-legacy-migrate all
 
 `all` 固定执行 `preflight`、小说分类/作者、书籍/副分类/封面、章节正文、论坛来源/候选/导入任务/抓取日志、TXT 导入任务、Reader SEO、Reader 身份和 Reader Commerce。小说与 TXT 对象阶段需要额外注入 MinIO 端点、凭据和 Bucket；TXT 阶段还要求 `MOONBOOK_LEGACY_TXT_MANIFEST`。所有 DSN、凭据和允许的封面主机只能通过 Secret/环境变量注入。每个 stage 仍由同一个 Runner 使用独立 checkpoint，失败后重新执行会从最近提交的游标继续。该入口只编排当前已实现的 stage，不代表尚未实现的业务表或 8GB 生产副本演练已经完成。
 
+章节清洗历史可单独执行：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-chapter-clean
+```
+
+该命令先确保 AI 配置/模型已迁移，再按任务、结果顺序读取 `novel_chapter_clean_*`；旧库仍使用早期命名时自动兼容 `ai_chapter_clean_*`。运行中的旧任务统一转为 `failed` 并记录中断原因，不会在切换后自动调用 AI。结果正文先写入并校验 MinIO `chapter_clean` 对象（来源指纹为正文 SHA-256），只有对象激活成功才写入结果引用；缺正文、缺书/章节/任务、非法状态及对象失败进入 `migration_errors`。旧 `raw_response` 永不写入目标库。结果使用 `moonbook-v1:<source-table>:<id>` 幂等，历史 active 冲突会先降为 `expired`，不会违反章节活动结果唯一约束。
+
 M2 小说分类与作者迁移：
 
 ```bash
