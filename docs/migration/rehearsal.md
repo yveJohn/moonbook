@@ -39,7 +39,11 @@ go test -count=1 -run '^TestReaderMigrationWithMySQLAndPostgres$' -v ./internal/
 cd server
 MOONBOOK_LEGACY_MYSQL_DSN='受控只读 MySQL DSN' \
 MOONBOOK_DATABASE_DSN='隔离 PostgreSQL DSN' \
+MOONBOOK_MINIO_ENDPOINT='隔离 MinIO 地址' \
+MINIO_ROOT_USER='通过 Secret 注入' \
+MINIO_ROOT_PASSWORD='通过 Secret 注入' \
+MINIO_BUCKET='隔离内容桶' \
 go run ./cmd/moonbook-migration-audit moonbook-v1 > /tmp/moonbook-migration-audit.json
 ```
 
-命令只读访问两端，输出脱敏 JSON，包含固定映射表的源/目标行数、最大 ID、目标来源键数、checkpoint/错误数、MinIO 注册对象按来源和状态的数量/字节数，以及清洗、合并、画像的孤儿关联检查。它不会连接 MinIO 或修改任何数据库；对象内容逐对象 SHA-256 仍需使用对象存储核对脚本补充，报告中不得把缺失副本或失败 stage 计为通过。
+命令只读访问 MySQL、PostgreSQL 和 MinIO，输出脱敏 JSON。它校验 `all` 的全部 stage checkpoint、迁移错误、源/目标行数与最大 ID、legacy 来源键、内容生产关联、钱包/流水/订单/支付/回调/会员/权益，以及业务引用对象的 kind/owner、Stat 字节/哈希和实际流式内容 SHA-256。报告只保留聚合和最多 100 个哈希指纹，不输出 DSN、对象键、业务 ID、正文或 Secret；任一差异退出非零。

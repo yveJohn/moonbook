@@ -79,37 +79,7 @@ func run() int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		stages = append(stages,
-			legacymigrate.NovelCategoryDictionaryStage{},
-			legacymigrate.LegacyBookCategoryStage{},
-			legacymigrate.NovelBookAuthorStage{},
-			legacymigrate.LegacyAuthorTableStage{Table: "book_author"},
-			legacymigrate.LegacyAuthorTableStage{Table: "author"},
-			legacymigrate.NovelBooksStage{},
-			legacymigrate.NovelBookSubCategoriesStage{},
-			legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader},
-			legacymigrate.NovelChaptersStage{Objects: objects},
-			legacymigrate.NovelCrawlSourcesStage{},
-			legacymigrate.NovelCrawlCandidatesStage{},
-			legacymigrate.NovelCrawlImportTasksStage{},
-			legacymigrate.NovelCrawlFetchLogsStage{},
-			txtStage,
-			legacymigrate.NovelAIConfigsStage{},
-			legacymigrate.NovelChapterCleanTasksStage{},
-			legacymigrate.NovelChapterCleanResultsStage{Objects: objects},
-			legacymigrate.NovelChapterSummaryConfigStage{},
-			legacymigrate.NovelChapterSummaryTaskStage{},
-			legacymigrate.NovelBookProfileConfigStage{},
-			legacymigrate.NovelBookProfileSuggestionsStage{},
-			legacymigrate.NovelBookMergeTasksStage{},
-			legacymigrate.NovelBookMergeSourcesStage{},
-			legacymigrate.NovelBookMergeChaptersStage{},
-			legacymigrate.NovelReaderSEOStage{},
-			readerIdentity,
-			legacymigrate.ReaderCommerceStage{},
-			legacymigrate.ReaderFinanceStage{},
-			legacymigrate.ReaderActivityStage{},
-		)
+		stages = append(stages, allMigrationStages(objects, downloader, txtStage, readerIdentity)...)
 	}
 	if command == "novel-crawl-sources" {
 		stages = append(stages, legacymigrate.NovelCrawlSourcesStage{})
@@ -197,6 +167,24 @@ func run() int {
 	}
 	fmt.Printf("migration=moonbook-v1 command=%s status=complete\n", command)
 	return 0
+}
+
+func allMigrationStages(objects *objectstore.Service, downloader *legacymigrate.CoverDownloader, txtStage legacymigrate.NovelTXTImportsStage, readerIdentity legacymigrate.ReaderIdentityStage) []legacymigrate.Stage {
+	return []legacymigrate.Stage{
+		legacymigrate.NovelCategoryDictionaryStage{}, legacymigrate.LegacyBookCategoryStage{},
+		legacymigrate.NovelBookAuthorStage{}, legacymigrate.LegacyAuthorTableStage{Table: "book_author"},
+		legacymigrate.LegacyAuthorTableStage{Table: "author"}, legacymigrate.NovelBooksStage{},
+		legacymigrate.NovelBookSubCategoriesStage{}, legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader},
+		legacymigrate.NovelChaptersStage{Objects: objects}, legacymigrate.NovelCrawlSourcesStage{},
+		legacymigrate.NovelCrawlCandidatesStage{}, legacymigrate.NovelCrawlImportTasksStage{},
+		legacymigrate.NovelCrawlFetchLogsStage{}, txtStage, legacymigrate.NovelAIConfigsStage{},
+		legacymigrate.NovelChapterCleanTasksStage{}, legacymigrate.NovelChapterCleanResultsStage{Objects: objects},
+		legacymigrate.NovelChapterSummaryConfigStage{}, legacymigrate.NovelChapterSummaryTaskStage{},
+		legacymigrate.NovelBookProfileConfigStage{}, legacymigrate.NovelBookProfileSuggestionsStage{},
+		legacymigrate.NovelBookMergeTasksStage{}, legacymigrate.NovelBookMergeSourcesStage{},
+		legacymigrate.NovelBookMergeChaptersStage{}, legacymigrate.NovelReaderSEOStage{}, readerIdentity,
+		legacymigrate.ReaderCommerceStage{}, legacymigrate.ReaderFinanceStage{}, legacymigrate.ReaderActivityStage{},
+	}
 }
 
 func migrationTimeout(raw string) (time.Duration, error) {

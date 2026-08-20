@@ -84,3 +84,6 @@
 - 激活新版本和旧版本转 `orphaned` 在同一 PostgreSQL 事务完成，上传成功但事务未提交的对象保持无引用；
 - 回收只处理超过宽限期且无引用的 `uploading`、`failed`、`orphaned` 或可恢复 `deleting` 对象，删除过程通过事件表审计并支持进程崩溃后幂等收敛；
 - 所有转换错误必须进入错误清单，禁止静默丢弃。
+- `moonbook-migration-audit` 必须覆盖 `moonbook-legacy-migrate all` 实际注册的每个 Stage；新增 Stage 没有审计合同时测试失败。
+- checkpoint 缺失、未完成或含错误，`migration_errors` 非零，源目标行数/最大主键不足，内容关联断裂，财务不变量差异或对象完整性差异均阻止切换。
+- 对象核对从 PostgreSQL 活动引用、章节清洗、书籍合并和 TXT 任务读取，只输出错误分类、聚合数和最多 100 个稳定哈希指纹，禁止输出对象键、Long ID 或正文。

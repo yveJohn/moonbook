@@ -12,7 +12,7 @@
 | M3 读者域与零修改兼容 | 已完成 | 冻结 Reader 树、全部调用面契约、真实 PostgreSQL/Redis/MinIO、SSR 异常、生产构建和 Playwright 关键旅程均通过统一验收；8GB 副本容量演练归属 M6 |
 | M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览、财务表迁移、EPUSDT 本地创建/回调审计、运营页签和 Full 财务核对器已实现并验收；真实最小金额支付仍待补齐 |
 | M5 内容生产与长任务 | 实施中 | 论坛来源安全连接检查和六类内容 Worker 单例重载已完成；论坛、TXT、清洗、摘要和画像 Worker 恢复与结果唯一性已有真实验证；真实第三方论坛/AI 沙箱仍待补齐 |
-| M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader、论坛、TXT、AI 配置、章节清洗、章节摘要、作品画像和书籍合并分批 stage/checkpoint；00065 来源键及 JSON 快照映射已加入，新增 `moonbook-migration-audit` 只读核对命令；清洗/合并对象逐对象校验、约 8 GB 副本演练和差异报告仍待完成 |
+| M6 全量迁移与校验 | 实施中 | 全部 `all` Stage 已由覆盖清单锁定；双库行数/主键、内容关联、全域财务及 MinIO 逐对象字节/SHA-256 核对已统一为非零退出门；约 8 GB 完整副本演练仍待完成 |
 | M7 生产切换就绪验收 | 审计中 | 备份恢复、Compose 升级和空库短时性能基线已有隔离证据；真实数据容量、监控告警、安全、统一 CI 和最终报告仍存在明确缺口 |
 
 ## M0 已完成
@@ -261,3 +261,4 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 完成 M5/M6 内容生产迁移审计：`all` 编排已覆盖论坛、TXT、合并和 AI stage，目标表已具备统一 legacy 来源键；旧清洗正文、TXT 文件和合并对象引用经 MinIO 大小/SHA-256 校验转换。自动发现调度器已补齐，审计发现的论坛 Cookie 明文缺口已由后续 Secret 引用工作包关闭；真实论坛沙箱、逐对象核对和 8GB 副本演练仍待完成。M5/M6 保持实施中，详见 `docs/verification/m5-m6-content-migration-audit.md` 和 `docs/verification/m5-forum-cookie-secret-reference.md`。
 - M5 论坛 Cookie Secret 引用改造已完成：迁移 `00069` 先记录来源 ID 的 SHA-256 指纹与处置状态，再清空历史明文并以 CHECK 拒绝回写；管理端只编辑受控环境变量引用，手动/自动发现和导入 Worker 均在请求前解析环境 Secret。真实 PostgreSQL 覆盖 0→69、68→69、重放、明文清理、哈希审计、行数不减少和约束拒绝；本地 HTTP 替身、日志脱敏、32 个前端合同测试、ESLint 与生产构建通过。真实第三方论坛沙箱仍归后续任务，连接检查见后续验收记录，详见 `docs/verification/m5-forum-cookie-secret-reference.md`。
 - M5 论坛来源连接检查与内容 Worker 重载恢复已完成：`POST /novel/crawl/sources/:id/check` 只允许受控 HTTP/HTTPS、公网 DNS 和标准端口，拨号前再次校验地址，关闭代理，限制同 hostname 三次重定向、10 秒总时限和 64 KiB 响应；结果只含稳定 code、HTTP 状态和耗时。六类内容 Worker 由串行生命周期管理器统一替换，旧集合未退出时拒绝启动新集合。迁移 `00070` 的空库 0→70、69→70、权限/序列和重放、回环 HTTP 分类/脱敏、race、Go vet、33 个前端测试、ESLint、生产构建及供应链检查通过；五类持久化任务继续复用真实 PostgreSQL/MinIO 的租约恢复与结果唯一性证据。真实第三方论坛和 AI 沙箱仍是外部验收项，详见 `docs/verification/m5-content-worker-connection-and-recovery.md`。
+- M6 全域迁移与对象核对已完成代码闭环：`all` 命令实际注册 Stage 与审计合同双向比对，checkpoint 缺失/未完成、migration error、源目标行数/最大主键、内容关联、对象与财务任一差异都会使 `moonbook-migration-audit` 非零退出。对象核对从活动引用、清洗、合并和 TXT 事实流式读取，MinIO Stat/Get 校验元数据和实际正文 SHA-256，仅输出分类聚合和最多 100 个哈希指纹。一次性 MySQL 8.4、PostgreSQL 17 和 MinIO 已注入大 ID 源行缺失、断关联、核对 SQL 缺失、缺对象、错大小、错哈希和财务异常并全部稳定检出；临时库、对象前缀和 MySQL 容器已清理。约 8 GB 完整副本演练仍待 Task 7，详见 `docs/verification/m6-global-migration-object-audit.md`。
