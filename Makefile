@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 #SCRIPT_DIR         = $(shell pwd)/etc/script
 #请选择golang版本
-BUILD_IMAGE_SERVER  = golang:1.24
+BUILD_IMAGE_SERVER  = golang:1.25
 #请选择node版本
 BUILD_IMAGE_WEB     = node:20
 #项目名称
@@ -17,9 +17,39 @@ REPOSITORY          = registry.cn-hangzhou.aliyuncs.com/${IMAGE_NAME}
 TAGS_OPT           ?= latest
 PLUGIN             ?= email
 
-.PHONY: verify verify-m1 verify-m3 scan-secrets test-reader-integration
+.PHONY: verify verify-quality verify-management verify-reader verify-integration \
+	verify-migration verify-e2e verify-compose verify-monitoring verify-security \
+	verify-m1 verify-m3 scan-secrets test-reader-integration
 
-verify: verify-m1
+verify:
+	MOONBOOK_VERIFY_STAGES="$(STAGES)" ./scripts/verify-all.sh
+
+verify-quality:
+	MOONBOOK_VERIFY_STAGES=quality ./scripts/verify-all.sh
+
+verify-management:
+	MOONBOOK_VERIFY_STAGES=management ./scripts/verify-all.sh
+
+verify-reader:
+	MOONBOOK_VERIFY_STAGES=reader ./scripts/verify-all.sh
+
+verify-integration:
+	MOONBOOK_VERIFY_STAGES=integration ./scripts/verify-all.sh
+
+verify-migration:
+	MOONBOOK_VERIFY_STAGES=migration ./scripts/verify-all.sh
+
+verify-e2e:
+	MOONBOOK_VERIFY_STAGES=e2e ./scripts/verify-all.sh
+
+verify-compose:
+	MOONBOOK_VERIFY_STAGES=compose ./scripts/verify-all.sh
+
+verify-monitoring:
+	MOONBOOK_VERIFY_STAGES=monitoring ./scripts/verify-all.sh
+
+verify-security:
+	MOONBOOK_VERIFY_STAGES=security ./scripts/verify-all.sh
 
 verify-m1:
 	./scripts/verify-m1.sh

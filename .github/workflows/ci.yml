@@ -7,8 +7,52 @@ on:
 permissions:
   contents: read
 
+env:
+  VERIFY_OUTPUT: ${{ runner.temp }}/moonbook-verify
+
 jobs:
   quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: make verify-quality
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-quality
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
+
+  management:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+          run_install: false
+      - run: make verify-management
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-management
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
+
+  reader:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -19,47 +63,228 @@ jobs:
           cache-dependency-path: server/go.sum
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.18.0
+          node-version: 22.23.2
           cache: npm
           cache-dependency-path: reader-ui/package-lock.json
-      - uses: pnpm/action-setup@v4
+      - run: make verify-reader
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          version: 10.15.1
-          run_install: false
-      - name: Verify Go formatting and modules
-        working-directory: server
-        run: |
-          test -z "$(gofmt -l internal/modules internal/platform cmd/moonbook-admin cmd/moonbook-config cmd/moonbook-legacy-migrate cmd/moonbook-migrate)"
-          go mod verify
-          go vet ./internal/... ./config ./core/... ./initialize/... ./middleware ./cmd/moonbook-admin ./cmd/moonbook-config ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
-      - name: Test Moonbook foundation
-        working-directory: server
-        run: go test -race ./internal/... ./config ./core/... ./initialize/... ./middleware ./cmd/moonbook-admin ./cmd/moonbook-config ./cmd/moonbook-legacy-migrate ./cmd/moonbook-migrate
-      - name: Install management frontend dependencies
-        working-directory: web
-        run: pnpm install --frozen-lockfile
-      - name: Test management frontend
-        working-directory: web
-        run: pnpm run test:moonbook
-      - name: Lint management frontend
-        working-directory: web
-        run: pnpm run lint
-      - name: Build management frontend
-        working-directory: web
-        run: pnpm run build
-      - name: Check management frontend supply chain
-        working-directory: web
-        run: pnpm run check:supply-chain
-      - name: Test and build frozen reader frontend
-        working-directory: reader-ui
-        run: npm ci && npm test && npm run build
-      - name: Scan repository secrets
-        run: scripts/scan-secrets.sh
+          name: verify-reader
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
 
-  m1-compose:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Start isolated dependencies
+        run: |
+          docker run -d --name moonbook-it-postgres -p 25432:5432 \
+            -e POSTGRES_DB=moonbook -e POSTGRES_USER=moonbook -e POSTGRES_PASSWORD=moonbook_it \
+            postgres:17.6-alpine
+          docker run -d --name moonbook-it-redis -p 26379:6379 redis:7.4.5-alpine
+          docker run -d --name moonbook-it-minio -p 29000:9000 \
+            -e MINIO_ROOT_USER=moonbook -e MINIO_ROOT_PASSWORD=moonbook_it_minio \
+            minio/minio:RELEASE.2025-07-23T15-54-02Z server /data
+          for i in $(seq 1 60); do
+            pg_isready -h 127.0.0.1 -p 25432 -U moonbook && break
+            sleep 1
+          done
+          pg_isready -h 127.0.0.1 -p 25432 -U moonbook
+          for i in $(seq 1 60); do
+            docker exec moonbook-it-redis redis-cli ping | grep -qx PONG && break
+            sleep 1
+          done
+          docker exec moonbook-it-redis redis-cli ping | grep -qx PONG
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:29000/minio/health/ready && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:29000/minio/health/ready
+      - name: Migrate isolated database
+        working-directory: server
+        run: go run ./cmd/moonbook-migrate up
+        env:
+          MOONBOOK_DATABASE_DSN: postgres://moonbook:moonbook_it@127.0.0.1:25432/moonbook?sslmode=disable
+      - run: make verify-integration
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+          MOONBOOK_READER_TEST_DSN: postgres://moonbook:moonbook_it@127.0.0.1:25432/moonbook?sslmode=disable
+          MOONBOOK_READER_TEST_REDIS_ADDR: 127.0.0.1:26379
+          MOONBOOK_READER_TEST_MINIO_ENDPOINT: 127.0.0.1:29000
+          MOONBOOK_READER_TEST_MINIO_ACCESS_KEY: moonbook
+          MOONBOOK_READER_TEST_MINIO_SECRET_KEY: moonbook_it_minio
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-integration
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
+
+  migration:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Verify empty-environment M1 stack
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Start isolated PostgreSQL
+        run: |
+          docker run -d --name moonbook-migration-postgres -p 25433:5432 \
+            -e POSTGRES_DB=postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=moonbook_migration \
+            postgres:17.6-alpine
+          for i in $(seq 1 60); do
+            pg_isready -h 127.0.0.1 -p 25433 -U postgres && break
+            sleep 1
+          done
+          pg_isready -h 127.0.0.1 -p 25433 -U postgres
+      - run: make verify-migration
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+          MOONBOOK_MIGRATION_TEST_ADMIN_DSN: postgres://postgres:moonbook_migration@127.0.0.1:25433/postgres?sslmode=disable
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-migration
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - name: Start isolated application fixture
         run: scripts/verify-m1.sh
+        env:
+          MOONBOOK_VERIFY_PROJECT: moonbook_verify_e2e_ci
+          MOONBOOK_VERIFY_KEEP: "1"
+          MOONBOOK_VERIFY_ADMIN_PORT: "28080"
+          MOONBOOK_VERIFY_READER_PORT: "28081"
+      - name: Permit fixture administrator normal login
+        run: |
+          docker compose -p moonbook_verify_e2e_ci --env-file .env.example exec -T postgres \
+            psql -U moonbook -d moonbook -v ON_ERROR_STOP=1 \
+            -c "update sys_users set must_change_password=false where username='m1verify_admin'; update sys_security_config set captcha_open=999 where id=1"
+          docker compose -p moonbook_verify_e2e_ci --env-file .env.example restart server
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:28080/api/health/ready && break
+            sleep 1
+          done
+          curl -fsS http://localhost:28080/api/health/ready
+      - run: make verify-e2e
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+          MOONBOOK_E2E_BASE_URL: http://localhost:28080
+          MOONBOOK_E2E_ADMIN_USERNAME: m1verify_admin
+          MOONBOOK_E2E_ADMIN_PASSWORD: M1Verify-Local-Only-2026
+          MOONBOOK_E2E_OUTPUT_DIR: ${{ runner.temp }}/playwright
+      - name: Clean isolated application fixture
+        if: always()
+        run: docker compose -p moonbook_verify_e2e_ci --env-file .env.example down --volumes --remove-orphans
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-e2e
+          path: |
+            ${{ env.VERIFY_OUTPUT }}
+            ${{ runner.temp }}/playwright
+          if-no-files-found: warn
+
+  compose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: make verify-compose
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+          MOONBOOK_VERIFY_PROJECT: moonbook_verify_ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-compose
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
+
+  monitoring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare local monitoring contract
+        run: |
+          cp .env.example "${RUNNER_TEMP}/moonbook-monitoring.env"
+          printf '%s\n' \
+            'COMPOSE_PROJECT_NAME=moonbook_verify_monitoring_ci' \
+            'POSTGRES_EXPORTER_PASSWORD=moonbook_monitoring_ci' \
+            "MOONBOOK_METRICS_TOKEN_FILE=${RUNNER_TEMP}/moonbook-metrics-token" \
+            >>"${RUNNER_TEMP}/moonbook-monitoring.env"
+          printf '%s' 'change-me-local-metrics-token' >"${RUNNER_TEMP}/moonbook-metrics-token"
+          chmod 600 "${RUNNER_TEMP}/moonbook-metrics-token"
+      - run: make verify-monitoring
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+          MOONBOOK_ENV_FILE: ${{ runner.temp }}/moonbook-monitoring.env
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-monitoring
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
+
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+          run_install: false
+      - run: make verify-security
+        env:
+          MOONBOOK_VERIFY_OUTPUT_DIR: ${{ env.VERIFY_OUTPUT }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-security
+          path: ${{ env.VERIFY_OUTPUT }}
+          if-no-files-found: warn
+
+  required:
+    if: always()
+    needs: [quality, management, reader, integration, migration, e2e, compose, monitoring, security]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every verification stage
+        run: |
+          test '${{ needs.quality.result }}' = success
+          test '${{ needs.management.result }}' = success
+          test '${{ needs.reader.result }}' = success
+          test '${{ needs.integration.result }}' = success
+          test '${{ needs.migration.result }}' = success
+          test '${{ needs.e2e.result }}' = success
+          test '${{ needs.compose.result }}' = success
+          test '${{ needs.monitoring.result }}' = success
+          test '${{ needs.security.result }}' = success

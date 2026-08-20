@@ -4,6 +4,12 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 reader_business_baseline="26743db"
 reader_router_version="7.18.2"
+mode="${1:---all}"
+
+case "$mode" in
+  --all|--reader-only|--integration-only) ;;
+  *) echo "usage: scripts/verify-m3.sh [--all|--reader-only|--integration-only]" >&2; exit 2 ;;
+esac
 
 for command in git go npm; do
   if ! command -v "$command" >/dev/null 2>&1; then
@@ -13,6 +19,12 @@ for command in git go npm; do
 done
 
 cd "$repo_dir"
+
+if [[ "$mode" == "--integration-only" ]]; then
+  ./scripts/test-reader-integration.sh
+  echo "M3 Reader/Commerce 真实依赖集成验收通过"
+  exit 0
+fi
 
 echo "[1/6] 校验冻结 Reader 业务源码和安全依赖"
 if ! git diff --quiet "$reader_business_baseline" -- reader-ui \
@@ -57,7 +69,11 @@ echo "[2/6] 运行 Reader/Commerce 后端单元与契约测试"
 )
 
 echo "[3/6] 运行真实 PostgreSQL/Redis/MinIO 集成测试"
-./scripts/test-reader-integration.sh
+if [[ "$mode" == "--all" ]]; then
+  ./scripts/test-reader-integration.sh
+else
+  echo "由 integration 阶段独立执行"
+fi
 
 echo "[4/6] 运行冻结 Reader 基线测试"
 (
