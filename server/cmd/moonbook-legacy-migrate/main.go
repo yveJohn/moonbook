@@ -21,8 +21,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-crawl-sources|novel-crawl-candidates|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-crawl-import-tasks" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-crawl-sources|novel-crawl-candidates|novel-crawl-import-tasks|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -85,6 +85,7 @@ func run() int {
 			legacymigrate.NovelChaptersStage{Objects: objects},
 			legacymigrate.NovelCrawlSourcesStage{},
 			legacymigrate.NovelCrawlCandidatesStage{},
+			legacymigrate.NovelCrawlImportTasksStage{},
 			legacymigrate.NovelReaderSEOStage{},
 			readerIdentity,
 			legacymigrate.ReaderCommerceStage{},
@@ -97,6 +98,9 @@ func run() int {
 	}
 	if command == "novel-crawl-candidates" {
 		stages = append(stages, legacymigrate.NovelCrawlSourcesStage{}, legacymigrate.NovelCrawlCandidatesStage{})
+	}
+	if command == "novel-crawl-import-tasks" {
+		stages = append(stages, legacymigrate.NovelCrawlSourcesStage{}, legacymigrate.NovelCrawlCandidatesStage{}, legacymigrate.NovelCrawlImportTasksStage{})
 	}
 	if command == "reader-identity" || command == "reader-commerce" || command == "reader-finance" || command == "reader-activity" {
 		stages = append(stages, readerIdentity)

@@ -4,7 +4,7 @@
 
 ## 结论
 
-M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章节清洗、章节摘要和作品画像。当前已新增内容生产前向迁移 `00063_content_legacy_source_keys.sql`，并将论坛来源/板块、候选帖子 stage 接入独立命令和 `all` 编排；这些 stage 保留旧 ID、按来源键幂等重跑，并且不把 Cookie 明文写入 PostgreSQL。其余内容生产表、对象迁移、双库集成报告和全域核对器仍未完成，因此 M5 和 M6 不能关闭。
+M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章节清洗、章节摘要和作品画像。当前已新增内容生产前向迁移 `00063_content_legacy_source_keys.sql`，并将论坛来源/板块、候选帖子、导入任务 stage 接入独立命令和 `all` 编排；这些 stage 保留旧 ID、按来源键幂等重跑，历史运行中的导入任务会被标记为中断失败且不会自动访问外部论坛，并且不把 Cookie 明文写入 PostgreSQL。其余内容生产表、对象迁移、双库集成报告和全域核对器仍未完成，因此 M5 和 M6 不能关闭。
 
 ## 旧数据范围
 
@@ -27,7 +27,7 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 
 `novel-metadata`、`novel-books`、`novel-chapters`、`novel-reader-seo`、`reader-identity`、`reader-commerce`、`reader-finance`、`reader-activity`。
 
-`all` 已在小说章节之后组合 `novel-crawl-sources` 和 `novel-crawl-candidates`；独立命令可单独重跑 `novel-crawl-sources`，或用 `novel-crawl-candidates` 按依赖顺序重跑两者。候选之外仍不存在 TXT、导入、清洗、合并或 AI stage。
+`all` 已在小说章节之后组合 `novel-crawl-sources`、`novel-crawl-candidates` 和 `novel-crawl-import-tasks`；独立命令可按依赖顺序重跑每个 stage。导入任务之外仍不存在 TXT、清洗、合并或 AI stage。
 
 内容生产迁移必须在已有小说、章节和 Reader stage 之后按外键依赖执行，并至少拆为可独立重跑的阶段。建议依赖顺序由后续设计确定，但必须满足：
 
@@ -41,7 +41,7 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 
 前向迁移 `00063` 已为论坛、TXT、清洗、合并和 AI 相关目标表增加可空 `legacy_source_key` 及局部唯一索引。论坛来源/板块和候选 stage 使用 `moonbook-v1:<table>:<legacy-id>`，可在 checkpoint 丢失或更换 migration name 后按来源键证明幂等，并拒绝覆盖具有不同来源键的运行时记录。其余 stage 接入时必须复用同一约束。
 
-冲突必须进入结构化错误清单，禁止覆盖运行时已存在的不同事实；候选 stage 已对来源/板块缺失、书籍缺失、非法状态和非法文本分别记录错误。
+冲突必须进入结构化错误清单，禁止覆盖运行时已存在的不同事实；候选 stage 已对来源/板块缺失、书籍缺失、非法状态和非法文本分别记录错误，导入任务 stage 已对候选缺失、目标书籍缺失、非法状态和质量状态分别记录错误。
 
 ## 对象迁移缺口
 
