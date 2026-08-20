@@ -66,6 +66,7 @@ func New(db *sql.DB, callbackStaleAfter ...time.Duration) *Metrics {
 			staleAfter = callbackStaleAfter[0]
 		}
 		registry.MustRegister(newPaymentCallbackCollector(db, staleAfter))
+		registry.MustRegister(newOperationalAuditCollector(db))
 	}
 	return &Metrics{
 		registry: registry, requestsTotal: requestsTotal, duration: duration, inFlight: inFlight,

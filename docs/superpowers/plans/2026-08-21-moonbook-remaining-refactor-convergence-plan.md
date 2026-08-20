@@ -194,12 +194,14 @@
 - Create: `docs/runbooks/monitoring.md`
 - Create: `docs/runbooks/incidents/*.md`
 
-- [ ] **Step 1：固定镜像。** Prometheus、Alertmanager、postgres_exporter、redis_exporter、cAdvisor 和 Blackbox Exporter 使用固定 tag/digest；监控 profile 默认不启动。
-- [ ] **Step 2：最小权限采集。** PostgreSQL exporter 使用只读监控账号，Redis 和 MinIO 使用受限采集配置；Prometheus Bearer Token 通过只读 Secret 文件或环境渲染，不写入仓库。
-- [ ] **Step 3：实现规则。** 覆盖 API/Reader、PostgreSQL、Redis、MinIO、支付、任务、迁移、对象和容器资源；每条告警带 severity、runbook 和稳定低基数标签。
-- [ ] **Step 4：Alertmanager。** 提供本地 UI 和通用 Webhook；生产地址由环境变量注入，默认本地 sink 不外发。
-- [ ] **Step 5：自动验证。** 使用 `promtool`/`amtool` 校验配置，通过故障注入证明关键告警进入 firing、通知送达 sink、恢复后 resolved。
-- [ ] **Step 6：提交。** 提交信息：`新增生产监控与告警栈`。
+- [x] **Step 1：固定镜像。** Prometheus、Alertmanager、postgres_exporter、redis_exporter、cAdvisor 和 Blackbox Exporter 使用固定 tag/digest；监控 profile 默认不启动。
+- [x] **Step 2：最小权限采集。** PostgreSQL exporter 使用只读监控账号，Redis 和 MinIO 使用受限采集配置；Prometheus Bearer Token 通过只读 Secret 文件或环境渲染，不写入仓库。
+- [x] **Step 3：实现规则。** 覆盖 API/Reader、PostgreSQL、Redis、MinIO、支付、任务、迁移、对象和容器资源；每条告警带 severity、runbook 和稳定低基数标签。
+- [x] **Step 4：Alertmanager。** 提供本地 UI 和通用 Webhook；生产地址由环境变量注入，默认本地 sink 不外发。
+- [x] **Step 5：自动验证。** 使用 `promtool`/`amtool` 校验配置，通过故障注入证明关键告警进入 firing、通知送达 sink、恢复后 resolved。
+- [x] **Step 6：提交。** 提交信息：`新增生产监控与告警栈`。
+
+验收记录见 `docs/verification/m7-monitoring-alerting.md`。
 
 ## Task 9：关闭可修复漏洞并生成供应链证据
 

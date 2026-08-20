@@ -1,0 +1,198 @@
+groups:
+  - name: moonbook-availability
+    rules:
+      - alert: MoonbookEndpointDown
+        expr: probe_success{job="blackbox"} == 0
+        for: 15s
+        labels:
+          severity: critical
+          service: moonbook
+          runbook: docs/runbooks/incidents/application-unavailable.md
+        annotations:
+          summary: A Moonbook HTTP endpoint is unavailable
+          description: Blackbox checks have failed for more than 15 seconds.
+      - alert: MoonbookAPIErrorRateHigh
+        expr: sum(rate(moonbook_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(moonbook_http_requests_total[5m])), 1) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: server
+          runbook: docs/runbooks/incidents/application-unavailable.md
+        annotations:
+          summary: Moonbook API 5xx rate is above 5 percent
+      - alert: MoonbookAPILatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(moonbook_http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: server
+          runbook: docs/runbooks/incidents/application-unavailable.md
+        annotations:
+          summary: Moonbook API p95 latency is above one second
+      - alert: MoonbookAPIInFlightHigh
+        expr: moonbook_http_requests_in_flight > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: server
+          runbook: docs/runbooks/incidents/application-unavailable.md
+        annotations:
+          summary: Moonbook API has sustained high in-flight requests
+
+  - name: moonbook-dependencies
+    rules:
+      - alert: MoonbookPostgresExporterDown
+        expr: pg_up == 0 or absent(pg_up)
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+          runbook: docs/runbooks/incidents/database-cache.md
+        annotations:
+          summary: PostgreSQL monitoring is unavailable
+      - alert: MoonbookPostgresConnectionsHigh
+        expr: sum(pg_stat_activity_count) / clamp_min(max(pg_settings_max_connections), 1) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: postgres
+          runbook: docs/runbooks/incidents/database-cache.md
+        annotations:
+          summary: PostgreSQL connections exceed 80 percent
+      - alert: MoonbookRedisExporterDown
+        expr: redis_up == 0 or absent(redis_up)
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+          runbook: docs/runbooks/incidents/database-cache.md
+        annotations:
+          summary: Redis monitoring is unavailable
+      - alert: MoonbookRedisMemoryHigh
+        expr: redis_memory_max_bytes > 0 and redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: redis
+          runbook: docs/runbooks/incidents/database-cache.md
+        annotations:
+          summary: Redis memory usage exceeds 80 percent
+      - alert: MoonbookMinIOMetricsMissing
+        expr: absent(minio_cluster_health_status)
+        for: 2m
+        labels:
+          severity: critical
+          service: minio
+          runbook: docs/runbooks/incidents/content-storage.md
+        annotations:
+          summary: MinIO cluster metrics are missing
+      - alert: MoonbookMinIOOfflineDrives
+        expr: minio_cluster_drive_offline_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: minio
+          runbook: docs/runbooks/incidents/content-storage.md
+        annotations:
+          summary: MinIO reports an offline drive
+      - alert: MoonbookContainerMemoryHigh
+        expr: container_memory_working_set_bytes{name!=""} / clamp_min(container_spec_memory_limit_bytes{name!=""}, 1) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: containers
+          runbook: docs/runbooks/incidents/application-unavailable.md
+        annotations:
+          summary: A Moonbook container exceeds 90 percent memory
+
+  - name: moonbook-business
+    rules:
+      - alert: MoonbookPaymentCallbacksStale
+        expr: moonbook_payment_callback_stale_received > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: payment
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Payment callbacks remain unprocessed
+      - alert: MoonbookPaymentCallbackFailures
+        expr: sum(increase(moonbook_payment_callback_attempts_total{result=~"failed|rejected"}[10m])) > 0
+        labels:
+          severity: warning
+          service: payment
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Payment callback failures or rejections occurred
+      - alert: MoonbookPlatformJobsFailed
+        expr: sum(moonbook_platform_jobs{status="failed"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: jobs
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Persistent platform jobs are failed
+      - alert: MoonbookPlatformJobsBacklogged
+        expr: sum(moonbook_platform_jobs{status="pending"}) > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: jobs
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Persistent platform job backlog exceeds 100
+      - alert: MoonbookPlatformJobLeaseExpired
+        expr: moonbook_platform_job_overdue_leases > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: jobs
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: A running platform job lease has expired
+      - alert: MoonbookBusinessMetricsCollectionFailed
+        expr: moonbook_platform_job_metrics_collection_success == 0 or moonbook_payment_callback_metrics_collection_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: server
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Moonbook business metric collection failed
+      - alert: MoonbookMigrationErrorsOpen
+        expr: moonbook_migration_open_errors > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: migration
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Unresolved migration errors remain
+      - alert: MoonbookContentObjectsUnhealthy
+        expr: moonbook_object_unhealthy_records > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: objects
+          runbook: docs/runbooks/incidents/content-storage.md
+        annotations:
+          summary: Failed or stale transitional content objects remain
+      - alert: MoonbookFinanceReconcileMismatch
+        expr: moonbook_finance_reconcile_mismatches > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: finance
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Full financial reconciliation reports mismatches
+      - alert: MoonbookOperationalAuditStale
+        expr: moonbook_operational_audit_collection_success == 0 or time() - moonbook_operational_audit_last_success_timestamp_seconds > 600
+        for: 10m
+        labels:
+          severity: critical
+          service: audit
+          runbook: docs/runbooks/incidents/business-jobs.md
+        annotations:
+          summary: Operational audit has not completed successfully for ten minutes

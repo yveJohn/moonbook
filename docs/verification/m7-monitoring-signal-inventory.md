@@ -1,12 +1,10 @@
 # M7 监控信号与缺口清单
 
-检查日期：2026-08-15
+检查日期：2026-08-21
 
 ## 结论
 
-Moonbook Server 已提供受 Bearer Token 保护的 Prometheus 指标和四项依赖 readiness，但仓库尚无 Prometheus 抓取、Alertmanager、可视化、基础设施 exporter 或告警规则。现状只能支持人工瞬时检查，不能满足 M7 的持续监控、告警和故障处理要求。
-
-用户已确认后续监控栈放入根 `compose.yaml` 的可选 `monitoring` profile，通知采用 Alertmanager UI 加通用 Webhook。该选择不代表监控设计或实现已经批准；Webhook 地址和凭据不得进入 Git。
+根 `compose.yaml` 已实现默认关闭的 `monitoring` profile，包含 Prometheus、Alertmanager、PostgreSQL/Redis exporter、MinIO 原生指标、cAdvisor、Blackbox Exporter 和本地通用 Webhook sink。21 条规则覆盖应用、依赖、容器、支付、任务、迁移、对象和财务；真实隔离栈已证明 8 个 target 全部 `up=1`，Reader 故障 firing 和恢复 resolved 均送达 sink。完整证据见 `docs/verification/m7-monitoring-alerting.md`。
 
 ## 已有信号
 
@@ -25,17 +23,17 @@ Moonbook Server 已提供受 Bearer Token 保护的 Prometheus 指标和四项�
 
 `/metrics` 只在指标配置启用时注册；路由已注册但 Token 为空时 handler 返回 503。Server 在 Compose 中只 `expose` 到内部 backend 网络，但 Gateway 的 `/api/`、`/dev-api/` 和 `/prod-api/` 会转发任意 Server 路径，因此部署设计还需验证外部入口不会成为指标抓取主路径，并保留 Bearer 保护。
 
-## 缺失的持续监控面
+## 已关闭与后续增强
 
 | 目标 | 当前缺口 |
 | --- | --- |
-| PostgreSQL | 无 exporter；无连接使用率、等待、锁、事务、慢查询、数据库/表容量和复制状态指标 |
-| Redis | 无 exporter；无内存、keyspace、命中率、淘汰、阻塞客户端、持久化和连接指标 |
-| MinIO | 未配置 Prometheus 抓取；无请求错误、延迟、容量、对象数、磁盘水位和离线盘指标 |
-| Gateway/Web/Reader SSR | 无 Nginx、静态管理前端可用性、SSR 请求、Node 进程或外部黑盒探测指标 |
-| 容器与主机 | 无 CPU、内存、磁盘、网络、重启次数、OOM 和卷水位的持续指标 |
-| 业务可靠性 | 无支付创建/回调异常、对象缺失/哈希错误、钱包核对差异、迁移中断和备份新鲜度指标 |
-| Worker | 无队列最老年龄、任务耗时、尝试次数、吞吐、最终失败和恢复耗时指标 |
+| PostgreSQL | 已有只读 `pg_monitor` exporter 和连接告警；慢查询基线、复制告警按生产拓扑后续配置 |
+| Redis | 已有认证 exporter、可用性和内存告警；命中率/淘汰趋势可在稳定基线后收紧 |
+| MinIO | 已有内部网络原生指标、缺失指标和离线盘告警；生产容量阈值需结合实际卷配额 |
+| Gateway/Web/Reader SSR | Gateway、Reader、Server readiness 已有 Blackbox；Nginx/Node 内部延迟仍可后续细化 |
+| 容器与主机 | cAdvisor 已覆盖容器资源；宿主磁盘和 Docker 重启事件需部署环境 exporter 补充 |
+| 业务可靠性 | 支付、任务、迁移错误、异常对象和缓存式全域财务核对已有指标与告警；备份新鲜度归 Task 12 |
+| Worker | 当前覆盖状态、失败、积压和过期租约；最老任务年龄与分类型耗时仍是增强项 |
 | 日志关联 | 已有 request/trace/task 标识，但没有日志聚合或从告警跳转到对应日志证据的路径 |
 
 ## 已确认的实现边界
@@ -46,6 +44,6 @@ Moonbook Server 已提供受 Bearer Token 保护的 Prometheus 指标和四项�
 - Prometheus 抓取凭据、Webhook URL/Token 和管理密码只能由环境变量或 Secret 注入；
 - 监控不得直接修改业务数据，也不得把 Redis 当作告警或任务状态的唯一事实源。
 
-## 设计前仍需确定
+## 运行入口
 
-后续专项设计仍需逐段确认组件范围、保留期限、资源限制、抓取身份、指标补充、告警分级和阈值、Webhook 失败策略、可视化范围、Runbook 对应关系以及本地验收方法。在设计获用户批准前，不新增 Compose 服务、exporter、规则或业务指标。
+配置、Secret、告警分级、静默和故障处置见 `docs/runbooks/monitoring.md`。生产通知目标仍必须通过环境变量注入，仓库不保存 URL、Token 或凭据。
