@@ -4,7 +4,7 @@
 
 ## 结论
 
-M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章节清洗、章节摘要和作品画像。当前已新增内容生产 legacy 来源键，并将论坛来源/板块、候选帖子、导入任务、抓取日志、TXT 任务/原文件、AI 配置/模型、清洗/摘要/画像和书籍合并 stage 接入独立命令和 `all` 编排；这些 stage 保留旧 ID、按来源键幂等重跑，历史运行任务不会自动访问外部系统，抓取日志缺失关联会保留为 NULL 并进入错误清单，TXT/清洗文件必须通过大小和 SHA-256 校验，旧 AI Key 只转换为 Secret 引用，并且不把 Cookie、Key、原始响应或完整敏感正文写入 PostgreSQL。双库真实内容集成、第三方 AI 沙箱和全量对象核对仍未完成，因此 M5 和 M6 不能关闭。
+M5 的本地代码与自动化门已闭合：长任务恢复覆盖论坛导入、TXT、清洗、摘要、画像和自动发现，六类 Worker 的重载/失租接管有真实依赖证据；论坛 Cookie 与 AI Key 只迁移为 Secret 引用。M6 的 `all` Stage 覆盖合同、双库行数/主键/关联、Full 财务和 MinIO 逐对象字节/SHA-256 核对均已实现并完成合成故障注入。真实论坛/AI 调用属于外部验收，不是代码缺口。完整副本仍为 No-Go：16 个 TXT 任务原文件及受控清单缺失，因此目标业务迁移尚未运行，M6 不能关闭。
 
 ## 旧数据范围
 
@@ -21,15 +21,15 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 
 更早的 `crawl_source`、`crawl_single_task`、`crawl_batch_task`、`crawl_board`、`crawl_board_thread`、`crawl_forum_source_state` 仍需由 M6 完整副本盘点确定行数和启用状态，再逐表给出迁移目标或“不迁移”理由。不得仅凭当前 Java 模块未引用就静默忽略。
 
-## 当前编排缺口
+## 当前编排证据
 
-`server/cmd/moonbook-legacy-migrate/main.go` 当前接受以下业务命令：
+`server/cmd/moonbook-legacy-migrate/main.go` 接受以下业务命令：
 
-`novel-metadata`、`novel-books`、`novel-chapters`、`novel-chapter-clean`、`novel-reader-seo`、`reader-identity`、`reader-commerce`、`reader-finance`、`reader-activity`。
+`all`、`preflight`、`novel-metadata`、`novel-books`、`novel-chapters`、`novel-chapter-clean`、`novel-chapter-summary`、`novel-book-profile`、`novel-book-merge`、`novel-crawl-sources`、`novel-crawl-candidates`、`novel-crawl-import-tasks`、`novel-crawl-fetch-logs`、`novel-txt-imports`、`novel-ai-configs`、`novel-reader-seo`、`reader-identity`、`reader-commerce`、`reader-finance`、`reader-activity`。
 
-`all` 已在小说章节之后组合 AI 配置、章节清洗任务/结果、章节摘要配置/任务、作品画像配置/建议、书籍合并任务/源书/章节明细、四个论坛 stage 和 `novel-txt-imports`；`novel-chapter-clean`、`novel-chapter-summary`、`novel-book-profile` 与 `novel-book-merge` 可按依赖顺序独立重跑。清洗结果正文经 MinIO 大小/SHA-256 校验并以 `chapter_clean` 对象激活，旧 `raw_response` 不迁移。运行时发现、AI 真实调用沙箱和全域核对器仍是待补齐的内容生产验收项。
+`all` 在小说章节之后组合 AI 配置、章节清洗任务/结果、章节摘要配置/任务、作品画像配置/建议、书籍合并任务/源书/章节明细、四个论坛 Stage 和 `novel-txt-imports`；独立命令可按依赖顺序幂等重跑。清洗结果经 MinIO 大小/SHA-256 校验并以 `chapter_clean` 对象激活，旧 `raw_response` 不迁移。Stage 注册集合与审计覆盖清单双向比较，遗漏或多余 Stage 会使自动测试失败。
 
-内容生产迁移必须在已有小说、章节和 Reader stage 之后按外键依赖执行，并至少拆为可独立重跑的阶段。建议依赖顺序由后续设计确定，但必须满足：
+内容生产迁移已在小说、章节和 Reader Stage 之后按外键依赖执行，并拆为可独立重跑的阶段；实际顺序满足：
 
 1. 来源和板块先于候选、导入任务和抓取日志；
 2. AI 配置和模型先于清洗、摘要和画像配置；
@@ -37,13 +37,13 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 4. 论坛导入任务、章节及清洗结果均可引用后，才能迁移书籍合并血缘；合并血缘不得直接引用旧对象 ID；
 5. 每个阶段具有独立 checkpoint、错误清单、源表计数和目标核对。
 
-## 幂等与 ID 支持缺口
+## 幂等与 ID 支持
 
-前向迁移 `00063` 已为论坛、TXT、清洗、合并和 AI 相关目标表增加可空 `legacy_source_key` 及局部唯一索引。已实现的论坛、TXT 和 AI 配置/模型 stage 使用 `moonbook-v1:<table>:<legacy-id>`，可在 checkpoint 丢失或更换 migration name 后按来源键证明幂等，并拒绝覆盖具有不同来源键的运行时记录。其余 stage 接入时必须复用同一约束。
+前向迁移 `00063`、`00064`、`00065` 已为论坛、TXT、清洗、合并和 AI 相关目标表增加 `legacy_source_key` 及局部唯一索引。全部内容 Stage 使用 `moonbook-v1:<table>:<legacy-id>` 或对应稳定来源键，可在 checkpoint 丢失后按来源键证明幂等，并拒绝覆盖具有不同来源键的运行时记录。
 
 冲突必须进入结构化错误清单，禁止覆盖运行时已存在的不同事实；候选 stage 已对来源/板块缺失、书籍缺失、非法状态和非法文本分别记录错误，导入任务 stage 已对候选缺失、目标书籍缺失、非法状态和质量状态分别记录错误，抓取日志 stage 已对关联缺失、非法阶段/状态、非法计数和非法 JSON 分别记录错误。
 
-## 对象迁移缺口
+## 对象迁移合同
 
 以下旧数据不能直接复制到 PostgreSQL：
 
@@ -54,21 +54,17 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 
 每个对象 stage 必须核对源对象数、成功数、缺失数、总字节数和逐对象哈希；PostgreSQL 事务失败后的已上传对象必须保持无活动引用并进入孤立对象回收流程。
 
-## 第三方秘密缺口
+## 第三方秘密边界
 
-批准设计要求第三方凭据只通过环境变量或 Secret 注入。AI 迁移映射已明确旧 `api_key` 不写入 PostgreSQL，而是生成环境变量引用和待注入清单。
+AI 迁移将旧 `api_key` 转为环境变量引用和待注入清单，不写入 PostgreSQL。迁移 `00069` 已把论坛 Cookie 改为 `MOONBOOK_FORUM_COOKIE_*` Secret 引用；API、页面、Worker 和迁移不再读写明文 `cookie_text`，日志与连接检查响应均脱敏。真实值只由受控环境注入，证据见 `docs/verification/m5-forum-cookie-secret-reference.md`。
 
-论坛 Cookie 当前不满足同一约束：`novel_crawl_forum_source.cookie_text` 在 PostgreSQL 中保存明文，管理页面也允许直接提交 Cookie，Worker 从数据库读取并发送。迁移旧 `cookie_text` 会把第三方会话凭据继续写入目标库。
+## 运行任务能力
 
-在内容迁移前必须完成论坛凭据存储设计：目标表只保存 Secret 引用和配置状态，旧 Cookie 值不进入 PostgreSQL、日志、测试快照或迁移报告。真实值只能由受控环境在部署时注入。
-
-## 运行任务能力缺口
-
-旧 `novel_crawl_runtime_task` 提供 `forumDiscover` 和 `forumImport` 运行开关、状态、计数和停止请求。新平台 Worker 已替代论坛导入的领取、租约、恢复和停止语义，但没有与旧 `forumDiscover` 等价的持续自动发现调度器。
+旧 `novel_crawl_runtime_task` 提供 `forumDiscover` 和 `forumImport` 运行开关、状态、计数和停止请求。新平台 Worker 已替代论坛导入的领取、租约、恢复和停止语义；`candidate.DiscoveryWorker` 提供等价的持续自动发现调度。
 
 `novel_crawl_forum_board.auto_follow_enabled`、`follow_interval_minutes` 和 `follow_import_limit` 已由 `candidate.DiscoveryWorker` 纳入应用生命周期：每轮最多扫描 20 个到期板块，按 PostgreSQL 会话 advisory lock 防止多实例重复发现，成功后才更新 `last_follow_time`，单板抓取失败不会停止整个调度器。该调度器仍只负责候选发现，导入执行继续由 `platform_jobs` 的论坛导入 Worker 负责。
 
-自动发现的真实第三方论坛沙箱、Cookie Secret 引用和限流策略仍未完成，不能据此关闭 M5。
+自动发现的调度、Secret 引用、SSRF 和限流合同已完成；真实第三方论坛凭据与联网验收按 `docs/runbooks/external-validation.md` 单独执行。
 
 旧 runtime 行本身不应按 `running=true` 原样恢复。运行中或待执行任务迁移后必须进入明确的中断/待人工重试状态，避免切换时未经审核访问外部论坛或重复导入。
 
@@ -86,16 +82,16 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 - TXT、清洗和合并对象数量、字节数、SHA-256 及活动引用零差异；
 - 旧 AI Key、论坛 Cookie 和完整敏感正文不出现在 PostgreSQL 非对象列、日志或报告中。
 
-当前可执行的第一层只读核对命令为 `server/cmd/moonbook-migration-audit`。它输出固定内容表映射、主键范围、legacy 来源键、checkpoint/错误数、注册对象汇总及清洗/合并/画像孤儿检查；MinIO 逐对象内容哈希、财务全域核对和完整 8GB 副本演练仍需在隔离环境补充，不能仅凭该命令关闭 M6。
+`server/cmd/moonbook-migration-audit` 输出固定表映射、主键范围、legacy 来源键、checkpoint/错误数、关联和对象汇总，并通过 `ObjectVerifier` 流式执行 MinIO Stat/Get 的实际字节与 SHA-256 核对；`moonbook-finance-reconcile` 覆盖全域财务。故障注入见 `docs/verification/m6-global-migration-object-audit.md`。完整副本因 16 个 TXT 原文件缺失在目标写入前停止，不能把核对器的合成通过冒充完整数据通过。
 
 ## 退出门
 
-M5/M6 的内容生产迁移部分只有在以下证据齐全后才能关闭：
+M5 本地运行能力已完成；M6 内容迁移只有在以下证据全部齐全后才能关闭：
 
-1. 内容生产 stage 纳入独立命令和 `all` 编排；
-2. 前向迁移提供 legacy 来源键、唯一约束和序列推进能力；
-3. 隔离只读 MySQL、真实 PostgreSQL 和 MinIO 集成测试覆盖中断恢复与幂等重跑；
-4. 旧数据库正文和文件全部通过对象大小与哈希校验，缺失项进入错误清单；
-5. 自动发现/自动跟进能力完成或经用户确认从有效范围移除；
-6. 第三方 Secret 不写入数据库和仓库；
-7. 完整约 8 GB 副本演练给出行数、对象、耗时和差异报告。
+1. `[x]` 内容生产 Stage 纳入独立命令和 `all` 编排；
+2. `[x]` 前向迁移提供 legacy 来源键、唯一约束和序列推进能力；
+3. `[x]` 隔离只读 MySQL、真实 PostgreSQL 和 MinIO 集成测试覆盖中断恢复与幂等重跑；
+4. `[x]` 对象核对器对正文和文件执行大小与实际 SHA-256 校验，缺失项阻止切换；
+5. `[x]` 自动发现/自动跟进能力完成；
+6. `[x]` 第三方 Secret 不写入数据库和仓库；
+7. `[ ]` 完整约 8 GB 副本演练给出业务 Stage、行数、对象、财务、耗时和差异报告；当前被 16 个 TXT 原文件清单阻断。

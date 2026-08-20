@@ -10,10 +10,10 @@
 | M1 工程与本地基础设施 | 已完成 | 完整 Compose 应用栈、空库迁移、CI、一键验收、健康/指标/任务/迁移骨架及秘密扫描均有真实运行证据 |
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
 | M3 读者域与零修改兼容 | 已完成 | 冻结 Reader 树、全部调用面契约、真实 PostgreSQL/Redis/MinIO、SSR 异常、生产构建和 Playwright 关键旅程均通过统一验收；8GB 副本容量演练归属 M6 |
-| M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览、财务表迁移、EPUSDT 本地创建/回调审计、运营页签和 Full 财务核对器已实现并验收；真实最小金额支付仍待补齐 |
-| M5 内容生产与长任务 | 实施中 | 论坛来源安全连接检查和六类内容 Worker 单例重载已完成；论坛、TXT、清洗、摘要和画像 Worker 恢复与结果唯一性已有真实验证；真实第三方论坛/AI 沙箱仍待补齐 |
-| M6 全量迁移与校验 | 实施中 | 全部 `all` Stage 已由覆盖清单锁定；双库行数/主键、内容关联、全域财务及 MinIO 逐对象字节/SHA-256 核对已统一为非零退出门；约 8 GB 完整副本演练仍待完成 |
-| M7 生产切换就绪验收 | 审计中 | 备份恢复、Compose 升级和空库短时性能基线已有隔离证据；真实数据容量、监控告警、安全、统一 CI 和最终报告仍存在明确缺口 |
+| M4 交易、支付与运营 | 本地完成，外部待验收 | 支付状态机、回调全尝试审计、运营页签和 Full 财务核对已验收；仅真实 EPUSDT 最小金额支付需授权 |
+| M5 内容生产与长任务 | 本地完成，外部待验收 | 论坛安全连接、Secret 引用、自动发现和六类 Worker 恢复/重载已验收；真实论坛/AI 联网归外部清单 |
+| M6 全量迁移与校验 | 核对器完成，输入阻断 | `all` Stage、双库行数/主键/关联、Full 财务和 MinIO 逐对象核对已形成非零门；16 个 TXT 原文件/清单缺失阻止完整副本业务迁移 |
+| M7 生产切换就绪验收 | 最终固定验收中 | 监控、安全、统一 CI、备份/升级、维护模式、生产 Compose 与切换/回退合同已闭环；Task 13 固定 commit 全门和最终报告待执行 |
 
 ## M0 已完成
 
@@ -26,24 +26,25 @@
 - 旧数据域映射总表：`docs/migration/mapping.md`。
 - 只读 MySQL 容量盘点脚本：`scripts/inventory-legacy-mysql.sh`。
 
-## 当前已知问题
+## 当前已知问题与关闭证据
 
-- GVA BSL 1.1 规定 Production Use 需要商业许可证；生产切换前必须取得并保存授权证据。
-- 冻结 reader-ui 的 npm 依赖存在 9 个 high 漏洞，必须在 M7 前升级或形成批准的缓解记录。
-- 冻结旧仓库已只读定位 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节，结合 gzip ISIZE 模值和用户提供信息推算单成员原始大小约 8,129,574,556 字节。Moonbook PostgreSQL 与 MinIO 数据目录所在 Docker 文件系统当前可用约 934.68 GiB，容量不是当前直接阻断项；文件仍未解压、未校验、未导入且保持未跟踪，完整副本演练仍须先完成内容生产 stage、对象转换和全域核对器，详见 `docs/verification/m6-data-copy-discovery.md`。
+本节前六项为当前结论；其后按时间保留实施证据。历史发现不代表当前仍未完成，发生冲突时以总览、`m7-readiness-audit.md` 和对应报告的“最终复审”结论为准。
+
+- GVA BSL 1.1 Production Use 商业许可证与静态二进制 `NOASSERTION` 许可证处置仍需生产前书面证据；Reader 依赖和三镜像可修复 High/Critical 已清零。
+- 旧库 gzip 已在隔离 MySQL 完整恢复，实际 SQL 为 3,834,607,260 字节、耗时 64 秒；此前依据 ISIZE 推算的 8,129,574,556 字节已被否定。当前容量直接阻断项是 16 个 `novel_txt_import_task` 原文件及受控清单缺失，业务迁移尚未开始，详见 `docs/verification/m6-full-copy-rehearsal.md`。
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
-- M4 已关闭 Reader EPUSDT 创建、失败分类、替换、过期、并发、历史凭据回调和每次 HTTP 回调尝试审计缺口；两个运营审计页签、财务全域核对及受控真实最小金额支付仍未完成。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
-- M5/M6 已接入论坛全链路和基于受控文件清单的 TXT 对象迁移；论坛 Cookie 已由迁移 `00069` 改为受控环境变量 Secret 引用，来源连接检查通过迁移 `00070` 和 SSRF/脱敏合同收敛，六类内容 Worker 的 Start/Stop/重载已串行化。清洗/合并/AI 迁移的全域核对、真实第三方论坛沙箱和全量对象核对仍未完成。详细证据见 `docs/verification/m5-forum-cookie-secret-reference.md`、`docs/verification/m5-content-worker-connection-and-recovery.md` 和 `docs/verification/m5-m6-content-migration-audit.md`。
-- M7 首次审计确认最终报告仍是模板，备份恢复文档包含错误迁移表名、一次性容器 `exec`、未挂载 MinIO 备份目录和可能校验错误 Compose 项目等不可执行步骤；性能、安全、告警、故障处理、升级和统一最终验收均无闭环报告。详细证据见 `docs/verification/m7-readiness-audit.md`。
+- M4 本地代码门已关闭：两个运营审计页签和 Full 财务核对均通过；仅受控真实最小金额支付按外部清单待验收，详见 `docs/verification/m4-exit-audit.md`。
+- M5 本地代码门已关闭；M6 Stage 与全域核对器已闭环。真实第三方论坛/AI 属外部验收，完整副本因 16 个 TXT 原文件清单缺失保持 No-Go，详见 `docs/verification/m5-m6-content-migration-audit.md` 与 `docs/verification/m6-full-copy-rehearsal.md`。
+- M7 原审计中的备份命令、升级、监控、安全、模块边界、统一 CI、维护停写、生产资源/日志/可信代理和切换/回退 Runbook 缺口均已关闭；当前只剩 Task 13 固定提交全门以及完整副本/外部授权，详见 `docs/verification/m7-readiness-audit.md`。
 - M7 GVA 管理基座已完成本地最终验收：系统配置仅返回安全白名单和 Secret 配置状态且不可写，邮件插件/API/策略由 `00068` 精确移除；平台任务只读列表、筛选、详情与 attempt 审计已完成。真实 PostgreSQL/Redis HTTP 覆盖验证码登录、首次改密、JWT 撤销、RBAC、组织岗位、字典参数、日志、定时任务及数据权限；桌面和 `390x844` 浏览器覆盖配置、操作历史、定时任务及平台任务，控制台 0 error/0 warning。旧通知公告、通用 OSS、SMTP 和在线会话 UI 已依据旧库与代码证据明确移出范围，详见 `docs/verification/m7-gva-foundation-final.md`。
-- M7 已完成一次双项目、独立命名卷的本地合成备份恢复演练，修正 MinIO 客户端挂载、稳定 SHA-256 清单、空库恢复顺序、一次性迁移调用和版本表名，并把财务核对命令纳入 Server 镜像；恢复后 106 张表、版本 58/59 条记录、1 个 43 字节对象与源端一致，迁移 `applied=0`、基础设施 healthy、财务 `mismatches=0`，完整 Compose 栈及三项健康入口通过。该证据只关闭命令级可执行性和基础启动冒烟，真实业务数据、协调停写、支付回调和认证业务旅程仍待完成，详见 `docs/verification/m7-backup-restore-rehearsal.md`。
-- M7 已新增固定 commit/tag/digest、配置与 Secret 门禁、升级前备份、一次性迁移、应用替换、冒烟和回退兼容边界明确的 Compose 升级 Runbook，并在 `3058fee` 到 `a8c209d` 两个固定 Server 镜像间完成隔离演练。升级迁移 `applied=0`，版本 58/59 条记录和 `sys_params` 夹具保持不变，目标镜像新增财务核对返回 `mismatches=0`，升级及应用镜像回退后的 gateway/API/Reader 健康均通过。该版本对无迁移差异，只关闭命令级升级和特定兼容回退缺口；真实业务、含迁移版本兼容、TLS/可信代理、资源限制和生产观察阈值仍待完成，详见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
-- M7 管理端供应链专项整改已删除 `vite-vue-path-map@1.0.2`、`vite-auto-import-svg@2.9.8` 和 `vite-check-multiple-dom@0.2.1` 三个确定的恶意/破坏性直接构建依赖，以仓库内路径映射和 SVG sprite 插件替代，并增加覆盖声明、锁文件、源码、安装树和生产产物的 CI 安全门。固定 `8fd98ac` 下 28 个测试、ESLint、生产构建和供应链检查通过；最终容器产物 223 个 JS 文件通过独立扫描，镜像 ID 为 `ec3121be...`。Trivy 仍报告管理端 Alpine 3.21.5 为 30 high/2 critical，Server/Reader 漏洞、管理端其余依赖、SBOM、许可证和 GVA 商业授权仍待处理，生产继续 No-Go，详见 `docs/verification/m7-security-supply-chain-audit.md`。
+- M7 备份恢复演练已验证 dump、MinIO mirror、哈希、隔离恢复、迁移幂等、财务和全栈健康；Task 11 又补齐 503 维护停写与支付重投合同。真实业务恢复仍依赖解除 TXT 完整副本阻断。
+- M7 升级/应用回退、生产 digest/资源/日志合同、TLS/可信代理边界、12 小时停止点和回退事实封存均已完成；真实 TLS/DNS 和生产流量仍需授权。
+- M7 供应链最终复审为三镜像与锁文件可修复 High/Critical 归零，恶意依赖已删除，SBOM/许可证摘要进入统一门；商业授权和 `NOASSERTION` 处置仍属外部 No-Go。
 - M7 已在独立空库 Compose 项目建立公开读取入口的本地短时性能基线：网关 health 为 9859.95 RPS，API readiness 为 3924.92 RPS，Reader 书籍列表为 7984.91 RPS，Reader SSR 为 546.54 RPS，纳入报告的请求全部零失败，负载后依赖 readiness 和容器健康不变。该环境无业务数据、资源限额、鉴权路径、MinIO 正文、支付、Worker、持续压测或约 8 GB 副本，不能外推生产容量或关闭 M7 性能门，详见 `docs/verification/m7-performance-baseline.md`。
-- M7 后端质量基线在固定提交 `c88052f` 验证格式、Go 模块和 vet 通过，本地监听相关测试在允许回环监听后通过；但 `TestModuleDependencyRules` 确定发现 Reader、Commerce 与 Novel 之间 15 处跨域实现引用，扩展审计还确认至少 11 个实现文件直接读写其他模块拥有的数据，当前 CI 后端测试应失败。该缺口必须通过领域契约、组合根和跨域事务设计关闭，禁止跳过或放宽边界测试，详见 `docs/verification/m7-backend-quality-baseline.md`。
+- M7 原后端质量审计发现的 15 处跨模块 import 和 11 处跨域 SQL 已通过合同/Provider、组合根和 Context 事务整改清零；边界测试未放宽并进入统一 quality 门。
 - M7 已把上述违规归并为 9 类跨域工作流，固定 Reader 路由兼容、公开内容投影、账号商业视图、邀请注册奖励、个人内容投影、点赞汇总、Commerce 读者校验、首充奖励及购买报价的所有权和回归不变量；注册奖励、点赞、购买和首充奖励的同库事务语义不得在整改中弱化。该事实清单不批准实现方案，详见 `docs/verification/m7-module-boundary-workflow-inventory.md`。
-- M7 监控信号盘点确认当前只有 Go/process、Server HTTP 和平台任务 Prometheus 指标，四依赖 readiness 与 Compose healthcheck 没有持续采集；PostgreSQL、Redis、MinIO、Gateway/Reader SSR、容器资源和业务可靠性指标均存在缺口，仓库也没有 Prometheus、Alertmanager、可视化或规则。用户已选择根 Compose 可选 `monitoring` profile 与 Alertmanager UI + 通用 Webhook，完整监控设计仍待逐段批准，详见 `docs/verification/m7-monitoring-signal-inventory.md`。
-- M7 CI 覆盖审计确认现有两个 job 只覆盖基础质量与 M1 Compose，根 `make verify` 也只执行 M1；M3 真实依赖、迁移双库、完整浏览器、备份恢复、性能、通用安全扫描及固定制品均未进入统一门。审计时的后端边界失败和管理端三个恶意/破坏性构建依赖均已由 2026-08-16 专项整改关闭，管理端新增 CI 等价入口和构建后供应链门；但登录后管理旅程因缺少隔离测试密码未补验，流水线仍不是完整发布入口，详见 `docs/verification/m7-ci-coverage-audit.md`。
+- M7 监控 profile 已覆盖 8 个 target、21 条规则、最小权限和业务核对指标，Reader 故障注入 firing/resolved 通过，详见 `docs/verification/m7-monitoring-alerting.md`。
+- M7 根 `make verify` 与 CI 已统一九阶段，登录后管理 E2E 和结构化 artifact 均纳入；Task 13 只需在固定提交最终重跑并索引结果。
 - M7 模块边界整改的架构、合同、上下文事务、批量投影、错误和测试设计，以及 Commerce 自有最小 Reader 搜索投影补充方案均已获用户确认；书面规格正式批准，详细实施计划已形成。投影只用于 Commerce 管理搜索与展示，Reader 仍是事实源，鉴权和交易判断必须走实时合同；实施不得弱化冻结 Reader 契约、跨域原子性或现有边界测试，详见 `docs/superpowers/specs/2026-08-15-moonbook-module-boundary-remediation-design.md` 和 `docs/superpowers/plans/2026-08-15-moonbook-module-boundary-remediation-plan.md`。
 - M7 模块边界整改 Task 1 已完成 Context 绑定的 Platform Transactor：支持最外层提交/回滚、嵌套加入、rollback-only、panic 回滚、既有 Runner 事务接入、事务内 Executor 和提交后回调；提交后回调失败可识别为事实已提交，外部事务禁止静默注册回调。脚本化 driver 单元测试、`gofmt`、`go vet` 和项目浏览器隔离 PostgreSQL 上的提交/回滚/四路并发集成测试通过。
 - M7 模块边界整改 Task 2 已建立 Reader、Commerce、Novel 三域窄合同和稳定错误分类，覆盖账号校验/锁定/批量显示、邀请关系、Commerce 搜索投影与 Reader 兼容交易能力、公开内容/SEO/批量展示、商品目标/购买快照和点赞汇总。合同 DTO 不含 Gin/GVA/数据库实现句柄，Long ID 保持 Go `int64`；AST import 白名单、DTO 形状、错误脱敏、定向单元测试和 `go vet` 通过。Provider 将按后续工作流任务逐项实现，当前运行时行为未改变。
@@ -194,7 +195,9 @@ M2 已满足退出条件：小说管理闭环、对象存储完整性、管理�
 
 M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结调用面具备正常、错误、鉴权、空值、分页、Long ID、日期和存储故障契约；旧密码摘要首次登录升级、旧 Token/过期/撤销/封禁语义、真实 SSR 与浏览器关键旅程均有自动化或运行时证据。约 8GB 副本只用于 M6 全量迁移容量、耗时和全业务差异验收，不再阻塞 M3。
 
-## M4 当前进度
+## M4 实施记录（按时间）
+
+当前结论：本地代码、运营页签、支付替身和 Full 财务核对门已完成；以下按提交顺序保留早期“待实现”到后续关闭的过程。唯一剩余项为真实 EPUSDT 最小金额外部验收。
 
 - 前向迁移 `00013_reader_wallet_foundation.sql` 建立 `reader_wallets` 钱包汇总表和 `reader_wallet_ledgers` 不可变流水表；余额、收入/支出累计值均使用 PostgreSQL `bigint`，流水支持业务幂等键和分页查询。
 - 钱包流水通过数据库触发器禁止更新和删除；余额变更设计为锁定钱包行、写入前后余额并在同一事务提交，Redis 不承载余额事实。
@@ -232,15 +235,17 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 完成商品目标与购买事务边界整改：Novel Purchase Provider 统一提供商品目标和事务内购买快照，商品管理与购买运行时代码不再读取 `novel_books` 或 `novel_chapters`。会员、章节和整书购买由 Commerce Service 发起平台事务，依次取得幂等锁、实时 Reader 锁和 Novel 目标锁，再写订单、钱包流水、会员授予或内容权益；重复请求仍返回原订单。真实 PostgreSQL 已覆盖未发布/禁用/缺失目标、免费章节、字数与固定价、报价变化、八路并发幂等、Reader 禁用、Provider 故障及失败无新增事实；完整模块测试、`go vet`、依赖静态门和 Reader 投影一致性复核均通过。
 - 完成首充邀请奖励事务边界整改：Reader Invite Provider 在调用方现有 PostgreSQL 事务中以共享锁读取有效邀请关系，Commerce 奖励写入不再查询 `reader_invite_relations`；模拟充值确认、EPUSDT 回调、主动同步和人工补单均由组合根注入同一 Provider。三入口并发真实库测试证明只生成一条首充奖励事实和一条奖励流水；Reader 合同故障及邀请人钱包溢出均不会留下充值入账、奖励、成功终态或回调成功日志。定向集成测试、完整模块测试、`go vet`、依赖静态门与 Reader 投影一致性复核均通过。
 - 新增模块数据所有权静态门：类型化注册表固定 Reader、Commerce、Novel 表归属，Go AST 扫描业务运行时字符串常量、包级常量和可解析拼接，拒绝跨域 SQL、未登记域表及动态表名；迁移、CLI 与测试 fixture 明确不在业务运行时扫描范围。组合根测试禁止业务模块构造其他领域 Provider，并确认三域 Provider 由 `initialize/router_biz.go` 装配；Commerce Reader 搜索投影只允许出现在同步仓储和三个管理展示仓储。原样依赖规则、SQL 所有权、组合根、投影范围测试及 `go vet ./internal/modules` 全部通过。
-- 完成 EPUSDT 支付创建闭环（迁移 `00060`）：订单以 `creating` 落库后在事务外调用网关，严格校验响应并区分 `create_failed` 与 `gateway_unknown`；同请求 16 路并发只调用一次网关，新活动订单替换旧单，过期 Worker 释放活动槽位。订单保存当前凭据引用和 PID 快照，回调支持当前、历史及 legacy 空引用凭据，五种晚到状态可安全入账，网关交易号与链上哈希跨订单防重放。空库/升级/重跑迁移、真实 PostgreSQL/Redis/MinIO、race、vet、冻结 Reader 536 项与生产构建、Compose/配置/Shell/秘密扫描和隔离 HTTP 替身创建/查询/管理数据源可见性全部通过；真实付款未执行，回调全尝试审计、两个运营页签及财务全域核对仍未完成，M4 保持实施中。
-- 完成 EPUSDT 回调全尝试审计（迁移 `00061`）：每次 HTTP 尝试先独立持久化脱敏记录，再进入验签与资金事务；成功、合法幂等、拒绝、跨订单重放、依赖故障和 panic 均有稳定终态，审计故障返回 `503 fail` 由 EPUSDT 重试且不产生资金事实。隔离替身 2 次调用分别产生 `failed`/`success` 审计且只入账一次；Prometheus 增加结果、失败码、503、持久化失败和滞留指标，Runbook 固定只有 `200 ok/success` 停止重试。`00060 -> 00061`、空库 61 迁移、重跑与财务事实保护，Payment 真实 PostgreSQL、Commerce/Reader 全包、官方 Go 1.24.2 容器 race、完整 `make verify-m3`、管理端 29 项自动门均通过；Playwright 在 `1440x1000` 与 `390x844` 验证“处理中断”“无效”“未校验”、Long ID 字符串、详情白名单和无危险操作，夹具及 2 个 MinIO 对象已清理。真实付款未执行，两个运营页签和财务全域核对仍未完成，M4 保持实施中。
+- 完成 EPUSDT 支付创建闭环（迁移 `00060`）：订单以 `creating` 落库后在事务外调用网关，严格校验响应并区分 `create_failed` 与 `gateway_unknown`；同请求 16 路并发只调用一次网关，新活动订单替换旧单，过期 Worker 释放活动槽位。订单保存当前凭据引用和 PID 快照，回调支持当前、历史及 legacy 空引用凭据，五种晚到状态可安全入账，网关交易号与链上哈希跨订单防重放。空库/升级/重跑迁移、真实 PostgreSQL/Redis/MinIO、race、vet、冻结 Reader 536 项与生产构建、Compose/配置/Shell/秘密扫描和隔离 HTTP 替身创建/查询/管理数据源可见性全部通过；该批次当时尚未实现的回调审计、运营页签和 Full 核对已由后续 `00061`/`00062` 及核对器批次关闭。
+- 完成 EPUSDT 回调全尝试审计（迁移 `00061`）：每次 HTTP 尝试先独立持久化脱敏记录，再进入验签与资金事务；成功、合法幂等、拒绝、跨订单重放、依赖故障和 panic 均有稳定终态，审计故障返回 `503 fail` 由 EPUSDT 重试且不产生资金事实。隔离替身 2 次调用分别产生 `failed`/`success` 审计且只入账一次；Prometheus 增加结果、失败码、503、持久化失败和滞留指标，Runbook 固定只有 `200 ok/success` 停止重试。`00060 -> 00061`、空库 61 迁移、重跑与财务事实保护，Payment 真实 PostgreSQL、Commerce/Reader 全包、官方 Go 1.24.2 容器 race、完整 `make verify-m3`、管理端 29 项自动门均通过；Playwright 在 `1440x1000` 与 `390x844` 验证“处理中断”“无效”“未校验”、Long ID 字符串、详情白名单和无危险操作，夹具及 2 个 MinIO 对象已清理。后续 `00062` 和 Full 核对批次已关闭运营页签与财务本地门，真实付款继续归外部验收。
 
 ## M4 新增运营审计页签
 
 - 新增前向迁移 `00062` 与 Commerce 只读 API：`GET /reader/checkins`、`GET /reader/inviteRewards`。查询通过搜索投影左连接事实表，Long ID 和金额按字符串输出，支持关键词、日期/时间、阶段、状态和稳定分页。
 - 管理端钱包页面新增“签到记录”“邀请奖励”页签，仅提供查询，不提供补签、补发、删除、重算或资金操作。后端模块编译、真实 PostgreSQL 集成测试、前端 ESLint 与生产构建通过；本地隔离 Compose 在 `1440x1000`/`390x844` 完成浏览器验收，移动端无横向溢出，Long ID 保持文本显示。`commerce/reconcile.Full` 与 `moonbook-finance-reconcile` 已覆盖钱包、充值订单、消费订单、回调和会员/权益关联，并通过零差异/断链检测夹具；真实支付环境仍是 M4 未完成项。
 
-## M5 当前进度
+## M5/M6 实施记录（按时间）
+
+当前结论：M5 本地代码门已完成；M6 Stage/对象/财务核对器已完成，但完整副本被 16 个 TXT 原文件清单阻断。以下早期缺口描述仅为实施历史，当前状态以本节末尾的 M6 全域核对记录和对应验证报告为准。
 
 - 新增论坛来源管理 API 和页面（`GET/POST/PUT/DELETE /novel/crawl/sources`），迁移 `00036` 同时建立来源/板块事实表和 GVA 菜单权限；来源 URL、响应编码、请求间隔和排序在服务端校验，Cookie 只返回是否配置，编辑留空不会清除既有 Cookie，真实 PostgreSQL 集成测试覆盖 CRUD、筛选和敏感字段脱敏。
 - 新增论坛板块管理 API 和页面（`GET/POST/PUT/DELETE /novel/crawl/boards`），迁移 `00037` 注册菜单、API 和超级管理员权限；板块来源关联、来源启停约束、同来源名称唯一、URL 域名、分页模板和自动跟进参数在服务端校验，Long ID 全程字符串化。导入任务引用保护将在任务模块落地后补齐。
