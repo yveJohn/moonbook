@@ -2,15 +2,22 @@ package crawlsource
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/url"
 	"strconv"
 	"strings"
 )
 
-type Service struct{ Repo Repository }
+type Service struct {
+	Repo    Repository
+	Secrets SecretResolver
+	Checker SourceChecker
+}
 
-func NewService(repo Repository) *Service { return &Service{Repo: repo} }
+func NewService(repo Repository, secrets SecretResolver, checker SourceChecker) *Service {
+	return &Service{Repo: repo, Secrets: secrets, Checker: checker}
+}
 
 func (s *Service) List(ctx context.Context, keyword, enabled string, page, size int) ([]Source, int64, error) {
 	if page < 1 {
@@ -52,6 +59,33 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return errors.New("invalid source id")
 	}
 	return s.Repo.Delete(ctx, id)
+}
+
+func (s *Service) Check(ctx context.Context, id int64) (CheckResult, error) {
+	if id <= 0 {
+		return CheckResult{}, errors.New("invalid source id")
+	}
+	source, err := s.Repo.Get(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return CheckResult{}, errors.New("source not found")
+	}
+	if err != nil {
+		return CheckResult{}, err
+	}
+	if s.Checker == nil {
+		return CheckResult{}, errors.New("source checker is not configured")
+	}
+	cookie := ""
+	if source.CookieSecretRef != "" {
+		if s.Secrets == nil {
+			return CheckResult{Code: CheckCodeSecretNotConfigured}, nil
+		}
+		cookie, err = s.Secrets.ResolveCookie(source.CookieSecretRef)
+		if err != nil {
+			return CheckResult{Code: CheckCodeSecretNotConfigured}, nil
+		}
+	}
+	return s.Checker.Check(ctx, CheckTarget{BaseURL: source.BaseURL, UserAgent: source.UserAgent, Cookie: cookie}), nil
 }
 
 func valid(in Input) error {

@@ -18,8 +18,12 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	write := private.Group("novel/crawl").Use(middleware.OperationRecord())
 	read.GET("sources", h.list)
 	write.POST("sources", h.create)
+	write.POST("sources/:id/check", h.check)
 	write.PUT("sources/:id", h.update)
 	write.DELETE("sources/:id", h.delete)
+}
+func renderCheck(v CheckResult) map[string]any {
+	return map[string]any{"ok": v.OK, "code": v.Code, "httpStatus": v.HTTPStatus, "elapsedMs": v.ElapsedMs}
 }
 
 func render(v Source) map[string]any {
@@ -87,4 +91,18 @@ func (h *Handler) delete(c *gin.Context) {
 		return
 	}
 	managementresponse.OK(c, nil, "删除成功")
+}
+
+func (h *Handler) check(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串"))
+		return
+	}
+	result, err := h.service.Check(c, id)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	managementresponse.OK(c, renderCheck(result), "检查完成")
 }

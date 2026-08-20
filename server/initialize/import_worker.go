@@ -25,29 +25,108 @@ import (
 	"go.uber.org/zap"
 )
 
-var importWorker struct {
-	sync.Mutex
-	cancel context.CancelFunc
-	done   chan struct{}
+type contentWorker interface {
+	Run(context.Context) error
+}
+
+type namedContentWorker struct {
+	name   string
+	worker contentWorker
+}
+
+type contentWorkerLifecycle struct {
+	mu      sync.Mutex
+	cancel  context.CancelFunc
+	done    chan struct{}
+	timeout time.Duration
+}
+
+var importWorker contentWorkerLifecycle
+
+func (l *contentWorkerLifecycle) replace(build func() ([]namedContentWorker, error)) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.stopLocked() {
+		return errors.New("previous content workers did not stop before timeout")
+	}
+
+	workers, err := build()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	l.cancel, l.done = cancel, done
+	go runContentWorkers(ctx, done, workers)
+	return nil
+}
+
+func (l *contentWorkerLifecycle) stop() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stopLocked()
+}
+
+func (l *contentWorkerLifecycle) stopLocked() bool {
+	cancel, done := l.cancel, l.done
+	if cancel != nil {
+		cancel()
+	}
+	if done == nil {
+		return true
+	}
+	timeout := l.timeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		l.cancel, l.done = nil, nil
+		return true
+	case <-timer.C:
+		zap.L().Warn("等待内容任务停止超时")
+		return false
+	}
+}
+
+func runContentWorkers(ctx context.Context, done chan<- struct{}, workers []namedContentWorker) {
+	defer close(done)
+	var wg sync.WaitGroup
+	wg.Add(len(workers))
+	for _, item := range workers {
+		item := item
+		go func() {
+			defer wg.Done()
+			if err := item.worker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				zap.L().Error("内容任务停止", zap.String("worker", item.name), zap.Error(err))
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func StartImportWorker() error {
-	StopImportWorker()
+	return importWorker.replace(buildContentWorkers)
+}
+
+func buildContentWorkers() ([]namedContentWorker, error) {
 	if global.GVA_DB == nil {
-		return fmt.Errorf("import worker database is not initialized")
+		return nil, fmt.Errorf("import worker database is not initialized")
 	}
 	db, err := global.GVA_DB.DB()
 	if err != nil {
-		return fmt.Errorf("open import worker database: %w", err)
+		return nil, fmt.Errorf("open import worker database: %w", err)
 	}
 	minio := global.GVA_CONFIG.Minio
 	blobs, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: minio.Endpoint, AccessKey: minio.AccessKeyId, SecretKey: minio.AccessKeySecret, Bucket: minio.BucketName, UseSSL: minio.UseSSL})
 	if err != nil {
-		return fmt.Errorf("initialize import worker object store: %w", err)
+		return nil, fmt.Errorf("initialize import worker object store: %w", err)
 	}
 	executor, err := importtask.NewHTTPExecutor(30*time.Second, 4<<20)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	forumSecrets := crawlsource.EnvSecretResolver{Lookup: os.LookupEnv}
 	worker := &importtask.Worker{
@@ -91,69 +170,16 @@ func StartImportWorker() error {
 		PollInterval: time.Minute, Client: &http.Client{Timeout: 30 * time.Second},
 		Secrets: forumSecrets,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	importWorker.Lock()
-	importWorker.cancel, importWorker.done = cancel, done
-	importWorker.Unlock()
-	go func() {
-		defer close(done)
-		var wg sync.WaitGroup
-		wg.Add(6)
-		go func() {
-			defer wg.Done()
-			if err := worker.Run(ctx); err != nil {
-				zap.L().Error("论坛导入任务停止", zap.Error(err))
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			if err := discoveryWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				zap.L().Error("论坛自动发现任务停止", zap.Error(err))
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			if err := cleanWorker.Run(ctx); err != nil {
-				zap.L().Error("章节清洗任务停止", zap.Error(err))
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			if err := summaryWorker.Run(ctx); err != nil {
-				zap.L().Error("章节简介补全任务停止", zap.Error(err))
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			if err := profileWorker.Run(ctx); err != nil {
-				zap.L().Error("作品资料补全任务停止", zap.Error(err))
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			if err := txtWorker.Run(ctx); err != nil {
-				zap.L().Error("TXT导入任务停止", zap.Error(err))
-			}
-		}()
-		wg.Wait()
-	}()
-	return nil
+	return []namedContentWorker{
+		{name: "forum-import", worker: worker},
+		{name: "forum-discovery", worker: discoveryWorker},
+		{name: "chapter-clean", worker: cleanWorker},
+		{name: "chapter-summary", worker: summaryWorker},
+		{name: "book-profile", worker: profileWorker},
+		{name: "txt-import", worker: txtWorker},
+	}, nil
 }
 
 func StopImportWorker() {
-	importWorker.Lock()
-	cancel, done := importWorker.cancel, importWorker.done
-	importWorker.cancel, importWorker.done = nil, nil
-	importWorker.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-	if done != nil {
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			zap.L().Warn("等待小说导入任务停止超时")
-		}
-	}
+	importWorker.stop()
 }

@@ -145,7 +145,7 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	books.RegisterRoutes(privateGroup, db, objects)
 	bookmerge.RegisterRoutes(privateGroup, bookmerge.NewService(db, objects))
 	chapters.RegisterRoutes(privateGroup, db, objects)
-	crawlsource.RegisterRoutes(privateGroup, crawlsource.NewService(crawlsource.SQLRepository{DB: db}))
+	crawlsource.RegisterRoutes(privateGroup, crawlsource.NewService(crawlsource.SQLRepository{DB: db}, crawlsource.EnvSecretResolver{Lookup: os.LookupEnv}, crawlsource.NewDefaultHTTPSourceChecker()))
 	crawlboard.RegisterRoutes(privateGroup, crawlboard.NewService(crawlboard.SQLRepository{DB: db}))
 	candidate.RegisterRoutes(privateGroup, candidate.NewService(candidate.SQLRepository{DB: db}, crawlsource.EnvSecretResolver{Lookup: os.LookupEnv}))
 	importtask.RegisterRoutes(privateGroup, importtask.NewService(importtask.SQLRepository{DB: db}))

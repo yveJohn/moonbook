@@ -129,12 +129,14 @@
 - Modify: `web/src/api/novel/crawlSources.js`
 - Modify: `web/src/view/novel/crawlSources/index.vue`
 
-- [ ] **Step 1：连接检查合同。** 只访问来源配置允许的 HTTP/HTTPS 目标，限制端口、DNS/私网、重定向、响应体和超时；使用 Secret 引用但响应仅返回状态、耗时和稳定错误码。
-- [ ] **Step 2：本地 HTTP 替身。** 覆盖成功、认证失败、重定向越界、超时、过大响应、DNS/连接错误和 Cookie 脱敏。
-- [ ] **Step 3：生命周期故障矩阵。** 同一测试进程执行 Start→任务领取→Stop→租约过期→Start，覆盖论坛发现/导入、TXT、清洗、摘要、画像；证明配置重载最多一个 Worker 集合。
-- [ ] **Step 4：结果唯一性。** 每类任务重启和重复执行后章节、对象、清洗结果、摘要、画像及 attempt 数量符合既有幂等约束。
-- [ ] **Step 5：真实依赖验证。** 使用项目专用 PostgreSQL、Redis、MinIO 和回环 HTTP/OpenAI 替身完成整体恢复场景。
-- [ ] **Step 6：提交。** 提交信息：`完善内容任务连接检查与重启恢复`。
+- [x] **Step 1：连接检查合同。** 只访问来源配置允许的 HTTP/HTTPS 目标，限制端口、DNS/私网、重定向、响应体和超时；使用 Secret 引用但响应仅返回状态、耗时和稳定错误码。
+- [x] **Step 2：本地 HTTP 替身。** 覆盖成功、认证失败、重定向越界、超时、过大响应、DNS/连接错误和 Cookie 脱敏。
+- [x] **Step 3：生命周期故障矩阵。** 同一测试进程执行 Start→任务领取→Stop→租约过期→Start，覆盖论坛发现/导入、TXT、清洗、摘要、画像；证明配置重载最多一个 Worker 集合。
+- [x] **Step 4：结果唯一性。** 每类任务重启和重复执行后章节、对象、清洗结果、摘要、画像及 attempt 数量符合既有幂等约束。
+- [x] **Step 5：真实依赖验证。** 使用项目专用 PostgreSQL、Redis、MinIO 和回环 HTTP/OpenAI 替身完成整体恢复场景。
+- [x] **Step 6：提交。** 提交信息：`完善内容任务连接检查与重启恢复`。
+
+实现复用了论坛导入、TXT、章节清洗、章节摘要和作品画像已有的真实租约恢复/结果唯一性集成测试，并新增组合根并发 Start、Stop→Start、停止超时拒绝替换测试；未复制五套业务夹具到组合根测试文件。验收记录见 `docs/verification/m5-content-worker-connection-and-recovery.md`。
 
 ## Task 6：扩展全域迁移核对器
 

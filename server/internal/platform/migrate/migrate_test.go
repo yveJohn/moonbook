@@ -115,9 +115,28 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00067_platform_job_monitor_admin.sql",
 		"00068_remove_unused_email_plugin.sql",
 		"00069_forum_cookie_secret_reference.sql",
+		"00070_forum_source_connection_check.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestForumSourceConnectionCheckMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00070_forum_source_connection_check.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"(1822,now(),now(),'/novel/crawl/sources/:id/check'",
+		"('p','888','/novel/crawl/sources/:id/check','POST'",
+		"GREATEST((SELECT max(id) FROM sys_apis),1822)",
+		"Moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("forum source connection check migration missing %q", required)
+		}
 	}
 }
 

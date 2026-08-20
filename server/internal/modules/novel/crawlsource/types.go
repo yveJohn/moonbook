@@ -23,6 +23,7 @@ type Input struct {
 
 type Repository interface {
 	List(context.Context, string, string, int, int) ([]Source, int64, error)
+	Get(context.Context, int64) (Source, error)
 	Create(context.Context, Input) (Source, error)
 	Update(context.Context, int64, Input) (Source, error)
 	Delete(context.Context, int64) error

@@ -35,6 +35,11 @@ func (r SQLRepository) List(ctx context.Context, keyword, enabled string, page, 
 	}
 	return items, total, rows.Err()
 }
+func (r SQLRepository) Get(ctx context.Context, id int64) (Source, error) {
+	var v Source
+	err := scan(r.DB.QueryRowContext(ctx, sourceSelect+` WHERE id=$1`, id), &v)
+	return v, err
+}
 func (r SQLRepository) Create(ctx context.Context, in Input) (Source, error) {
 	var v Source
 	err := scan(r.DB.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_source(source_name,base_url,request_charset,cookie_secret_ref,user_agent,request_interval_ms,enabled,sort_order,remark) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,$7,$8,$9) RETURNING `+sourceReturning, in.SourceName, in.BaseURL, in.RequestCharset, in.CookieSecretRef, in.UserAgent, in.RequestIntervalMs, in.Enabled, in.SortOrder, in.Remark), &v)
