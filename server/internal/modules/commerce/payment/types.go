@@ -1,6 +1,9 @@
 package payment
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 type Callback struct {
 	PID, TradeID, OrderNo, Amount, ActualAmount, ReceiveAddress, Token, TransactionID, Signature string
@@ -16,9 +19,36 @@ type VerificationSnapshot struct {
 type Repository interface {
 	VerificationSnapshot(context.Context, string) (VerificationSnapshot, error)
 	Process(context.Context, Callback) error
+	ProcessAttempt(context.Context, int64, Callback) error
 }
 
 type CallbackAuditRepository interface {
 	BeginAttempt(context.Context, AttemptStart) (int64, error)
 	FinalizeAttempt(context.Context, int64, AttemptCompletion) error
+}
+
+type ProcessingError struct {
+	Code FailureCode
+	kind error
+}
+
+func (e *ProcessingError) Error() string {
+	if reason, ok := FailureReason(e.Code); ok {
+		return reason
+	}
+	return "Callback processing failed"
+}
+
+func (e *ProcessingError) Unwrap() error { return e.kind }
+
+func newProcessingError(code FailureCode, kind error) error {
+	return &ProcessingError{Code: code, kind: kind}
+}
+
+func FailureCodeOf(err error) FailureCode {
+	var classified *ProcessingError
+	if errors.As(err, &classified) {
+		return classified.Code
+	}
+	return ""
 }

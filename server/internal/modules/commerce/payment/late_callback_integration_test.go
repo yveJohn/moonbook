@@ -141,16 +141,19 @@ func TestLateCallbackAllowedStatesCreditExactlyOnce(t *testing.T) {
 		t.Run(status, func(t *testing.T) {
 			fixture := newLateCallbackFixture(t, status, int64(index+1))
 			callback := fixture.callback()
-			if err := fixture.repository().Process(fixture.ctx, callback); err != nil {
+			repository := fixture.repository()
+			firstAttempt := beginRuntimeAttempt(t, fixture.ctx, repository, "late-first-"+fmt.Sprint(index))
+			if err := repository.ProcessAttempt(fixture.ctx, firstAttempt, callback); err != nil {
 				t.Fatal(err)
 			}
-			if err := fixture.repository().Process(fixture.ctx, callback); err != nil {
+			secondAttempt := beginRuntimeAttempt(t, fixture.ctx, repository, "late-second-"+fmt.Sprint(index))
+			if err := repository.ProcessAttempt(fixture.ctx, secondAttempt, callback); err != nil {
 				t.Fatal(err)
 			}
 			var gotStatus string
 			var active sql.NullInt64
 			var readerBalance, inviterBalance int64
-			var rechargeLedgers, rewards, rewardLedgers, callbacks int
+			var rechargeLedgers, rewards, rewardLedgers, callbacks, successes, idempotent int
 			if err := fixture.db.QueryRow(`SELECT status,active_reader_id FROM reader_recharge_orders WHERE id=$1`, fixture.orderID).Scan(&gotStatus, &active); err != nil {
 				t.Fatal(err)
 			}
@@ -172,8 +175,11 @@ func TestLateCallbackAllowedStatesCreditExactlyOnce(t *testing.T) {
 			if err := fixture.db.QueryRow(`SELECT count(*) FROM reader_payment_callback_logs WHERE recharge_order_id=$1`, fixture.orderID).Scan(&callbacks); err != nil {
 				t.Fatal(err)
 			}
-			if gotStatus != "paid" || active.Valid || readerBalance != 17 || inviterBalance != 100 || rechargeLedgers != 1 || rewards != 1 || rewardLedgers != 1 || callbacks != 1 {
-				t.Fatalf("status=%s active=%+v balances=%d/%d ledgers=%d rewards=%d/%d callbacks=%d", gotStatus, active, readerBalance, inviterBalance, rechargeLedgers, rewards, rewardLedgers, callbacks)
+			if err := fixture.db.QueryRow(`SELECT count(*) FILTER (WHERE processing_result='success'),count(*) FILTER (WHERE processing_result='idempotent') FROM reader_payment_callback_logs WHERE recharge_order_id=$1`, fixture.orderID).Scan(&successes, &idempotent); err != nil {
+				t.Fatal(err)
+			}
+			if gotStatus != "paid" || active.Valid || readerBalance != 17 || inviterBalance != 100 || rechargeLedgers != 1 || rewards != 1 || rewardLedgers != 1 || callbacks != 2 || successes != 1 || idempotent != 1 {
+				t.Fatalf("status=%s active=%+v balances=%d/%d ledgers=%d rewards=%d/%d callbacks=%d results=%d/%d", gotStatus, active, readerBalance, inviterBalance, rechargeLedgers, rewards, rewardLedgers, callbacks, successes, idempotent)
 			}
 		})
 	}
@@ -183,7 +189,7 @@ func TestLateCallbackRejectsDisallowedStatesWithoutFinancialFacts(t *testing.T) 
 	for index, status := range []string{"creating", "create_failed"} {
 		t.Run(status, func(t *testing.T) {
 			fixture := newLateCallbackFixture(t, status, int64(index+20))
-			if err := fixture.repository().Process(fixture.ctx, fixture.callback()); !errors.Is(err, ErrRejected) {
+			if err := fixture.repository().Process(fixture.ctx, fixture.callback()); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureSnapshotMismatch {
 				t.Fatalf("err=%v", err)
 			}
 			var ledgers, rewards, callbacks int
@@ -213,27 +219,42 @@ func TestLateCallbackRejectsGatewayTradeAndTransactionReplay(t *testing.T) {
 
 	tradeReplay := second.callback()
 	tradeReplay.TradeID = first.tradeID
-	if err := second.repository().Process(second.ctx, tradeReplay); !errors.Is(err, ErrRejected) {
+	if err := second.repository().Process(second.ctx, tradeReplay); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureReplay {
 		t.Fatalf("trade replay err=%v", err)
 	}
 	transactionReplay := third.callback()
 	transactionReplay.TransactionID = first.txID
-	if err := third.repository().Process(third.ctx, transactionReplay); !errors.Is(err, ErrRejected) {
+	if err := third.repository().Process(third.ctx, transactionReplay); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureReplay {
 		t.Fatalf("transaction replay err=%v", err)
 	}
 	differentPaidTrade := first.callback()
 	differentPaidTrade.TradeID = "different-trade"
-	if err := first.repository().Process(first.ctx, differentPaidTrade); !errors.Is(err, ErrRejected) {
+	if err := first.repository().Process(first.ctx, differentPaidTrade); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureSnapshotMismatch {
 		t.Fatalf("paid trade mismatch err=%v", err)
 	}
 	differentPaidTransaction := first.callback()
 	differentPaidTransaction.TransactionID = "different-transaction"
-	if err := first.repository().Process(first.ctx, differentPaidTransaction); !errors.Is(err, ErrRejected) {
+	if err := first.repository().Process(first.ctx, differentPaidTransaction); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureSnapshotMismatch {
 		t.Fatalf("paid transaction mismatch err=%v", err)
 	}
 	differentPaidAmount := first.callback()
 	differentPaidAmount.Amount = "3.00"
-	if err := first.repository().Process(first.ctx, differentPaidAmount); !errors.Is(err, ErrRejected) {
+	if err := first.repository().Process(first.ctx, differentPaidAmount); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureSnapshotMismatch {
 		t.Fatalf("paid amount mismatch err=%v", err)
+	}
+	differentActualAmount := first.callback()
+	differentActualAmount.ActualAmount = "1.99"
+	if err := first.repository().Process(first.ctx, differentActualAmount); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureSnapshotMismatch {
+		t.Fatalf("paid actual amount mismatch err=%v", err)
+	}
+	differentAddress := first.callback()
+	differentAddress.ReceiveAddress = "different-address"
+	if err := first.repository().Process(first.ctx, differentAddress); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureSnapshotMismatch {
+		t.Fatalf("paid address mismatch err=%v", err)
+	}
+	differentToken := first.callback()
+	differentToken.Token = "btc"
+	if err := first.repository().Process(first.ctx, differentToken); !errors.Is(err, ErrRejected) || FailureCodeOf(err) != FailureSnapshotMismatch {
+		t.Fatalf("paid token mismatch err=%v", err)
 	}
 }

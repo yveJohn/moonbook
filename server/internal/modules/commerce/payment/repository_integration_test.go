@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +21,12 @@ type failingInviteReader struct{ err error }
 
 func (reader failingInviteReader) ActiveInviteRelation(context.Context, int64) (readercontract.InviteRelation, error) {
 	return readercontract.InviteRelation{}, reader.err
+}
+
+type failingAccountLocker struct{}
+
+func (failingAccountLocker) LockAccount(context.Context, int64) (readercontract.Account, error) {
+	return readercontract.Account{}, readercontract.ErrUnavailable
 }
 
 func TestCallbackCreditsRechargeExactlyOnce(t *testing.T) {
@@ -54,21 +62,52 @@ func TestCallbackCreditsRechargeExactlyOnce(t *testing.T) {
 	fields["signature"] = Sign(fields, "secret")
 	callback := Callback{PID: fields["pid"], TradeID: fields["trade_id"], OrderNo: orderNo, Amount: fields["amount"], ActualAmount: fields["actual_amount"], ReceiveAddress: fields["receive_address"], Token: fields["token"], TransactionID: fields["block_transaction_id"], Status: 2, Fields: fields}
 	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}
-	if err := r.Process(ctx, callback); err != nil {
-		t.Fatal(err)
+	firstAttempt := beginRuntimeAttempt(t, ctx, r, "first")
+	secondAttempt := beginRuntimeAttempt(t, ctx, r, "second")
+	var wait sync.WaitGroup
+	errorsByAttempt := make([]error, 2)
+	for index, attemptID := range []int64{firstAttempt, secondAttempt} {
+		wait.Add(1)
+		go func(index int, attemptID int64) {
+			defer wait.Done()
+			errorsByAttempt[index] = r.ProcessAttempt(ctx, attemptID, callback)
+		}(index, attemptID)
 	}
-	if err := r.Process(ctx, callback); err != nil {
-		t.Fatal(err)
+	wait.Wait()
+	for index, err := range errorsByAttempt {
+		if err != nil {
+			t.Fatalf("attempt %d: %v", index, err)
+		}
 	}
-	var balance, ledgers int64
+	var balance, ledgers, callbacks int64
 	if err := db.QueryRowContext(ctx, `SELECT recharge_coin_balance FROM reader_wallets WHERE reader_id=$1`, readerID).Scan(&balance); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_wallet_ledgers WHERE reader_id=$1`, readerID).Scan(&ledgers); err != nil {
 		t.Fatal(err)
 	}
-	if balance != 17 || ledgers != 1 {
-		t.Fatalf("balance=%d ledgers=%d", balance, ledgers)
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE id IN ($1,$2)`, firstAttempt, secondAttempt).Scan(&callbacks); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.QueryContext(ctx, `SELECT processing_result FROM reader_payment_callback_logs WHERE id IN ($1,$2)`, firstAttempt, secondAttempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := make([]string, 0, 2)
+	for rows.Next() {
+		var result string
+		if err := rows.Scan(&result); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		results = append(results, result)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(results)
+	if balance != 17 || ledgers != 1 || callbacks != 2 || len(results) != 2 || results[0] != "idempotent" || results[1] != "success" {
+		t.Fatalf("balance=%d ledgers=%d callbacks=%d results=%v", balance, ledgers, callbacks, results)
 	}
 }
 
@@ -110,14 +149,18 @@ func TestCallbackRollsBackWhenInviteDependencyOrRewardWalletFails(t *testing.T) 
 		_, _ = db.ExecContext(q, `DELETE FROM reader_accounts WHERE id IN ($1,$2)`, inviterID, inviteeID)
 	})
 	callback := Callback{TradeID: "rollback-trade", OrderNo: orderNo, Amount: "2.00", ActualAmount: "2.00", ReceiveAddress: "T-rollback", Token: "usdt", TransactionID: "rollback-tx", Status: 2, Fields: map[string]string{"order_id": orderNo}}
-	if err := (SQLRepository{DB: db, Invites: failingInviteReader{err: readercontract.ErrUnavailable}, Accounts: readerprovider.NewAccount(db)}).Process(ctx, callback); !errors.Is(err, readercontract.ErrUnavailable) {
+	failedDependencyRepository := SQLRepository{DB: db, Invites: failingInviteReader{err: readercontract.ErrUnavailable}, Accounts: readerprovider.NewAccount(db)}
+	dependencyAttempt := beginRuntimeAttempt(t, ctx, failedDependencyRepository, "dependency")
+	if err := failedDependencyRepository.ProcessAttempt(ctx, dependencyAttempt, callback); !errors.Is(err, readercontract.ErrUnavailable) || FailureCodeOf(err) != FailureDependency {
 		t.Fatalf("invite dependency err=%v", err)
 	}
-	if err := (SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}).Process(ctx, callback); err == nil {
-		t.Fatal("expected inviter wallet overflow")
+	failedTransactionRepository := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}
+	transactionAttempt := beginRuntimeAttempt(t, ctx, failedTransactionRepository, "transaction")
+	if err := failedTransactionRepository.ProcessAttempt(ctx, transactionAttempt, callback); err == nil || FailureCodeOf(err) != FailureTransaction {
+		t.Fatalf("expected classified inviter wallet overflow: %v", err)
 	}
 	var status string
-	var inviteeWallets, inviteeLedgers, rewards, callbacks int
+	var inviteeWallets, inviteeLedgers, rewards, callbacks, received int
 	if err := db.QueryRowContext(ctx, `SELECT status FROM reader_recharge_orders WHERE id=$1`, orderID).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
@@ -130,11 +173,109 @@ func TestCallbackRollsBackWhenInviteDependencyOrRewardWalletFails(t *testing.T) 
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_invite_reward_records WHERE invitee_reader_id=$1`, inviteeID).Scan(&rewards); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE recharge_order_id=$1`, orderID).Scan(&callbacks); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE id IN ($1,$2)`, dependencyAttempt, transactionAttempt).Scan(&callbacks); err != nil {
 		t.Fatal(err)
 	}
-	if status != "pending" || inviteeWallets != 0 || inviteeLedgers != 0 || rewards != 0 || callbacks != 0 {
-		t.Fatalf("status=%s wallets=%d ledgers=%d rewards=%d callbacks=%d", status, inviteeWallets, inviteeLedgers, rewards, callbacks)
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE id IN ($1,$2) AND processing_result='received'`, dependencyAttempt, transactionAttempt).Scan(&received); err != nil {
+		t.Fatal(err)
+	}
+	if status != "pending" || inviteeWallets != 0 || inviteeLedgers != 0 || rewards != 0 || callbacks != 2 || received != 2 {
+		t.Fatalf("status=%s wallets=%d ledgers=%d rewards=%d callbacks=%d received=%d", status, inviteeWallets, inviteeLedgers, rewards, callbacks, received)
+	}
+}
+
+func beginRuntimeAttempt(t *testing.T, ctx context.Context, repository SQLRepository, suffix string) int64 {
+	t.Helper()
+	prefix := integrationtest.Prefix()
+	start, err := NewAttemptStart([]byte(`{"order_id":"runtime-test"}`), false, "request-"+suffix+"-"+prefix, "trace-"+suffix+"-"+prefix, "203.0.113.20", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	attemptID, err := repository.BeginAttempt(ctx, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = repository.DB.ExecContext(context.Background(), `DELETE FROM reader_payment_callback_logs WHERE id=$1`, attemptID)
+	})
+	return attemptID
+}
+
+func TestCallbackTransactionFailureMatrixLeavesNoFinancialFacts(t *testing.T) {
+	tests := []struct {
+		name        string
+		prepare     func(*testing.T, lateCallbackFixture, *Callback, int64)
+		accounts    func(lateCallbackFixture) readercontract.AccountLocker
+		wantCode    FailureCode
+		wantAttempt string
+	}{
+		{
+			name:     "account lock dependency",
+			accounts: func(lateCallbackFixture) readercontract.AccountLocker { return failingAccountLocker{} },
+			wantCode: FailureDependency, wantAttempt: "received",
+		},
+		{
+			name: "wallet update",
+			prepare: func(t *testing.T, fixture lateCallbackFixture, _ *Callback, _ int64) {
+				if _, err := fixture.db.ExecContext(fixture.ctx, `INSERT INTO reader_wallets(reader_id,recharge_coin_balance,total_recharge_coin_income) VALUES($1,9223372036854775800,9223372036854775800)`, fixture.readerID); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantCode: FailureTransaction, wantAttempt: "received",
+		},
+		{
+			name: "order update",
+			prepare: func(_ *testing.T, _ lateCallbackFixture, callback *Callback, _ int64) {
+				callback.TransactionID = strings.Repeat("x", 129)
+			},
+			wantCode: FailureTransaction, wantAttempt: "received",
+		},
+		{
+			name: "audit terminal update",
+			prepare: func(t *testing.T, fixture lateCallbackFixture, callback *Callback, attemptID int64) {
+				snapshot := SnapshotFromCallback(*callback)
+				completion := AttemptCompletion{Result: ResultRejected, FailureCode: FailureSignatureInvalid, ResponseStatus: 401, Snapshot: &snapshot}
+				if err := fixture.repository().FinalizeAttempt(fixture.ctx, attemptID, completion); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantCode: FailureTransaction, wantAttempt: "rejected",
+		},
+	}
+	for index, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newLateCallbackFixture(t, "pending", int64(200+index))
+			repository := fixture.repository()
+			if test.accounts != nil {
+				repository.Accounts = test.accounts(fixture)
+			}
+			attemptID := beginRuntimeAttempt(t, fixture.ctx, repository, "matrix-"+fmt.Sprint(index))
+			callback := fixture.callback()
+			if test.prepare != nil {
+				test.prepare(t, fixture, &callback, attemptID)
+			}
+			err := repository.ProcessAttempt(fixture.ctx, attemptID, callback)
+			if FailureCodeOf(err) != test.wantCode {
+				t.Fatalf("code=%s err=%v", FailureCodeOf(err), err)
+			}
+			var status, attemptResult string
+			var ledgers, rewards int
+			if err := fixture.db.QueryRowContext(fixture.ctx, `SELECT status FROM reader_recharge_orders WHERE id=$1`, fixture.orderID).Scan(&status); err != nil {
+				t.Fatal(err)
+			}
+			if err := fixture.db.QueryRowContext(fixture.ctx, `SELECT processing_result FROM reader_payment_callback_logs WHERE id=$1`, attemptID).Scan(&attemptResult); err != nil {
+				t.Fatal(err)
+			}
+			if err := fixture.db.QueryRowContext(fixture.ctx, `SELECT count(*) FROM reader_wallet_ledgers WHERE reader_id IN ($1,$2)`, fixture.readerID, fixture.inviterID).Scan(&ledgers); err != nil {
+				t.Fatal(err)
+			}
+			if err := fixture.db.QueryRowContext(fixture.ctx, `SELECT count(*) FROM reader_invite_reward_records WHERE invitee_reader_id=$1`, fixture.readerID).Scan(&rewards); err != nil {
+				t.Fatal(err)
+			}
+			if status != "pending" || attemptResult != test.wantAttempt || ledgers != 0 || rewards != 0 {
+				t.Fatalf("status=%s attempt=%s ledgers=%d rewards=%d", status, attemptResult, ledgers, rewards)
+			}
+		})
 	}
 }
 

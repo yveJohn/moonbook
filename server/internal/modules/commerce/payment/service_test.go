@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -12,6 +13,7 @@ type verificationRepositoryStub struct {
 	snapshot  VerificationSnapshot
 	err       error
 	processed int
+	attemptID int64
 }
 
 func (stub *verificationRepositoryStub) VerificationSnapshot(context.Context, string) (VerificationSnapshot, error) {
@@ -21,6 +23,12 @@ func (stub *verificationRepositoryStub) VerificationSnapshot(context.Context, st
 func (stub *verificationRepositoryStub) Process(context.Context, Callback) error {
 	stub.processed++
 	return nil
+}
+
+func (stub *verificationRepositoryStub) ProcessAttempt(_ context.Context, attemptID int64, _ Callback) error {
+	stub.processed++
+	stub.attemptID = attemptID
+	return stub.err
 }
 
 func TestServiceVerifiesCallbackWithOrderCredential(t *testing.T) {
@@ -60,6 +68,52 @@ func TestServiceVerifiesCallbackWithOrderCredential(t *testing.T) {
 				t.Fatalf("err=%v processed=%d", err, repository.processed)
 			}
 		})
+	}
+}
+
+func TestServiceClassifiesCallbackFailures(t *testing.T) {
+	credentials, err := epusdt.NewCredentialProvider("primary", "merchant", "secret", "[]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	validFields := map[string]string{"pid": "merchant", "order_id": "RC1", "trade_id": "trade", "amount": "2.00", "actual_amount": "2.00", "receive_address": "T-address", "token": "usdt", "block_transaction_id": "tx", "status": "2"}
+	validFields["signature"] = Sign(validFields, "secret")
+	valid := Callback{PID: "merchant", OrderNo: "RC1", Signature: validFields["signature"], Fields: validFields}
+
+	tests := []struct {
+		name       string
+		repository *verificationRepositoryStub
+		callback   Callback
+		wantCode   FailureCode
+	}{
+		{name: "unknown order", repository: &verificationRepositoryStub{err: sql.ErrNoRows}, callback: valid, wantCode: FailureUnknownOrder},
+		{name: "snapshot dependency", repository: &verificationRepositoryStub{err: errors.New("database unavailable")}, callback: valid, wantCode: FailureDependency},
+		{name: "unknown credential", repository: &verificationRepositoryStub{snapshot: VerificationSnapshot{CredentialRef: "missing", MerchantPID: "merchant"}}, callback: valid, wantCode: FailureUnknownCredential},
+		{name: "snapshot pid mismatch", repository: &verificationRepositoryStub{snapshot: VerificationSnapshot{CredentialRef: "primary", MerchantPID: "other"}}, callback: valid, wantCode: FailurePIDMismatch},
+		{name: "callback pid mismatch", repository: &verificationRepositoryStub{snapshot: VerificationSnapshot{CredentialRef: "primary", MerchantPID: "merchant"}}, callback: func() Callback { value := valid; value.PID = "other"; return value }(), wantCode: FailurePIDMismatch},
+		{name: "signature invalid", repository: &verificationRepositoryStub{snapshot: VerificationSnapshot{CredentialRef: "primary", MerchantPID: "merchant"}}, callback: func() Callback { value := valid; value.Signature = "invalid"; return value }(), wantCode: FailureSignatureInvalid},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := NewService(test.repository, credentials).ProcessAttempt(context.Background(), 91, test.callback)
+			if FailureCodeOf(err) != test.wantCode || test.repository.processed != 0 {
+				t.Fatalf("code=%s err=%v processed=%d", FailureCodeOf(err), err, test.repository.processed)
+			}
+		})
+	}
+}
+
+func TestServicePassesAttemptIDToRepository(t *testing.T) {
+	credentials, err := epusdt.NewCredentialProvider("primary", "merchant", "secret", "[]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]string{"pid": "merchant", "order_id": "RC1", "trade_id": "trade", "amount": "2.00", "actual_amount": "2.00", "receive_address": "T-address", "token": "usdt", "block_transaction_id": "tx", "status": "2"}
+	fields["signature"] = Sign(fields, "secret")
+	repository := &verificationRepositoryStub{}
+	err = NewService(repository, credentials).ProcessAttempt(context.Background(), 9223372036854775000, Callback{PID: "merchant", OrderNo: "RC1", Signature: fields["signature"], Fields: fields})
+	if err != nil || repository.attemptID != 9223372036854775000 {
+		t.Fatalf("err=%v attemptID=%d", err, repository.attemptID)
 	}
 }
 

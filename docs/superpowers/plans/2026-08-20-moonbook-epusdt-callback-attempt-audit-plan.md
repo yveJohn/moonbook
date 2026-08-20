@@ -71,13 +71,13 @@
 - Modify: `server/internal/modules/commerce/payment/late_callback_integration_test.go`
 - Modify: `server/internal/modules/commerce/invitereward/repository_integration_test.go`
 
-- [ ] **Step 1：编写错误分类失败测试。** 区分未知订单、未知凭据、PID 错配、签名失败、快照不匹配、重放、依赖失败和事务失败；业务拒绝与可重试故障不得混淆。
-- [ ] **Step 2：重构 Service。** 按订单凭据选择 Secret，返回稳定分类结果；未知订单只在 `sql.ErrNoRows` 时拒绝，数据库故障必须进入 503 路径。
-- [ ] **Step 3：首次成功同事务。** 钱包流水、首充奖励、订单 `paid` 和当前审计 `success/200/success/completed_at` 同成同败，审计更新条件仍要求 `received`。
-- [ ] **Step 4：合法幂等独立终态。** 已支付订单只有所有支付快照完全一致才把本次新审计转为 `idempotent`；不同交易号、链上哈希、金额、地址或 Token 均拒绝。
-- [ ] **Step 5：故障矩阵。** 注入账号锁、钱包、奖励、订单和审计成功更新故障，证明没有半入账或错误成功响应；回滚后审计保留 `received` 供失败最终化。
-- [ ] **Step 6：晚到和并发回归。** 五种允许晚到状态、重复回调和跨订单重放仍只产生一套资金事实；并发回调最多一次首次成功，其余只能合法幂等或拒绝。
-- [ ] **Step 7：验证并提交。** 运行 Payment/Wallet/InviteReward 定向测试、race 和真实 PostgreSQL 集成；提交信息：`实现支付回调审计事务终态`。
+- [x] **Step 1：编写错误分类失败测试。** 区分未知订单、未知凭据、PID 错配、签名失败、快照不匹配、重放、依赖失败和事务失败；业务拒绝与可重试故障不得混淆。
+- [x] **Step 2：重构 Service。** 按订单凭据选择 Secret，返回稳定分类结果；未知订单只在 `sql.ErrNoRows` 时拒绝，数据库故障必须进入 503 路径。
+- [x] **Step 3：首次成功同事务。** 钱包流水、首充奖励、订单 `paid` 和当前审计 `success/200/success/completed_at` 同成同败，审计更新条件仍要求 `received`。
+- [x] **Step 4：合法幂等独立终态。** 已支付订单只有所有支付快照完全一致才把本次新审计转为 `idempotent`；不同交易号、链上哈希、金额、地址或 Token 均拒绝。
+- [x] **Step 5：故障矩阵。** 注入账号锁、钱包、奖励、订单和审计成功更新故障，证明没有半入账或错误成功响应；回滚后审计保留 `received` 供失败最终化。
+- [x] **Step 6：晚到和并发回归。** 五种允许晚到状态、重复回调和跨订单重放仍只产生一套资金事实；并发回调最多一次首次成功，其余只能合法幂等或拒绝。
+- [x] **Step 7：验证并提交。** 运行 Payment/Wallet/InviteReward 定向测试、race 和真实 PostgreSQL 集成；提交信息：`实现支付回调审计事务终态`。
 
 ## Task 4：实现有限读取、HTTP 合同与重试故障路径
 
