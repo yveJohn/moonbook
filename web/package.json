@@ -3,6 +3,11 @@
   "version": "3.0.0",
   "private": true,
   "packageManager": "pnpm@10.15.1",
+  "pnpm": {
+    "overrides": {
+      "uuid": "11.1.1"
+    }
+  },
   "scripts": {
     "dev": "node openDocument.js && vite --host --mode development",
     "serve": "node openDocument.js && vite --host --mode development",
@@ -19,8 +24,6 @@
   "type": "module",
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
-    "@form-create/designer": "^3.2.6",
-    "@form-create/element-ui": "^3.2.10",
     "@iconify/vue": "^5.0.0",
     "@logicflow/core": "^2.2.3",
     "@logicflow/extension": "^2.2.3",
@@ -35,10 +38,11 @@
     "@wangeditor/editor-for-vue": "^5.1.12",
     "ace-builds": "^1.36.4",
     "arcdash": "^0.0.60",
-    "axios": "1.8.2",
+    "axios": "1.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "echarts": "5.5.1",
+    "dompurify": "3.4.14",
+    "echarts": "6.1.0",
     "element-plus": "^2.13.6",
     "highlight.js": "^11.10.0",
     "marked": "14.1.1",
@@ -56,11 +60,10 @@
     "vform3-builds": "^3.0.10",
     "vue": "^3.5.31",
     "vue-cropper": "^1.1.4",
-    "vue-echarts": "^7.0.3",
+    "vue-echarts": "^8.1.0",
     "vue-qr": "^4.0.9",
     "vue-router": "^4.4.3",
     "vue3-ace-editor": "^2.2.4",
-    "vue3-sfc-loader": "^0.9.5",
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {

@@ -2,7 +2,28 @@ import { lstat, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const forbiddenPackages = ['vite-auto-import-svg', 'vite-check-multiple-dom', 'vite-vue-path-map']
+const forbiddenPackages = [
+  'vite-auto-import-svg',
+  'vite-check-multiple-dom',
+  'vite-vue-path-map',
+  'vue3-sfc-loader',
+  '@form-create/designer',
+  '@form-create/element-ui'
+]
+const forbiddenLockEntries = [
+  { fingerprint: 'forbidden-postcss-7-lock-entry', pattern: /(^|[\s/'"]+)postcss@7(?:\.|:|[\s'"]|$)/m },
+  { fingerprint: 'forbidden-wangeditor-4-lock-entry', pattern: /(^|[\s/'"]+)wangeditor@4(?:\.|:|[\s'"]|$)/m }
+]
+const aiPreviewTarget = 'src/plugin/ai/view/picture/picture.vue'
+const aiPreviewRequirements = [
+  { fingerprint: 'missing-empty-iframe-sandbox', pattern: /sandbox\s*=\s*["']["']/ },
+  { fingerprint: 'missing-preview-csp', pattern: /Content-Security-Policy/ },
+  { fingerprint: 'missing-preview-sanitizer', pattern: /DOMPurify\.sanitize\s*\(/ }
+]
+const aiPreviewForbidden = [
+  { fingerprint: 'forbidden-dynamic-sfc-loader', pattern: /\bloadModule\s*\(|vue3-sfc-loader/ },
+  { fingerprint: 'forbidden-dynamic-vue-mount', pattern: /\bVue\.(?:createApp|h)\s*\(/ }
+]
 const sourceTargets = ['vite.config.js', 'vitePlugin', 'src']
 const sourceExtensions = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.vue', '.json'])
 const base64Candidate = /[A-Za-z0-9+/]{32,}={0,2}/g
@@ -86,6 +107,7 @@ export async function checkSupplyChain({ rootDir }) {
   const lockFile = path.join(root, 'pnpm-lock.yaml')
 
   const packageJson = JSON.parse(await readFile(packageFile, 'utf8'))
+  const lockContent = await readFile(lockFile, 'utf8')
   for (const packageName of forbiddenPackages) {
     for (const section of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
       if (Object.hasOwn(packageJson[section] ?? {}, packageName)) {
@@ -93,7 +115,6 @@ export async function checkSupplyChain({ rootDir }) {
       }
     }
 
-    const lockContent = await readFile(lockFile, 'utf8')
     if (new RegExp(`(^|[\\s/'"]+)${packageName}(?:@|:|[\\s'"]|$)`, 'm').test(lockContent)) {
       addFinding(findings, root, lockFile, 'forbidden-package-lock-entry')
     }
@@ -101,6 +122,23 @@ export async function checkSupplyChain({ rootDir }) {
     const installedPackage = path.join(root, 'node_modules', packageName)
     if (await pathExists(installedPackage)) {
       addFinding(findings, root, installedPackage, 'forbidden-installed-package')
+    }
+  }
+  for (const { fingerprint, pattern } of forbiddenLockEntries) {
+    if (pattern.test(lockContent)) addFinding(findings, root, lockFile, fingerprint)
+  }
+
+  const aiPreviewFile = path.join(root, aiPreviewTarget)
+  const aiPreviewMetadata = await pathExists(aiPreviewFile)
+  if (!aiPreviewMetadata?.isFile()) {
+    addFinding(findings, root, aiPreviewFile, 'missing-secure-ai-preview')
+  } else {
+    const content = await readFile(aiPreviewFile, 'utf8')
+    for (const { fingerprint, pattern } of aiPreviewRequirements) {
+      if (!pattern.test(content)) addFinding(findings, root, aiPreviewFile, fingerprint)
+    }
+    for (const { fingerprint, pattern } of aiPreviewForbidden) {
+      if (pattern.test(content)) addFinding(findings, root, aiPreviewFile, fingerprint)
     }
   }
 

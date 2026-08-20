@@ -9,11 +9,17 @@ import { checkSupplyChain } from '../scripts/check-supply-chain.mjs'
 async function fixture() {
   const rootDir = await mkdtemp(path.join(tmpdir(), 'moonbook-supply-chain-'))
   await mkdir(path.join(rootDir, 'src'), { recursive: true })
+  await mkdir(path.join(rootDir, 'src/plugin/ai/view/picture'), { recursive: true })
   await mkdir(path.join(rootDir, 'vitePlugin'), { recursive: true })
   await mkdir(path.join(rootDir, 'dist/assets'), { recursive: true })
   await writeFile(path.join(rootDir, 'package.json'), JSON.stringify({ dependencies: { vue: '3.5.0' } }))
   await writeFile(path.join(rootDir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n")
   await writeFile(path.join(rootDir, 'vite.config.js'), 'export default {}\n')
+  await writeFile(path.join(rootDir, 'src/plugin/ai/view/picture/picture.vue'), [
+    '<iframe sandbox="" />',
+    '<meta http-equiv="Content-Security-Policy">',
+    'DOMPurify.sanitize(template)'
+  ].join('\n'))
   await writeFile(path.join(rootDir, 'dist/assets/index.js'), 'console.log("trusted")\n')
   return rootDir
 }
@@ -21,7 +27,7 @@ async function fixture() {
 test('accepts trusted declarations, sources and a nonempty production bundle', async () => {
   const rootDir = await fixture()
   assert.deepEqual(await checkSupplyChain({ rootDir }), {
-    sourceFiles: 1,
+    sourceFiles: 2,
     distJavaScriptFiles: 1
   })
 })
@@ -30,7 +36,10 @@ test('rejects the malicious dependency in package declarations and the lockfile'
   for (const packageName of [
     ['vite', 'auto', 'import', 'svg'].join('-'),
     ['vite', 'check', 'multiple', 'dom'].join('-'),
-    ['vite', 'vue', 'path', 'map'].join('-')
+    ['vite', 'vue', 'path', 'map'].join('-'),
+    ['vue3', 'sfc', 'loader'].join('-'),
+    ['@form-create', 'designer'].join('/'),
+    ['@form-create', 'element-ui'].join('/')
   ]) {
     const rootDir = await fixture()
     await writeFile(path.join(rootDir, 'package.json'), JSON.stringify({ dependencies: { [packageName]: '1.0.2' } }))
@@ -41,6 +50,37 @@ test('rejects the malicious dependency in package declarations and the lockfile'
       assert.match(error.message, /forbidden-package-lock-entry/)
       return true
     })
+  }
+})
+
+test('rejects PostCSS 7 and WangEditor 4 lock entries', async () => {
+  const rootDir = await fixture()
+  await writeFile(path.join(rootDir, 'pnpm-lock.yaml'), [
+    'packages:',
+    '  postcss@7.0.39: {}',
+    '  wangeditor@4.7.15: {}'
+  ].join('\n'))
+
+  await assert.rejects(checkSupplyChain({ rootDir }), (error) => {
+    assert.match(error.message, /forbidden-postcss-7-lock-entry/)
+    assert.match(error.message, /forbidden-wangeditor-4-lock-entry/)
+    return true
+  })
+})
+
+test('rejects missing or weakened AI preview isolation', async () => {
+  const target = 'src/plugin/ai/view/picture/picture.vue'
+  const cases = [
+    { content: '<meta http-equiv="Content-Security-Policy">\nDOMPurify.sanitize(template)', finding: 'missing-empty-iframe-sandbox' },
+    { content: '<iframe sandbox="" />\nDOMPurify.sanitize(template)', finding: 'missing-preview-csp' },
+    { content: '<iframe sandbox="" />\n<meta http-equiv="Content-Security-Policy">', finding: 'missing-preview-sanitizer' },
+    { content: '<iframe sandbox="" />\n<meta http-equiv="Content-Security-Policy">\nDOMPurify.sanitize(template)\nloadModule(path)', finding: 'forbidden-dynamic-sfc-loader' },
+    { content: '<iframe sandbox="" />\n<meta http-equiv="Content-Security-Policy">\nDOMPurify.sanitize(template)\nVue.createApp(component)', finding: 'forbidden-dynamic-vue-mount' }
+  ]
+  for (const { content, finding } of cases) {
+    const rootDir = await fixture()
+    await writeFile(path.join(rootDir, target), content)
+    await assert.rejects(checkSupplyChain({ rootDir }), new RegExp(finding))
   }
 })
 

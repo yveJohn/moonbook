@@ -1,12 +1,57 @@
 <template>
   <div class="form-designer-container">
-    <fc-designer ref="designer" :config="config" height="calc(100vh - 160px)">
-      <template #handle>
-        <el-button type="primary" size="small" plain @click="exportVueTemplate">
-          解析为 Vue 原生标签
-        </el-button>
-      </template>
-    </fc-designer>
+    <div class="designer-toolbar">
+      <el-form :inline="true" :model="formOptions">
+        <el-form-item label="标签宽度">
+          <el-input v-model="formOptions.labelWidth" inputmode="numeric" class="option-input" />
+        </el-form-item>
+        <el-form-item label="标签位置">
+          <el-select v-model="formOptions.labelPosition" class="option-select">
+            <el-option label="右侧" value="right" />
+            <el-option label="左侧" value="left" />
+            <el-option label="顶部" value="top" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="控件尺寸">
+          <el-select v-model="formOptions.size" class="option-select">
+            <el-option label="默认" value="default" />
+            <el-option label="大" value="large" />
+            <el-option label="小" value="small" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div class="toolbar-actions">
+        <el-button :icon="Plus" @click="addField">添加字段</el-button>
+        <el-button type="primary" :icon="DocumentCopy" @click="exportVueTemplate">生成代码</el-button>
+      </div>
+    </div>
+
+    <el-table :data="fields" row-key="id" border class="field-table">
+      <el-table-column label="标签" min-width="150">
+        <template #default="{ row }"><el-input v-model="row.title" /></template>
+      </el-table-column>
+      <el-table-column label="字段名" min-width="150">
+        <template #default="{ row }"><el-input v-model="row.field" /></template>
+      </el-table-column>
+      <el-table-column label="类型" width="160">
+        <template #default="{ row }">
+          <el-select v-model="row.type">
+            <el-option v-for="option in fieldTypes" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+        </template>
+      </el-table-column>
+      <el-table-column label="占位提示" min-width="180">
+        <template #default="{ row }"><el-input v-model="row.placeholder" /></template>
+      </el-table-column>
+      <el-table-column label="必填" width="80" align="center">
+        <template #default="{ row }"><el-switch v-model="row.required" /></template>
+      </el-table-column>
+      <el-table-column label="操作" width="70" align="center">
+        <template #default="{ $index }">
+          <el-button :icon="Delete" circle text type="danger" title="删除字段" @click="removeField($index)" />
+        </template>
+      </el-table-column>
+    </el-table>
 
     <el-dialog v-model="dialogVisible" title="生成的 Vue 模板代码" width="70%" top="5vh">
       <el-input 
@@ -30,24 +75,41 @@
 <script setup>
   import { ref } from 'vue'
   import { ElMessage } from 'element-plus'
-  import FcDesigner from '@form-create/designer'
+  import { Delete, DocumentCopy, Plus } from '@element-plus/icons-vue'
 
   defineOptions({
     name: 'FormGenerator'
   })
 
-  const designer = ref(null)
   const dialogVisible = ref(false)
   const vueCode = ref('')
-
-  const config = {
-    fieldReadonly: false,
-    useTemplate: true
+  let fieldSequence = 1
+  const fieldTypes = [
+    { label: '文本', value: 'input' },
+    { label: '数字', value: 'inputNumber' },
+    { label: '选择', value: 'select' },
+    { label: '开关', value: 'switch' },
+    { label: '日期', value: 'datePicker' },
+    { label: '多选', value: 'checkbox' }
+  ]
+  const formOptions = ref({ labelWidth: '100px', labelPosition: 'right', size: 'default' })
+  const createField = () => {
+    const sequence = fieldSequence++
+    return { id: sequence, title: `字段 ${sequence}`, field: `field${sequence}`, type: 'input', placeholder: '', required: false }
   }
+  const fields = ref([createField()])
+  const addField = () => fields.value.push(createField())
+  const removeField = (index) => fields.value.splice(index, 1)
 
   const kebabCase = (str) => {
     return str.replace(/([A-Z])/g, '-$1').toLowerCase()
   }
+
+  const escapeAttribute = (value) => String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
 
   const generateVueCode = (rules, options) => {
     let formDataInit = []
@@ -94,7 +156,7 @@
           if (typeof value === 'boolean') {
             propsStr += value ? ` ${kebabCase(key)}` : ` :${kebabCase(key)}="false"`
           } else if (typeof value === 'string') {
-            propsStr += ` ${kebabCase(key)}="${value}"`
+            propsStr += ` ${kebabCase(key)}="${escapeAttribute(value)}"`
           } else {
             propsStr += ` :${kebabCase(key)}='${JSON.stringify(value)}'`
           }
@@ -104,11 +166,11 @@
       let innerContent = ''
       if (rule.options && Array.isArray(rule.options)) {
         if (tag === 'select') {
-          innerContent = rule.options.map(opt => `\n        <el-option label="${opt.label}" value="${opt.value}" />`).join('') + '\n      '
+          innerContent = rule.options.map(opt => `\n        <el-option label="${escapeAttribute(opt.label)}" value="${escapeAttribute(opt.value)}" />`).join('') + '\n      '
         } else if (tag === 'radio') {
-          innerContent = rule.options.map(opt => `\n        <el-radio label="${opt.value}">${opt.label}</el-radio>`).join('') + '\n      '
+          innerContent = rule.options.map(opt => `\n        <el-radio label="${escapeAttribute(opt.value)}">${escapeAttribute(opt.label)}</el-radio>`).join('') + '\n      '
         } else if (tag === 'checkbox') {
-          innerContent = rule.options.map(opt => `\n        <el-checkbox label="${opt.value}">${opt.label}</el-checkbox>`).join('') + '\n      '
+          innerContent = rule.options.map(opt => `\n        <el-checkbox label="${escapeAttribute(opt.value)}">${escapeAttribute(opt.label)}</el-checkbox>`).join('') + '\n      '
         }
       }
 
@@ -116,13 +178,13 @@
       formDataInit.push(`  ${rule.field}: ${JSON.stringify(initVal)}`)
 
       if (rule.$required || (rule.effect && rule.effect.required)) {
-        formRules.push(`  ${rule.field}: [{ required: true, message: '${rule.title}不能为空', trigger: 'blur' }]`)
+        formRules.push(`  ${rule.field}: [{ required: true, message: ${JSON.stringify(`${rule.title}不能为空`)}, trigger: 'blur' }]`)
       } else if (rule.validate) {
         formRules.push(`  ${rule.field}: ${JSON.stringify(rule.validate)}`)
       }
 
       return `
-    <el-form-item label="${rule.title}" prop="${rule.field}">
+    <el-form-item label="${escapeAttribute(rule.title)}" prop="${rule.field}">
       <${elTag} v-model="formData.${rule.field}"${propsStr}>${innerContent}</${elTag}>
     </el-form-item>`
     }
@@ -184,9 +246,28 @@ const resetForm = () => {
   }
 
   const exportVueTemplate = () => {
-    const rules = designer.value.getRule()
-    const options = designer.value.getOption()
-    
+    if (!fields.value.length) {
+      ElMessage.warning('请先添加字段')
+      return
+    }
+    const invalid = fields.value.find((field) => !/^[A-Za-z_$][\w$]*$/.test(field.field) || !field.title.trim())
+    if (invalid) {
+      ElMessage.error('字段名必须是有效的 JavaScript 标识符，且标签不能为空')
+      return
+    }
+    if (new Set(fields.value.map((field) => field.field)).size !== fields.value.length) {
+      ElMessage.error('字段名不能重复')
+      return
+    }
+    const rules = fields.value.map((field) => ({
+      type: field.type,
+      field: field.field,
+      title: field.title.trim(),
+      value: field.type === 'checkbox' ? [] : null,
+      props: field.placeholder ? { placeholder: field.placeholder } : {},
+      $required: field.required
+    }))
+    const options = { form: formOptions.value }
     vueCode.value = generateVueCode(rules, options)
     dialogVisible.value = true
   }
@@ -203,6 +284,41 @@ const resetForm = () => {
 </script>
 
 <style scoped>
+  .form-designer-container {
+    padding: 16px;
+  }
 
+  .designer-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  .designer-toolbar :deep(.el-form-item) {
+    margin-bottom: 8px;
+  }
+
+  .option-input,
+  .option-select {
+    width: 120px;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+
+  .field-table {
+    width: 100%;
+  }
+
+  @media (max-width: 900px) {
+    .designer-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
 </style>
-
