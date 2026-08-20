@@ -3,6 +3,7 @@ package candidate
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 )
 
@@ -47,6 +48,10 @@ func (s *Service) Delete(ctx context.Context, ids []int64) error {
 }
 
 func (s *Service) Discover(ctx context.Context, boardID string) (DiscoverResult, error) {
+	return s.DiscoverWithClient(ctx, boardID, nil)
+}
+
+func (s *Service) DiscoverWithClient(ctx context.Context, boardID string, client *http.Client) (DiscoverResult, error) {
 	boardID = strings.TrimSpace(boardID)
 	if boardID == "" {
 		return DiscoverResult{}, errors.New("invalid board id")
@@ -58,7 +63,7 @@ func (s *Service) Discover(ctx context.Context, boardID string) (DiscoverResult,
 	if !target.Enabled {
 		return DiscoverResult{}, errors.New("board or source is disabled")
 	}
-	items, err := DiscoverBoard(ctx, target, nil)
+	items, err := DiscoverBoard(ctx, target, client)
 	if err != nil {
 		return DiscoverResult{}, err
 	}

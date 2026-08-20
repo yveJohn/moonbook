@@ -66,7 +66,9 @@ M5 的运行时长任务恢复证据已经覆盖论坛导入、TXT 导入、章�
 
 旧 `novel_crawl_runtime_task` 提供 `forumDiscover` 和 `forumImport` 运行开关、状态、计数和停止请求。新平台 Worker 已替代论坛导入的领取、租约、恢复和停止语义，但没有与旧 `forumDiscover` 等价的持续自动发现调度器。
 
-`novel_crawl_forum_board.auto_follow_enabled`、`follow_interval_minutes` 和 `follow_import_limit` 当前只被管理 CRUD 保存，运行时代码没有调度扫描。管理功能矩阵中的“运行任务”不能标记为被 `platform_jobs` 完整替代，自动发现/自动跟进仍是 M5 运行能力缺口。
+`novel_crawl_forum_board.auto_follow_enabled`、`follow_interval_minutes` 和 `follow_import_limit` 已由 `candidate.DiscoveryWorker` 纳入应用生命周期：每轮最多扫描 20 个到期板块，按 PostgreSQL 会话 advisory lock 防止多实例重复发现，成功后才更新 `last_follow_time`，单板抓取失败不会停止整个调度器。该调度器仍只负责候选发现，导入执行继续由 `platform_jobs` 的论坛导入 Worker 负责。
+
+自动发现的真实第三方论坛沙箱、Cookie Secret 引用和限流策略仍未完成，不能据此关闭 M5。
 
 旧 runtime 行本身不应按 `running=true` 原样恢复。运行中或待执行任务迁移后必须进入明确的中断/待人工重试状态，避免切换时未经审核访问外部论坛或重复导入。
 

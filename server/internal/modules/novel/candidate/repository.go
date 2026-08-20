@@ -8,7 +8,13 @@ import (
 	"strings"
 )
 
-type SQLRepository struct{ DB *sql.DB }
+type queryer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+type SQLRepository struct{ DB queryer }
 
 const selectColumns = `id::text,source_id::text,source_name,board_id::text,board_name,forum_thread_id,thread_title,COALESCE(display_title,''),thread_url,COALESCE(author_id,''),status,COALESCE(import_task_id::text,''),COALESCE(target_book_id::text,''),COALESCE(last_import_page_no::text,''),COALESCE(last_import_floor_id,''),follow_count::text,COALESCE(last_follow_time::text,''),COALESCE(follow_fail_reason,''),discover_time::text,COALESCE(remark,''),created_at::text,updated_at::text`
 

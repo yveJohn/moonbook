@@ -2,7 +2,9 @@ package initialize
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/aiconfig"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/bookprofile"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/candidate"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapterclean"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chaptersummary"
@@ -80,6 +83,10 @@ func StartImportWorker() error {
 		WorkerID: "novel-book-profile-" + global.GVA_CONFIG.App.Node, Lease: 10 * time.Minute,
 		PollInterval: time.Second, AutoScan: 5 * time.Minute,
 	}
+	discoveryWorker := &candidate.DiscoveryWorker{
+		DB: db, WorkerID: "novel-forum-discovery-" + global.GVA_CONFIG.App.Node,
+		PollInterval: time.Minute, Client: &http.Client{Timeout: 30 * time.Second},
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	importWorker.Lock()
@@ -88,11 +95,17 @@ func StartImportWorker() error {
 	go func() {
 		defer close(done)
 		var wg sync.WaitGroup
-		wg.Add(5)
+		wg.Add(6)
 		go func() {
 			defer wg.Done()
 			if err := worker.Run(ctx); err != nil {
 				zap.L().Error("论坛导入任务停止", zap.Error(err))
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if err := discoveryWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				zap.L().Error("论坛自动发现任务停止", zap.Error(err))
 			}
 		}()
 		go func() {
