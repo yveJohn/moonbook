@@ -33,7 +33,7 @@ go test -count=1 -run '^TestReaderMigrationWithMySQLAndPostgres$' -v ./internal/
 
 TXT 原文件门在恢复源库后决定：源表不存在或任务数为零时，脚本生成只含空映射的清单；任务数大于零时，必须提供外部只读 `MOONBOOK_FULL_COPY_TXT_MANIFEST` 和 `MOONBOOK_FULL_COPY_TXT_ROOT`。找不到任一原文件时必须 No-Go，禁止伪造或跳过任务。
 
-演练环境文件必须位于仓库外，并为端口、数据库和 Secret 使用本次隔离值。执行方式：
+演练环境文件必须位于仓库外，`COMPOSE_PROJECT_NAME` 必须与 `MOONBOOK_FULL_COPY_PROJECT` 完全一致，并为端口、数据库和 Secret 使用本次隔离值。执行方式：
 
 ```bash
 export MOONBOOK_FULL_COPY_BACKUP=/Users/yve/Documents/moonbook/exports/moonbook_admin_20260715_175649.sql.gz

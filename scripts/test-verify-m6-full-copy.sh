@@ -7,7 +7,7 @@ trap 'rm -rf "$fixture_dir"' EXIT
 
 mkdir -p "$fixture_dir/bin" "$fixture_dir/work"
 printf 'SELECT 1;\n' | gzip >"$fixture_dir/backup.sql.gz"
-printf 'POSTGRES_DB=test\n' >"$fixture_dir/rehearsal.env"
+printf 'COMPOSE_PROJECT_NAME=moonbook_verify_m6_contract\nPOSTGRES_DB=test\n' >"$fixture_dir/rehearsal.env"
 expected_sha="$(shasum -a 256 "$fixture_dir/backup.sql.gz" | awk '{print $1}')"
 
 cat >"$fixture_dir/bin/docker" <<'SH'
@@ -49,6 +49,8 @@ assert_rejected() {
 assert_rejected "must be an absolute path" env MOONBOOK_FULL_COPY_BACKUP=relative.sql.gz "$root_dir/scripts/verify-m6-full-copy.sh" --preflight
 assert_rejected "backup SHA-256 does not match" env MOONBOOK_FULL_COPY_SHA256="$(printf '0%.0s' {1..64})" "$root_dir/scripts/verify-m6-full-copy.sh" --preflight
 assert_rejected "project must match" env MOONBOOK_FULL_COPY_PROJECT=moonbook "$root_dir/scripts/verify-m6-full-copy.sh" --preflight
+printf 'COMPOSE_PROJECT_NAME=another_project\n' >"$fixture_dir/wrong-project.env"
+assert_rejected "COMPOSE_PROJECT_NAME must exactly equal" env MOONBOOK_FULL_COPY_ENV_FILE="$fixture_dir/wrong-project.env" "$root_dir/scripts/verify-m6-full-copy.sh" --preflight
 mkdir -p "$root_dir/.m6-contract-work"
 assert_rejected "outside the active and frozen repositories" env MOONBOOK_FULL_COPY_WORK_DIR="$root_dir/.m6-contract-work" "$root_dir/scripts/verify-m6-full-copy.sh" --preflight
 rmdir "$root_dir/.m6-contract-work"

@@ -49,6 +49,14 @@ if full_copy_path_within "$work_dir" "$root_dir" || full_copy_path_within "$work
 fi
 [[ "$work_dir" != "/" && "$work_dir" != "/Users" && "$work_dir" != "/Users/yve" ]] || full_copy_die "work directory is too broad"
 
+# Compose uses COMPOSE_PROJECT_NAME in explicit network and volume names.
+set -a
+# shellcheck disable=SC1090
+source "$MOONBOOK_FULL_COPY_ENV_FILE"
+set +a
+[[ "${COMPOSE_PROJECT_NAME:-}" == "$MOONBOOK_FULL_COPY_PROJECT" ]] || \
+  full_copy_die "environment COMPOSE_PROJECT_NAME must exactly equal the isolated project name"
+
 full_copy_require_command docker
 full_copy_require_command gzip
 full_copy_require_command shasum
@@ -79,11 +87,6 @@ if [[ "$action" == "--preflight" ]]; then
   exit 0
 fi
 
-# The rehearsal env file is sourced only after path and project validation.
-set -a
-# shellcheck disable=SC1090
-source "$MOONBOOK_FULL_COPY_ENV_FILE"
-set +a
 for name in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD REDIS_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD MINIO_BUCKET; do
   [[ -n "${!name:-}" ]] || full_copy_die "environment file is missing: $name"
 done
