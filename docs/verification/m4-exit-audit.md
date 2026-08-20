@@ -1,11 +1,11 @@
 # M4 交易、支付与运营退出审计
 
 审计日期：2026-08-20
-固定代码基线：`2658a44b`
+固定代码基线：`009391c`
 
 ## 结论
 
-M4 当前仍未满足退出条件。Reader 发起 EPUSDT 交易的创建、替换、失败分类、过期释放、并发幂等、历史凭据回调及每次 HTTP 回调尝试审计已在本地闭环；签到/邀请奖励两个运营审计页签、订单/支付/会员/权益全域核对以及受控真实 EPUSDT 最小金额支付仍未完成。
+M4 当前仍未满足退出条件。Reader 发起 EPUSDT 交易的创建、替换、失败分类、过期释放、并发幂等、历史凭据回调及每次 HTTP 回调尝试审计已在本地闭环；签到/邀请奖励两个运营审计页签已实现并完成本地桌面/移动浏览器验收；订单/支付/会员/权益全域核对以及受控真实 EPUSDT 最小金额支付仍未完成。
 
 本轮没有使用真实支付凭据，没有执行付款、生产迁移、生产连接或流量切换。本地 HTTP 替身只能证明协议与应用状态机，不替代真实 EPUSDT 外部验收。
 
@@ -60,6 +60,8 @@ M4 当前仍未满足退出条件。Reader 发起 EPUSDT 交易的创建、替�
 - Payment 全包真实 PostgreSQL 集成通过；Commerce/Reader 全包、模块依赖、SQL 所有权和 `go vet` 通过，官方 `golang:1.24.2-bookworm` 容器内同范围 `go test -race` 通过。
 - 全新隔离数据库执行完整 `make verify-m3`：PostgreSQL、Redis、MinIO 均就绪，冻结 Reader 536 项、树外 SSR/SEO 6 项及 Reader 生产构建通过。共享验收库存在历史夹具污染，未删除或改写，未用于替代该隔离结果。
 - `pnpm run verify:management` 通过 29 项测试、ESLint、生产构建和供应链检查；仅保留已知 Vite 配置及 `arcdash` BigInt target 警告。
+- 本地隔离 Compose 管理端在 `1440x1000` 与 `390x844` 视口打开钱包页面，三页签“钱包概览/签到记录/邀请奖励”可切换；移动端 `document.documentElement.scrollWidth=390`，无横向溢出。临时高位 ID `9007199254743784`、`9007199254743785` 在页面中保持文本字符串显示；邀请奖励筛选控件可见，页面没有补签、补发、删除、重算或导出按钮。截图保存在 `output/playwright/m4-wallet-desktop.png`、`m4-checkins-desktop.png`、`m4-rewards-desktop.png`。
+- `adminoperations` 集成测试使用真实 PostgreSQL 验证高位 ID、日期/阶段/状态筛选、稳定分页以及搜索投影缺失时事实记录仍保留；无 `MOONBOOK_READER_TEST_DSN` 时安全跳过，隔离 Compose 数据库本轮实际执行并清理夹具。
 - Playwright 使用本轮隔离管理员与夹具，在 `1440x1000` 和 `390x844` 验证“处理中断”“无效”“未校验”、Long ID 文本、详情字段白名单及无布局重叠；回调前缀、管理员、书籍、对象元数据、读者和邀请码最终均为 0，MinIO 删除 2 个夹具对象。
 
 验收工具版本：Go `1.25.12 darwin/arm64`、Node `24.14.1`、npm `11.11.0`、Docker Client/Server `29.4.0`、Compose `5.1.2`、PostgreSQL `17.6`、Redis `7.4.5`、MinIO `RELEASE.2025-07-23T15-54-02Z`。Server 容器按项目 Dockerfile 使用 Go `1.24.2-alpine3.21` 构建。
@@ -81,7 +83,7 @@ M4 退出前需要提供可执行核对，至少覆盖：
 
 ## 管理能力缺口
 
-旧管理 API 还定义了 `GET /reader/checkin/list` 和 `GET /reader/inviteReward/list`。用户已选择将其补为可见审计页签；当前尚未实现，因此 M4 不能退出。
+旧管理 API 还定义了 `GET /reader/checkin/list` 和 `GET /reader/inviteReward/list`。已映射为钱包页面内“签到记录”“邀请奖励”只读页签，对外提供 `GET /reader/checkins`、`GET /reader/inviteRewards`（迁移 `00062`）；当前剩余 M4 缺口是财务全域核对器和真实支付环境验收。
 
 ## Compose 与秘密边界
 
@@ -94,7 +96,7 @@ M4 退出前需要提供可执行核对，至少覆盖：
 1. `[x]` 真实网关创建适配器的本地替身实现与失败状态测试；
 2. `[x]` 每次回调尝试均有脱敏、可关联、可检索的审计记录；
 3. `[x]` 创建、成功、失败、重复、重放、晚到和并发状态机测试；
-4. `[ ]` 签到和邀请奖励记录审计页签通过桌面与移动端 E2E；后端与管理页面已实现，浏览器验收待补；
+4. `[x]` 签到和邀请奖励记录审计页签通过桌面与移动端 E2E；
 5. `[ ]` 订单、支付、钱包、奖励、会员和权益通用核对器零差异；
 6. `[x]` EPUSDT 变量完整注入 Compose，仓库不包含真实凭据；
 7. `[ ]` 使用受控真实支付环境完成连通性和最小金额支付验收。
