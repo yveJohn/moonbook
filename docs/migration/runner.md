@@ -46,7 +46,16 @@ go run ./cmd/moonbook-legacy-migrate novel-books
 
 封面 URL 仅以 SHA-256 指纹写入对象元数据，避免带签名参数的 URL 泄漏；实际 URL 仍只保留在 `novel_books.legacy_cover_url` 供错误排查。下载、格式、上传或激活失败会写入 `migration_errors`，不会覆盖已有活动封面。MinIO 写入经大小和 SHA-256 校验后才激活 PostgreSQL 引用；同一书籍和 URL 指纹重跑不会新建重复版本。
 
-M2 章节与正文迁移：
+## M5 AI 配置和模型迁移
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-ai-configs
+```
+
+该 stage 读取旧 `novel_ai_config` 和（存在时）`novel_ai_config_model`，保留配置/模型 ID、顺序、当前模型、失败阈值、失败计数、状态版本和启用状态。旧表的单一 `model` 字段在没有模型子表记录时转换为目标顺序 1 模型。旧 `api_key` 只用于判断是否需要 Secret 引用，绝不写入 PostgreSQL、日志或 checkpoint；例如任务 ID `42` 生成 `MOONBOOK_AI_LEGACY_42_API_KEY`，实际值必须由部署环境注入。目标配置仍保留旧启用状态，Secret 缺失时由 AI 执行器在运行时拒绝调用并记录脱敏错误。配置和模型使用 `legacy_source_key` 幂等，非法状态或当前模型缺失会进入结构化错误清单。
+
+## M2 章节与正文迁移
 
 ```bash
 cd server
