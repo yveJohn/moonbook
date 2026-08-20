@@ -30,14 +30,14 @@ func run() int {
 		fmt.Fprintln(os.Stderr, e)
 		return 1
 	}
-	r, e := reconcile.Wallets(ctx, db)
+	r, e := reconcile.Full(ctx, db)
 	if e != nil {
 		fmt.Fprintln(os.Stderr, e)
 		return 1
 	}
-	fmt.Printf("checked=%d mismatches=%d\n", r.Checked, len(r.Mismatches))
+	fmt.Printf("wallet_checked=%d recharge_orders=%d purchase_orders=%d callbacks=%d membership_grants=%d entitlements=%d mismatches=%d\n", r.Wallets.Checked, r.RechargeOrders, r.PurchaseOrders, r.Callbacks, r.MembershipGrants, r.Entitlements, len(r.Mismatches))
 	for _, m := range r.Mismatches {
-		fmt.Printf("reader=%d coin=%s field=%s expected=%d actual=%d\n", m.ReaderID, m.CoinType, m.Field, m.Expected, m.Actual)
+		fmt.Printf("domain=%s key=%s field=%s expected=%s actual=%s\n", m.Domain, m.Key, m.Field, m.Expected, m.Actual)
 	}
 	if len(r.Mismatches) > 0 {
 		return 1

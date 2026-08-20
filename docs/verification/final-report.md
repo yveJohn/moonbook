@@ -17,7 +17,7 @@
 | M1 Compose/迁移/健康检查/CI | `scripts/verify-m1.sh`、CI 运行记录 | 待最终审计 |
 | M2 小说与 MinIO | `docs/progress/refactor-status.md`、对象集成测试 | 待最终审计 |
 | M3 Reader 契约、SSR、浏览器 | `make verify-m3`、`docs/contracts/reader-api.md`、`docs/migration/m3-reader-commerce.md` | 通过：逐接口矩阵、真实依赖、536 个冻结用例、6 个树外 SSR/SEO 用例、生产构建和浏览器关键旅程均有证据；8GB 副本演练归属 M6 |
-| M4 财务核对与支付 | `moonbook-finance-reconcile`、`docs/verification/m4-exit-audit.md` | 实施中：EPUSDT 创建/失败/并发/过期/历史凭据回调及每次回调尝试审计通过；两个运营页签、财务全域核对和真实最小金额支付未完成 |
+| M4 财务核对与支付 | `moonbook-finance-reconcile`、`docs/verification/m4-exit-audit.md` | 实施中：EPUSDT 创建/失败/并发/过期/历史凭据回调及每次回调尝试审计、两个运营页签和 Full 财务核对器已通过本地证据；真实最小金额支付未执行 |
 | M5 长任务恢复与第三方替身 | 导入 Worker、TXT/AI/采集测试 | 未完成 |
 | M6 全量迁移演练 | `docs/migration/`、副本演练报告 | 未完成 |
 | M7 备份、切换、回退 | 本目录及 `docs/runbooks/` | 未完成；管理端三个恶意/破坏性构建依赖已关闭，但其他安全、完整浏览器、恢复和切换门仍未关闭 |
