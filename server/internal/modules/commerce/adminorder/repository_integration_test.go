@@ -89,7 +89,15 @@ func TestMockRechargeCreateConfirmAndFirstInviteReward(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), `UPDATE reader_accounts SET status='enabled' WHERE id=$1`, inviteeID)
+		q := context.Background()
+		_, _ = db.ExecContext(q, `DELETE FROM reader_invite_reward_records WHERE invitee_reader_id=$1`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_wallet_ledgers WHERE reader_id IN ($1,$2)`, inviterID, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_wallets WHERE reader_id IN ($1,$2)`, inviterID, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_purchase_orders WHERE reader_id=$1`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_invite_relations WHERE invitee_reader_id=$1`, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_invite_codes WHERE id=$1`, inviteCodeID)
+		_, _ = db.ExecContext(q, `DELETE FROM commerce_reader_search_projection WHERE reader_id IN ($1,$2)`, inviterID, inviteeID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_accounts WHERE id IN ($1,$2)`, inviterID, inviteeID)
 	})
 
 	readerAccounts := readerprovider.NewAccount(db)

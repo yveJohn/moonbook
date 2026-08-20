@@ -32,7 +32,7 @@ func TestForumCookieSecretReferenceMigrationScenarios(t *testing.T) {
 		if err != nil || len(results) != 69 {
 			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
 		}
-		if replayed, err := provider.Up(ctx); err != nil || len(replayed) != 0 {
+		if replayed, err := provider.UpTo(ctx, 69); err != nil || len(replayed) != 0 {
 			t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
 		}
 	})

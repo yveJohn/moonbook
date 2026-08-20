@@ -181,6 +181,7 @@ func staticString(expression ast.Expr, constants map[string]string) (string, boo
 func TestCommerceProjectionUsageIsRestrictedToSearchAndDisplay(t *testing.T) {
 	allowed := map[string]bool{
 		filepath.Clean("commerce/readersearch/repository.go"):       true,
+		filepath.Clean("commerce/adminoperations/repository.go"):    true,
 		filepath.Clean("commerce/adminorder/repository.go"):         true,
 		filepath.Clean("commerce/adminrechargeorder/repository.go"): true,
 		filepath.Clean("commerce/adminwallet/repository.go"):        true,

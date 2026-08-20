@@ -71,7 +71,7 @@ func TestCommerceReaderSearchProjectionMigrationScenarios(t *testing.T) {
 			}
 			scenario.verify(t, ctx, db)
 
-			replayed, err := provider.Up(ctx)
+			replayed, err := provider.UpTo(ctx, 61)
 			if err != nil || len(replayed) != 0 {
 				t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
 			}
@@ -101,7 +101,7 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
 		}
 		verifyEPUSDTSchema(t, ctx, db)
-		replayed, err := provider.Up(ctx)
+		replayed, err := provider.UpTo(ctx, 60)
 		if err != nil || len(replayed) != 0 {
 			t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
 		}
@@ -175,7 +175,7 @@ func TestEPUSDTCallbackAttemptAuditMigrationScenarios(t *testing.T) {
 			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
 		}
 		verifyCallbackAuditSchema(t, ctx, db)
-		replayed, err := provider.Up(ctx)
+		replayed, err := provider.UpTo(ctx, 61)
 		if err != nil || len(replayed) != 0 {
 			t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
 		}
