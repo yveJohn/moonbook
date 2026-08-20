@@ -9,6 +9,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/admincheckin"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/admininvitereward"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminmembership"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminoperations"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminorder"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminpayment"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminproduct"
@@ -126,6 +127,7 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	adminfeedback.RegisterRoutes(privateGroup, adminfeedback.NewService(adminfeedback.SQLRepository{DB: db}))
 	admininvite.RegisterRoutes(privateGroup, admininvite.NewService(admininvite.SQLRepository{DB: db}))
 	admincheckin.RegisterRoutes(privateGroup, admincheckin.NewService(admincheckin.SQLRepository{DB: db}))
+	adminoperations.RegisterRoutes(privateGroup, adminoperations.NewService(adminoperations.SQLRepository{DB: db}))
 	readeractivity.RegisterRoutes(privateGroup, activityService)
 	commerce := catalog.NewService(catalog.SQLRepository{DB: db})
 	minio := global.GVA_CONFIG.Minio
