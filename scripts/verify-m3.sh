@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-reader_tree_expected="ffbe7bb4c56792e94e160de86cc71bce0a6e0e5e"
+reader_business_baseline="26743db"
+reader_router_version="7.18.2"
 
 for command in git go npm; do
   if ! command -v "$command" >/dev/null 2>&1; then
@@ -13,17 +14,39 @@ done
 
 cd "$repo_dir"
 
-echo "[1/6] 校验冻结 Reader Git 树"
-reader_tree_actual="$(git rev-parse HEAD:reader-ui)"
-if [[ "$reader_tree_actual" != "$reader_tree_expected" ]]; then
-  echo "Reader tree 不匹配: expected=$reader_tree_expected actual=$reader_tree_actual" >&2
+echo "[1/6] 校验冻结 Reader 业务源码和安全依赖"
+if ! git diff --quiet "$reader_business_baseline" -- reader-ui \
+  ':(exclude)reader-ui/package.json' \
+  ':(exclude)reader-ui/package-lock.json'; then
+  echo "Reader 业务源码偏离冻结基线: $reader_business_baseline" >&2
+  git diff --stat "$reader_business_baseline" -- reader-ui \
+    ':(exclude)reader-ui/package.json' \
+    ':(exclude)reader-ui/package-lock.json' >&2
   exit 1
 fi
-if [[ -n "$(git status --porcelain --untracked-files=all -- reader-ui)" ]]; then
-  echo "Reader 工作树存在未提交变更" >&2
-  git status --short --untracked-files=all -- reader-ui >&2
+if [[ -n "$(git status --porcelain --untracked-files=all -- reader-ui \
+  ':(exclude)reader-ui/package.json' \
+  ':(exclude)reader-ui/package-lock.json')" ]]; then
+  echo "Reader 业务源码工作树存在未提交变更" >&2
+  git status --short --untracked-files=all -- reader-ui \
+    ':(exclude)reader-ui/package.json' \
+    ':(exclude)reader-ui/package-lock.json' >&2
   exit 1
 fi
+node -e '
+  const fs = require("fs")
+  const expected = process.argv[1]
+  const manifest = JSON.parse(fs.readFileSync("reader-ui/package.json", "utf8"))
+  const lock = JSON.parse(fs.readFileSync("reader-ui/package-lock.json", "utf8"))
+  const packages = ["@react-router/node", "@react-router/serve", "@react-router/dev", "react-router-dom"]
+  for (const name of packages) {
+    const declared = manifest.dependencies?.[name] ?? manifest.devDependencies?.[name]
+    const installed = lock.packages?.[`node_modules/${name}`]?.version
+    if (declared !== expected || installed !== expected) {
+      throw new Error(`${name} must be pinned to ${expected}; declared=${declared} lock=${installed}`)
+    }
+  }
+' "$reader_router_version"
 
 echo "[2/6] 运行 Reader/Commerce 后端单元与契约测试"
 (
@@ -51,4 +74,4 @@ echo "[6/6] 构建冻结 Reader SSR 生产产物"
   npm run build
 )
 
-echo "M3 Reader 零修改兼容验收通过"
+echo "M3 Reader 冻结业务源码与安全依赖兼容验收通过"

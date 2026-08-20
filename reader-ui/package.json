@@ -11,19 +11,19 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@react-router/node": "7.18.0",
-    "@react-router/serve": "7.18.0",
+    "@react-router/node": "7.18.2",
+    "@react-router/serve": "7.18.2",
     "animal-island-ui": "^0.9.5",
     "axios": "^1.13.6",
     "lucide-react": "^1.24.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-router-dom": "7.18.0",
+    "react-router-dom": "7.18.2",
     "isbot": "^5"
   },
   "devDependencies": {
-    "@react-router/dev": "7.18.0",
+    "@react-router/dev": "7.18.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.7",
