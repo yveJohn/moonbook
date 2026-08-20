@@ -94,6 +94,10 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
 	paymentConfig, paymentConfigErr := epusdt.LoadConfig(true, os.LookupEnv)
 	callbackCredentials, _ := epusdt.LoadCredentialProvider(os.LookupEnv)
+	callbackAuditConfig, callbackAuditConfigErr := payment.LoadAuditConfig(os.LookupEnv)
+	if callbackAuditConfigErr != nil {
+		panic("load payment callback audit config: " + callbackAuditConfigErr.Error())
+	}
 	unknownReleaseWindow, unknownReleaseErr := epusdt.LoadUnknownReleaseWindow(os.LookupEnv)
 	if paymentConfigErr == nil && unknownReleaseErr != nil {
 		paymentConfigErr = unknownReleaseErr
@@ -122,7 +126,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	adminmembership.RegisterRoutes(privateGroup, adminmembership.NewService(adminmembership.SQLRepository{DB: db}, transactor, readerAccounts))
 	admininvitereward.RegisterRoutes(privateGroup, admininvitereward.NewService(admininvitereward.SQLRepository{DB: db}))
 	adminproduct.RegisterRoutes(privateGroup, adminproduct.NewService(adminproduct.SQLRepository{DB: db}, purchaseTargets))
-	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, transactor, readerAccounts))
+	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, transactor, readerAccounts, callbackAuditConfig.StaleAfter))
 	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}, transactor, readerAccounts))
 	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}, transactor, readerSearch, accountConsistency))
 	adminfeedback.RegisterRoutes(privateGroup, adminfeedback.NewService(adminfeedback.SQLRepository{DB: db}))

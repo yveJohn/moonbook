@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	fixtureConfirmation = "moonbook_browser"
-	fixtureBookName     = "M3 浏览器验收作品"
-	fixtureAuthorName   = "M3 浏览器验收作者"
-	fixtureCategoryCode = "m3-browser"
-	fixtureInviteCode   = "M3-BROWSER-20260815"
-	fixtureReaderPrefix = "m3-browser-"
+	fixtureConfirmation   = "moonbook_browser"
+	fixtureBookName       = "M3 浏览器验收作品"
+	fixtureAuthorName     = "M3 浏览器验收作者"
+	fixtureCategoryCode   = "m3-browser"
+	fixtureInviteCode     = "M3-BROWSER-20260815"
+	fixtureReaderPrefix   = "m3-browser-"
+	fixtureCallbackPrefix = "m4-browser-callback-"
 )
 
 type config struct {
@@ -158,6 +159,27 @@ func seed(ctx context.Context, db *sql.DB, objects *objectstore.Service, blobs o
 	if _, err = tx.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,status,max_use_count,used_count,remark) VALUES((SELECT COALESCE(max(id),0)+1 FROM reader_invite_codes),$1,'enabled',100,0,'M3 browser fixture')`, fixtureInviteCode); err != nil {
 		return fmt.Errorf("insert invite code: %w", err)
 	}
+	var receivedCallbackID, rejectedCallbackID int64
+	if err = tx.QueryRowContext(ctx, `
+INSERT INTO reader_payment_callback_logs
+    (provider,merchant_order_no,gateway_trade_id,payload_hash,payload_snapshot,signature_valid,processing_result,
+     response_status,response_body,request_time,source_type,request_id,trace_id,payload_bytes,payload_truncated)
+VALUES ('epusdt','M4-BROWSER-RECEIVED','browser-trade-received',repeat('a',64),
+        '{"order_id":"M4-BROWSER-RECEIVED","trade_id":"browser-trade-received","status":"2"}',false,'received',
+        0,'',now()-interval '10 minutes','runtime',$1,'m4-browser-trace-received',128,false)
+RETURNING id`, fixtureCallbackPrefix+"received").Scan(&receivedCallbackID); err != nil {
+		return fmt.Errorf("insert received callback audit: %w", err)
+	}
+	if err = tx.QueryRowContext(ctx, `
+INSERT INTO reader_payment_callback_logs
+    (provider,merchant_order_no,gateway_trade_id,payload_hash,payload_snapshot,signature_valid,processing_result,
+     failure_code,failure_reason,response_status,response_body,request_time,source_type,request_id,trace_id,payload_bytes,payload_truncated,completed_at)
+VALUES ('epusdt','M4-BROWSER-REJECTED','browser-trade-rejected',repeat('b',64),
+        '{"order_id":"M4-BROWSER-REJECTED","trade_id":"browser-trade-rejected","amount":"2.00","actual_amount":"1.99","receive_address":"T-browser","token":"usdt","block_transaction_id":"browser-tx","status":"2"}',
+        false,'rejected','SIGNATURE_INVALID','Callback signature validation failed',401,'fail',now(),'runtime',$1,'m4-browser-trace-rejected',256,false,now())
+RETURNING id`, fixtureCallbackPrefix+"rejected").Scan(&rejectedCallbackID); err != nil {
+		return fmt.Errorf("insert rejected callback audit: %w", err)
+	}
 	if err = tx.Commit(); err != nil {
 		return err
 	}
@@ -175,7 +197,7 @@ func seed(ctx context.Context, db *sql.DB, objects *objectstore.Service, blobs o
 			return fmt.Errorf("activate chapter %d: %w", index+1, activateErr)
 		}
 	}
-	fmt.Printf("fixture_seeded=true book_id=%d chapter_ids=%d,%d invite_code=%s reader_username_prefix=%s\n", bookID, chapterIDs[0], chapterIDs[1], fixtureInviteCode, fixtureReaderPrefix)
+	fmt.Printf("fixture_seeded=true book_id=%d chapter_ids=%d,%d invite_code=%s reader_username_prefix=%s callback_ids=%d,%d\n", bookID, chapterIDs[0], chapterIDs[1], fixtureInviteCode, fixtureReaderPrefix, receivedCallbackID, rejectedCallbackID)
 	return nil
 }
 
@@ -204,6 +226,7 @@ func cleanup(ctx context.Context, db *sql.DB, blobs objectstore.BlobStore) error
 	readerPattern := fixtureReaderPrefix + "%"
 	bookArgs := []any{fixtureBookName, fixtureAuthorName}
 	statements := append(readerCleanupStatements(readerPattern),
+		callbackCleanupStatement(),
 		cleanupStatement{`DELETE FROM novel_object_references WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
 		cleanupStatement{`DELETE FROM novel_object_events WHERE object_id IN (SELECT id FROM novel_objects WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2))`, bookArgs},
 		cleanupStatement{`DELETE FROM novel_objects WHERE book_id IN (SELECT id FROM novel_books WHERE book_name=$1 AND author_name=$2)`, bookArgs},
@@ -229,6 +252,10 @@ func cleanup(ctx context.Context, db *sql.DB, blobs objectstore.BlobStore) error
 	}
 	fmt.Printf("fixture_cleaned=true removed_objects=%d reader_username_prefix=%s\n", len(keys), fixtureReaderPrefix)
 	return nil
+}
+
+func callbackCleanupStatement() cleanupStatement {
+	return cleanupStatement{`DELETE FROM reader_payment_callback_logs WHERE request_id LIKE $1`, []any{fixtureCallbackPrefix + "%"}}
 }
 
 func readerCleanupStatements(readerPattern string) []cleanupStatement {

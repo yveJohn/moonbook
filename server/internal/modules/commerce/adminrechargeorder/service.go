@@ -4,19 +4,25 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
 
 type Service struct {
-	Repo   Repository
-	Tx     Transactor
-	Reader readercontract.AccountLocker
+	Repo               Repository
+	Tx                 Transactor
+	Reader             readercontract.AccountLocker
+	CallbackStaleAfter time.Duration
 }
 
-func NewService(repo Repository, tx Transactor, reader readercontract.AccountLocker) *Service {
-	return &Service{Repo: repo, Tx: tx, Reader: reader}
+func NewService(repo Repository, tx Transactor, reader readercontract.AccountLocker, staleAfter ...time.Duration) *Service {
+	threshold := 5 * time.Minute
+	if len(staleAfter) > 0 && staleAfter[0] > 0 {
+		threshold = staleAfter[0]
+	}
+	return &Service{Repo: repo, Tx: tx, Reader: reader, CallbackStaleAfter: threshold}
 }
 func (s *Service) List(ctx context.Context, k, st string, p, n int) ([]Order, int64, error) {
 	if p < 1 {
@@ -57,21 +63,31 @@ func (s *Service) ManualPay(ctx context.Context, id int64, in ManualPayInput) (O
 	return order, nil
 }
 func (s *Service) Sync(ctx context.Context, id int64) (Order, error) { return s.Repo.Sync(ctx, id) }
-func (s *Service) ListCallbacks(ctx context.Context, keyword, result string, page, size int) ([]CallbackLog, int64, error) {
+func (s *Service) ListCallbacks(ctx context.Context, filter CallbackFilter) ([]CallbackLog, int64, error) {
 	r, ok := s.Repo.(CallbackRepository)
 	if !ok {
 		return nil, 0, errors.New("callback log repository unavailable")
 	}
-	if page < 1 {
-		page = 1
+	if err := validateCallbackFilter(filter); err != nil {
+		return nil, 0, err
 	}
-	if size < 1 {
-		size = 20
+	if filter.Page < 1 {
+		filter.Page = 1
 	}
-	if size > 100 {
-		size = 100
+	if filter.PageSize < 1 {
+		filter.PageSize = 20
 	}
-	return r.ListCallbacks(ctx, keyword, result, page, size)
+	if filter.PageSize > 100 {
+		filter.PageSize = 100
+	}
+	rows, total, err := r.ListCallbacks(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	for index := range rows {
+		s.markInterrupted(&rows[index], time.Now().UTC())
+	}
+	return rows, total, nil
 }
 
 func readerError(err error) error {
@@ -91,5 +107,69 @@ func (s *Service) GetCallback(ctx context.Context, id int64) (CallbackLog, error
 	if !ok {
 		return CallbackLog{}, errors.New("callback log repository unavailable")
 	}
-	return r.GetCallback(ctx, id)
+	item, err := r.GetCallback(ctx, id)
+	if err == nil {
+		s.markInterrupted(&item, time.Now().UTC())
+	}
+	return item, err
+}
+
+func (s *Service) markInterrupted(item *CallbackLog, now time.Time) {
+	item.Interrupted = item.SourceType == "runtime" && item.ProcessingResult == "received" && item.RequestTime.Before(now.Add(-s.CallbackStaleAfter))
+}
+
+func validateCallbackFilter(filter CallbackFilter) error {
+	if filter.SignatureStatus != "" && filter.SignatureStatus != "valid" && filter.SignatureStatus != "invalid" && filter.SignatureStatus != "not_checked" {
+		return invalidCallbackFilter("签名状态无效")
+	}
+	if filter.ProcessingResult != "" && !validLowerCode(filter.ProcessingResult) {
+		return invalidCallbackFilter("处理结果无效")
+	}
+	if filter.FailureCode != "" && !validUpperCode(filter.FailureCode) {
+		return invalidCallbackFilter("失败码无效")
+	}
+	if filter.ResponseStatus != nil && (*filter.ResponseStatus < 0 || *filter.ResponseStatus > 599) {
+		return invalidCallbackFilter("响应状态无效")
+	}
+	if filter.StartTime != nil && filter.EndTime != nil {
+		if filter.EndTime.Before(*filter.StartTime) {
+			return invalidCallbackFilter("结束时间不能早于开始时间")
+		}
+		if filter.EndTime.Sub(*filter.StartTime) > 31*24*time.Hour {
+			return invalidCallbackFilter("查询时间跨度不能超过31天")
+		}
+	}
+	return nil
+}
+
+func invalidCallbackFilter(message string) error {
+	return apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, message)
+}
+
+func validLowerCode(value string) bool {
+	if len(value) == 0 || len(value) > 64 {
+		return false
+	}
+	for _, character := range value {
+		if character < 'a' || character > 'z' {
+			if character != '_' && (character < '0' || character > '9') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validUpperCode(value string) bool {
+	if len(value) == 0 || len(value) > 64 || value[0] < 'A' || value[0] > 'Z' {
+		return false
+	}
+	for _, character := range value {
+		if character < 'A' || character > 'Z' {
+			if character != '_' && (character < '0' || character > '9') {
+				return false
+			}
+		}
+	}
+	return true
 }

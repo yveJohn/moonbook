@@ -33,6 +33,13 @@ type ManualPayInput struct {
 }
 
 type CallbackRepository interface {
-	ListCallbacks(context.Context, string, string, int, int) ([]CallbackLog, int64, error)
+	ListCallbacks(context.Context, CallbackFilter) ([]CallbackLog, int64, error)
 	GetCallback(context.Context, int64) (CallbackLog, error)
+}
+
+type CallbackFilter struct {
+	Keyword, ProcessingResult, SignatureStatus, FailureCode string
+	ResponseStatus                                          *int
+	StartTime, EndTime                                      *time.Time
+	Page, PageSize                                          int
 }

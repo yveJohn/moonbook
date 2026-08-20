@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type Handler struct{ service *Service }
@@ -57,13 +58,36 @@ func (h *Handler) sync(c *gin.Context) {
 }
 
 func renderCallback(v CallbackLog) map[string]any {
-	return map[string]any{"id": v.ID, "orderId": v.OrderID, "provider": v.Provider, "merchantOrderNo": v.MerchantOrderNo, "gatewayTradeId": v.GatewayTradeID, "payloadHash": v.PayloadHash, "signatureValid": v.SignatureValid, "processingResult": v.ProcessingResult, "failureReason": v.FailureReason, "responseStatus": v.ResponseStatus, "responseBody": v.ResponseBody, "requestTime": v.RequestTime, "createdAt": v.CreatedAt}
+	return map[string]any{
+		"id": v.ID, "orderId": v.OrderID, "provider": v.Provider, "merchantOrderNo": v.MerchantOrderNo,
+		"gatewayTradeId": v.GatewayTradeID, "payloadHash": v.PayloadHash, "signatureValid": v.SignatureValid,
+		"signatureStatus": v.SignatureStatus, "processingResult": v.ProcessingResult, "failureCode": v.FailureCode,
+		"failureReason": v.FailureReason, "responseStatus": v.ResponseStatus, "responseBody": v.ResponseBody,
+		"requestId": v.RequestID, "traceId": v.TraceID, "payloadBytes": v.PayloadBytes,
+		"payloadTruncated": v.PayloadTruncated, "requestTime": v.RequestTime, "createdAt": v.CreatedAt,
+		"completedAt": v.CompletedAt, "interrupted": v.Interrupted, "sourceType": v.SourceType, "snapshot": v.Snapshot,
+	}
 }
 
 func (h *Handler) callbackList(c *gin.Context) {
 	p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	n, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
-	rows, total, err := h.service.ListCallbacks(c, c.Query("keyword"), c.Query("processingResult"), p, n)
+	if p < 1 {
+		p = 1
+	}
+	if n < 1 {
+		n = 20
+	}
+	if n > 100 {
+		n = 100
+	}
+	filter, err := callbackFilterFromQuery(c)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	filter.Page, filter.PageSize = p, n
+	rows, total, err := h.service.ListCallbacks(c, filter)
 	if err != nil {
 		apperror.WriteManagement(c, err)
 		return
@@ -73,6 +97,34 @@ func (h *Handler) callbackList(c *gin.Context) {
 		items = append(items, renderCallback(v))
 	}
 	managementresponse.OK(c, managementresponse.Page{List: items, Total: total, Page: p, PageSize: n}, "获取成功")
+}
+
+func callbackFilterFromQuery(c *gin.Context) (CallbackFilter, error) {
+	filter := CallbackFilter{
+		Keyword: c.Query("keyword"), ProcessingResult: c.Query("processingResult"), SignatureStatus: c.Query("signatureStatus"), FailureCode: c.Query("failureCode"),
+	}
+	if raw := c.Query("responseStatus"); raw != "" {
+		status, err := strconv.Atoi(raw)
+		if err != nil {
+			return CallbackFilter{}, invalidCallbackFilter("响应状态无效")
+		}
+		filter.ResponseStatus = &status
+	}
+	for raw, destination := range map[string]**time.Time{"startTime": &filter.StartTime, "endTime": &filter.EndTime} {
+		value := c.Query(raw)
+		if value == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return CallbackFilter{}, invalidCallbackFilter("时间参数必须包含明确时区")
+		}
+		*destination = &parsed
+	}
+	if err := validateCallbackFilter(filter); err != nil {
+		return CallbackFilter{}, err
+	}
+	return filter, nil
 }
 
 func (h *Handler) callbackGet(c *gin.Context) {

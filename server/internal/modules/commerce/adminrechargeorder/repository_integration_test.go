@@ -4,9 +4,11 @@ package adminrechargeorder
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,11 +73,87 @@ func TestAdminRechargeOrderListAndGet(t *testing.T) {
 	if err != nil || got.OrderNo != orderNo || got.ReaderID == "" {
 		t.Fatalf("got=%+v err=%v", got, err)
 	}
-	logs, logTotal, err := r.ListCallbacks(ctx, orderNo, "success", 1, 20)
+	logs, logTotal, err := r.ListCallbacks(ctx, CallbackFilter{Keyword: orderNo, ProcessingResult: "success", Page: 1, PageSize: 20})
 	if err != nil || logTotal != 1 || len(logs) != 1 || logs[0].ID == "" || !logs[0].SignatureValid {
 		t.Fatalf("logs=%+v total=%d err=%v", logs, logTotal, err)
 	}
 }
+
+func TestCallbackAuditFiltersAndSanitizedDetail(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	base := time.Now().UnixNano()
+	requestPrefix := fmt.Sprintf("callback-admin-%d", base)
+	oldTime := time.Now().UTC().Add(-10 * time.Minute)
+	var receivedID, invalidID, historicalID int64
+	if err := db.QueryRowContext(ctx, `
+INSERT INTO reader_payment_callback_logs
+    (provider,merchant_order_no,gateway_trade_id,payload_hash,payload_snapshot,signature_valid,processing_result,
+     failure_code,failure_reason,response_status,response_body,request_time,source_type,request_id,trace_id,payload_bytes,payload_truncated)
+VALUES ('epusdt',$1,'trade-runtime',repeat('c',64),'{"order_id":"ORDER-RUNTIME","trade_id":"trade-runtime","pid":"secret-pid","signature":"secret-signature","unknown":"hidden"}',false,'received',NULL,'',0,'',$2,'runtime',$3,$4,120,false)
+RETURNING id`, "ORDER-RUNTIME-"+requestPrefix, oldTime, requestPrefix+"-received", requestPrefix+"-trace").Scan(&receivedID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `
+INSERT INTO reader_payment_callback_logs
+    (provider,merchant_order_no,gateway_trade_id,payload_hash,payload_snapshot,signature_valid,processing_result,
+     failure_code,failure_reason,response_status,response_body,request_time,source_type,request_id,trace_id,payload_bytes,payload_truncated,completed_at)
+VALUES ('epusdt',$1,'trade-invalid',repeat('d',64),'{"order_id":"ORDER-INVALID","trade_id":"trade-invalid","amount":"2.00","actual_amount":"1.99","receive_address":"T-address","token":"usdt","block_transaction_id":"tx-invalid","status":"2","pid":"secret-pid","signature":"secret-signature"}',false,'rejected',
+        'SIGNATURE_INVALID','Callback signature validation failed',401,'fail',now(),'runtime',$2,$3,240,false,now())
+RETURNING id`, "ORDER-INVALID-"+requestPrefix, requestPrefix+"-invalid", requestPrefix+"-trace-invalid").Scan(&invalidID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `
+INSERT INTO reader_payment_callback_logs
+    (provider,merchant_order_no,gateway_trade_id,payload_hash,signature_valid,processing_result,failure_reason,response_status,response_body,request_time,source_type)
+VALUES ('manual',$1,'',repeat('e',64),false,'manual_success','',200,'success',$2,'manual') RETURNING id`, "ORDER-HISTORICAL-"+requestPrefix, oldTime).Scan(&historicalID); err != nil {
+		t.Fatal(err)
+	}
+	largeID := base
+	for index, id := range []*int64{&receivedID, &invalidID, &historicalID} {
+		if _, err := db.ExecContext(ctx, `UPDATE reader_payment_callback_logs SET id=$1 WHERE id=$2`, largeID+int64(index), *id); err != nil {
+			t.Fatal(err)
+		}
+		*id = largeID + int64(index)
+	}
+	if invalidID <= 9007199254740991 {
+		t.Fatalf("fixture ID must exceed JavaScript safe integer: %d", invalidID)
+	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_payment_callback_logs WHERE id IN ($1,$2,$3)`, receivedID, invalidID, historicalID)
+	})
+
+	repository := SQLRepository{DB: db}
+	start, end := time.Now().UTC().Add(-time.Hour), time.Now().UTC().Add(time.Hour)
+	rows, total, err := repository.ListCallbacks(ctx, CallbackFilter{Keyword: requestPrefix, SignatureStatus: "invalid", FailureCode: "SIGNATURE_INVALID", ResponseStatus: intPtr(401), StartTime: &start, EndTime: &end, Page: 1, PageSize: 20})
+	if err != nil || total != 1 || len(rows) != 1 || rows[0].ID != strconv.FormatInt(invalidID, 10) || rows[0].SignatureStatus != "invalid" {
+		t.Fatalf("rows=%+v total=%d err=%v", rows, total, err)
+	}
+	detail, err := repository.GetCallback(ctx, invalidID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Snapshot.OrderNo != "ORDER-INVALID" || detail.Snapshot.TransactionID != "tx-invalid" || detail.RequestID != requestPrefix+"-invalid" || detail.PayloadBytes != 240 || detail.CompletedAt == nil {
+		t.Fatalf("detail=%+v", detail)
+	}
+	encoded, err := json.Marshal(detail.Snapshot)
+	if err != nil || strings.Contains(string(encoded), "pid") || strings.Contains(string(encoded), "signature") || strings.Contains(string(encoded), "unknown") {
+		t.Fatalf("unsafe snapshot=%s err=%v", encoded, err)
+	}
+
+	service := NewService(repository, nil, nil, 5*time.Minute)
+	received, _, err := service.ListCallbacks(ctx, CallbackFilter{Keyword: requestPrefix, ProcessingResult: "received", Page: 1, PageSize: 20})
+	if err != nil || len(received) != 1 || !received[0].Interrupted || received[0].SignatureStatus != "not_checked" {
+		t.Fatalf("received=%+v err=%v", received, err)
+	}
+	historical, _, err := service.ListCallbacks(ctx, CallbackFilter{Keyword: requestPrefix, ProcessingResult: "manual_success", Page: 1, PageSize: 20})
+	if err != nil || len(historical) != 1 || historical[0].Interrupted {
+		t.Fatalf("historical=%+v err=%v", historical, err)
+	}
+}
+
+func intPtr(value int) *int { return &value }
 
 func TestManualPayIsIdempotentAndProtectsGatewayTradeID(t *testing.T) {
 	db, _ := integrationtest.RequireDB(t)

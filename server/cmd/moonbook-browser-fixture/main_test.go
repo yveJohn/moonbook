@@ -63,3 +63,10 @@ func TestReaderCleanupCoversAccountReferencesBeforeDeletingAccount(t *testing.T)
 		t.Fatalf("reader account must be deleted after dependent rows, index=%d len=%d", accountDelete, len(statements))
 	}
 }
+
+func TestCallbackCleanupUsesDedicatedRequestPrefix(t *testing.T) {
+	statement := callbackCleanupStatement()
+	if !strings.Contains(statement.query, "request_id LIKE $1") || len(statement.args) != 1 || statement.args[0] != fixtureCallbackPrefix+"%" {
+		t.Fatalf("callback cleanup=%+v", statement)
+	}
+}

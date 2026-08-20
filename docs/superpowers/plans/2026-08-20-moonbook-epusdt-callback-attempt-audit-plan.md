@@ -113,14 +113,14 @@
 - Modify: `server/cmd/moonbook-browser-fixture/main.go`
 - Modify: `server/cmd/moonbook-browser-fixture/main_test.go`
 
-- [ ] **Step 1：编写查询失败测试。** 固定关键词、五种运行时结果、历史结果、签名三态、失败码、HTTP 状态、明确时区、起止顺序、31 天跨度、稳定分页和参数化 SQL。
-- [ ] **Step 2：扩展安全 DTO。** 列表/详情输出新审计字段和白名单 snapshot；不得返回原始请求、签名、PID、IP、请求头或自由底层错误。
-- [ ] **Step 3：实现处理中断判定。** 仅 `source_type=runtime + received + 超过阈值` 为中断；manual/sync/legacy 和历史空字段不得误报。
-- [ ] **Step 4：实现签名三态。** `signature_valid=true` 为 valid，`SIGNATURE_INVALID` 为 invalid，其余为 not_checked；禁止把默认 false 全部显示为无效。
-- [ ] **Step 5：完善 Vue 页面。** 增加筛选、失败码/request ID/完成状态列和详情抽屉；保持紧凑管理布局、移动端不溢出，不提供入账、重放、补偿或编辑入口。
-- [ ] **Step 6：Long ID 测试。** API 与页面使用字符串和 `appendLongId`，以超过 `Number.MAX_SAFE_INTEGER` 的 ID 证明无精度损失。
-- [ ] **Step 7：浏览器夹具与验收。** 只创建可追踪测试行，桌面和移动视口验证筛选、详情、脱敏和中断标识；完成后精确清理夹具。
-- [ ] **Step 8：验证并提交。** 运行管理端真实 PostgreSQL 测试、Node 测试、ESLint、生产构建和 Playwright；提交信息：`完善支付回调审计管理页`。
+- [x] **Step 1：编写查询失败测试。** 固定关键词、五种运行时结果、历史结果、签名三态、失败码、HTTP 状态、明确时区、起止顺序、31 天跨度、稳定分页和参数化 SQL。
+- [x] **Step 2：扩展安全 DTO。** 列表/详情输出新审计字段和白名单 snapshot；不得返回原始请求、签名、PID、IP、请求头或自由底层错误。
+- [x] **Step 3：实现处理中断判定。** 仅 `source_type=runtime + received + 超过阈值` 为中断；manual/sync/legacy 和历史空字段不得误报。
+- [x] **Step 4：实现签名三态。** `signature_valid=true` 为 valid，`SIGNATURE_INVALID` 为 invalid，其余为 not_checked；禁止把默认 false 全部显示为无效。
+- [x] **Step 5：完善 Vue 页面。** 增加筛选、失败码/request ID/完成状态列和详情抽屉；保持紧凑管理布局、移动端不溢出，不提供入账、重放、补偿或编辑入口。
+- [x] **Step 6：Long ID 测试。** API 与页面使用字符串和 `appendLongId`，以超过 `Number.MAX_SAFE_INTEGER` 的 ID 证明无精度损失。
+- [x] **Step 7：浏览器夹具与验收。** 只创建可追踪测试行，桌面和移动视口验证筛选、详情、脱敏和中断标识；完成后精确清理夹具。
+- [x] **Step 8：验证并提交。** 运行管理端真实 PostgreSQL 测试、Node 测试、ESLint、生产构建和 Playwright；提交信息：`完善支付回调审计管理页`。
 
 ## Task 6：增加回调指标、配置门和 Runbook
 
