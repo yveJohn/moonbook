@@ -22,8 +22,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-chapter-clean" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-crawl-import-tasks" && flag.Arg(0) != "novel-crawl-fetch-logs" && flag.Arg(0) != "novel-txt-imports" && flag.Arg(0) != "novel-ai-configs" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-chapter-clean|novel-crawl-sources|novel-crawl-candidates|novel-crawl-import-tasks|novel-crawl-fetch-logs|novel-txt-imports|novel-ai-configs|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-chapter-clean" && flag.Arg(0) != "novel-book-merge" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-crawl-import-tasks" && flag.Arg(0) != "novel-crawl-fetch-logs" && flag.Arg(0) != "novel-txt-imports" && flag.Arg(0) != "novel-ai-configs" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-chapter-clean|novel-book-merge|novel-crawl-sources|novel-crawl-candidates|novel-crawl-import-tasks|novel-crawl-fetch-logs|novel-txt-imports|novel-ai-configs|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -89,14 +89,17 @@ func run() int {
 			legacymigrate.NovelBookSubCategoriesStage{},
 			legacymigrate.NovelBookCoversStage{Objects: objects, Downloader: downloader},
 			legacymigrate.NovelChaptersStage{Objects: objects},
-			legacymigrate.NovelAIConfigsStage{},
-			legacymigrate.NovelChapterCleanTasksStage{},
-			legacymigrate.NovelChapterCleanResultsStage{Objects: objects},
 			legacymigrate.NovelCrawlSourcesStage{},
 			legacymigrate.NovelCrawlCandidatesStage{},
 			legacymigrate.NovelCrawlImportTasksStage{},
 			legacymigrate.NovelCrawlFetchLogsStage{},
 			txtStage,
+			legacymigrate.NovelAIConfigsStage{},
+			legacymigrate.NovelChapterCleanTasksStage{},
+			legacymigrate.NovelChapterCleanResultsStage{Objects: objects},
+			legacymigrate.NovelBookMergeTasksStage{},
+			legacymigrate.NovelBookMergeSourcesStage{},
+			legacymigrate.NovelBookMergeChaptersStage{},
 			legacymigrate.NovelReaderSEOStage{},
 			readerIdentity,
 			legacymigrate.ReaderCommerceStage{},
@@ -134,6 +137,14 @@ func run() int {
 			return 2
 		}
 		stages = append(stages, legacymigrate.NovelAIConfigsStage{}, legacymigrate.NovelChapterCleanTasksStage{}, legacymigrate.NovelChapterCleanResultsStage{Objects: objects})
+	}
+	if command == "novel-book-merge" {
+		objects, _, err := coverDependencies(target)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		stages = append(stages, legacymigrate.NovelCrawlSourcesStage{}, legacymigrate.NovelCrawlCandidatesStage{}, legacymigrate.NovelCrawlImportTasksStage{}, legacymigrate.NovelAIConfigsStage{}, legacymigrate.NovelChapterCleanTasksStage{}, legacymigrate.NovelChapterCleanResultsStage{Objects: objects}, legacymigrate.NovelBookMergeTasksStage{}, legacymigrate.NovelBookMergeSourcesStage{}, legacymigrate.NovelBookMergeChaptersStage{})
 	}
 	if command == "reader-identity" || command == "reader-commerce" || command == "reader-finance" || command == "reader-activity" {
 		stages = append(stages, readerIdentity)

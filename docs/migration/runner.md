@@ -33,6 +33,15 @@ go run ./cmd/moonbook-legacy-migrate novel-chapter-clean
 
 该命令先确保 AI 配置/模型已迁移，再按任务、结果顺序读取 `novel_chapter_clean_*`；旧库仍使用早期命名时自动兼容 `ai_chapter_clean_*`。运行中的旧任务统一转为 `failed` 并记录中断原因，不会在切换后自动调用 AI。结果正文先写入并校验 MinIO `chapter_clean` 对象（来源指纹为正文 SHA-256），只有对象激活成功才写入结果引用；缺正文、缺书/章节/任务、非法状态及对象失败进入 `migration_errors`。旧 `raw_response` 永不写入目标库。结果使用 `moonbook-v1:<source-table>:<id>` 幂等，历史 active 冲突会先降为 `expired`，不会违反章节活动结果唯一约束。
 
+书籍合并血缘可单独执行：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-book-merge
+```
+
+该命令依次迁移合并任务、源书和章节明细。仅当目标书籍、论坛导入任务、源章节及已激活正文对象已经迁移时才写入血缘；清洗正文引用还必须对应目标中 active 且成功的清洗结果。旧运行中任务转为失败，非法计数、论坛来源缺失、目标章节/对象缺失均进入错误清单。旧对象 ID 不直接复制，源/目标对象按书籍和章节重新解析；三个阶段各有独立 checkpoint 和来源键。
+
 M2 小说分类与作者迁移：
 
 ```bash
