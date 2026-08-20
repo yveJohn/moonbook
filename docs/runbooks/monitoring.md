@@ -1,5 +1,16 @@
 # Moonbook 监控与告警 Runbook
 
+## 告警到故障手册
+
+| 范围 | 代表告警 | 故障手册 |
+| --- | --- | --- |
+| Gateway、Server、Reader、容器资源 | `MoonbookEndpointDown`、API 5xx/p95/in-flight、容器内存 | `incidents/application-unavailable.md` |
+| PostgreSQL、Redis | exporter down、连接或内存超过 80% | `incidents/database-cache.md` |
+| MinIO、正文对象 | metrics missing、offline drive、对象异常 | `incidents/content-storage.md` |
+| 支付、Worker、迁移、财务 | 回调失败/过期、任务失败/积压/失租、迁移错误、财务差异 | `incidents/business-jobs.md` |
+
+Alertmanager 的每条规则已带仓库相对 `runbook` 标签。收到告警先按标签进入对应手册；生产切换窗口内的 critical 告警同时触发 `production-cutover.md` 的停止点和 `rollback.md` 评估。
+
 ## 启动边界
 
 监控栈属于根 `compose.yaml` 的可选 `monitoring` profile，默认不会启动。镜像使用固定版本；Prometheus、Alertmanager 和 Webhook 只绑定 `127.0.0.1`，生产环境通过受控反向代理、VPN 或运维隧道访问，不直接暴露公网。

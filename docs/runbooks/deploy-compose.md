@@ -19,6 +19,14 @@ docker compose --env-file .env --profile bootstrap run --rm admin-bootstrap
 
 `migrate` 会在 API 前运行并只执行待处理迁移；`minio-init` 幂等创建私有 Bucket。API 容器以非 root 用户运行，启动时从环境变量安全生成权限为 `0600` 的配置文件。API、管理静态站和读者 SSR 不直接绑定公网地址，统一经 `gateway` 暴露。
 
+## 生产配置合同
+
+生产环境必须同时加载 `deploy/compose/compose.production.yaml`，并先运行 `scripts/verify-production-config.sh /secure/path/moonbook.env`。该 override 删除本地应用构建，强制 PostgreSQL、Redis、MinIO、MinIO Client、Server、Web、Reader 和 Nginx 使用 `@sha256:` digest，并为常驻服务设置 CPU、内存、PID 上限及 `json-file` 日志轮转。默认限制只是起点，必须按容量测试调整；容器持续超过内存 90% 或宿主磁盘使用 80% 告警，磁盘 90% 或预计 24 小时内耗尽时停止发布并扩容。
+
+宿主发布端口仍只绑定 `127.0.0.1`，由同机或受控网络内 TLS 终止代理访问。TLS 代理必须启用 TLS 1.2+、证书续期告警和 HSTS，在转发前清除客户端提供的 `X-Real-IP`、`X-Forwarded-For`、`X-Forwarded-Proto`。Compose Gateway 会再次重写这些头；Server 只信任 `MOONBOOK_TRUSTED_PROXIES` 中的明确 IP/CIDR，未设置时不信任转发头，无效值会使 Server 启动失败。生产值必须收窄到实际 Gateway 网络，不得使用 `0.0.0.0/0`。
+
+卷容量必须覆盖数据库/对象当前数据、12 小时增长、一次在线备份和至少 30% 余量。Docker 数据目录和仓库外备份目录分别监控 inode、字节和增长率；日志轮转不能替代集中日志与保留策略。发布清单固定 commit、配置版本、全部镜像 digest、Secret 版本、卷容量、备份位置、迁移边界和责任人。
+
 严格 CORS 白名单分别由 `MOONBOOK_ADMIN_ORIGIN` 和 `MOONBOOK_READER_ORIGIN` 注入。部署到域名时必须填写浏览器地址的完整 Origin（协议、主机和端口），不能沿用 `.env.example` 的本地值；否则管理登录、写操作或读者请求会被 403 拒绝。
 
 只在宿主机直接运行 Go 服务时，才需要生成本地配置：
@@ -76,6 +84,7 @@ docker compose --env-file .env start
 - GVA 通过 `GVA_CONFIG` 选择生成配置文件；数据库、Redis、MinIO 和 JWT 密钥均由 `.env` 注入模板。
 - AI 配置表只保存形如 `MOONBOOK_AI_*_API_KEY` 的环境变量引用。Compose 示例透传 `MOONBOOK_AI_EXAMPLE_API_KEY`；新增供应商时必须在部署清单中显式透传对应 Secret，管理 API 只显示是否已注入，禁止把密钥值填入 PostgreSQL。
 - 生产部署必须使用 Secret 管理，不得复制本地 `.env`。
+- 生产环境文件还必须显式设置 `MOONBOOK_TRUSTED_PROXIES`；`scripts/verify-production-config.sh` 只验证结构和不可变镜像，不证明 Secret 内容正确。
 
 ## 验证
 

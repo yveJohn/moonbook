@@ -259,13 +259,15 @@
 - Modify: `compose.yaml`
 - Modify: `deploy/compose/gateway.conf`
 
-- [ ] **Step 1：部署合同。** 固定 commit/tag/digest、配置版本、TLS 终止、可信代理、Secret 完整性、日志轮转、资源限制和磁盘水位。
-- [ ] **Step 2：协调停写。** 提供可验证的维护模式或网关阻断流程，明确支付回调缓存/重投、Worker 停止、PostgreSQL 与 MinIO 协调快照顺序。
-- [ ] **Step 3：切换时限。** 把 12 小时拆为备份、预检、迁移、核对、冒烟、观察和回退余量；使用 Task 7 实测数据计算最晚回退时间。
-- [ ] **Step 4：故障处理。** 每个监控告警链接到 PostgreSQL、Redis、MinIO、Gateway、Reader、Worker、支付、迁移和对象故障手册。
-- [ ] **Step 5：外部清单。** 对真实支付、AI、论坛/代理、SMTP、GVA 商业授权和生产切流记录责任人、输入、命令、通过标准、风险和证据位置。
-- [ ] **Step 6：独立复现。** 在隔离 Compose 中由脚本按文档完成部署、升级、备份恢复和应用镜像回退。
-- [ ] **Step 7：提交。** 提交信息：`完善生产切换与故障处理手册`。
+- [x] **Step 1：部署合同。** 固定 commit/tag/digest、配置版本、TLS 终止、可信代理、Secret 完整性、日志轮转、资源限制和磁盘水位。
+- [x] **Step 2：协调停写。** 提供可验证的维护模式或网关阻断流程，明确支付回调缓存/重投、Worker 停止、PostgreSQL 与 MinIO 协调快照顺序。
+- [x] **Step 3：切换时限。** 把 12 小时拆为备份、预检、迁移、核对、冒烟、观察和回退余量；使用 Task 7 实测数据计算最晚回退时间。
+- [x] **Step 4：故障处理。** 每个监控告警链接到 PostgreSQL、Redis、MinIO、Gateway、Reader、Worker、支付、迁移和对象故障手册。
+- [x] **Step 5：外部清单。** 对真实支付、AI、论坛/代理、SMTP、GVA 商业授权和生产切流记录责任人、输入、命令、通过标准、风险和证据位置。
+- [x] **Step 6：独立复现。** 在隔离 Compose 中由脚本按文档完成部署、升级、备份恢复和应用镜像回退。
+- [x] **Step 7：提交。** 提交信息：`完善生产切换与故障处理手册`。
+
+验收记录见 `docs/verification/m7-production-operations-rehearsal.md`。生产 Compose 合同解析、可信代理定向测试和隔离维护模式进入/退出均通过；既有升级、备份恢复与应用镜像回退证据继续有效。Task 7 仅完成 3,834,607,260 字节源恢复（64 秒），业务迁移和核对仍被 16 个 TXT 原文件阻断，因此 12 小时表采用保守停止点，生产切换保持 No-Go。
 
 ## Task 12：收敛状态文档和功能矩阵
 

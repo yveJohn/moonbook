@@ -30,15 +30,16 @@ compose ps
 
 PostgreSQL dump 和 MinIO mirror 只有在所有 Moonbook 写入方均停止后才构成协调备份。生产执行前还必须确认支付渠道在停机期间会可靠重试回调，或已有受控回放和人工核对方案；未确认时禁止开始正式备份。
 
-Compose 单机部署按以下顺序阻断入口并优雅停止应用写入：
+Compose 单机部署必须使用维护脚本先阻断入口，再优雅停止应用写入：
 
 ```bash
-compose stop gateway
-compose stop reader-ui web server
+"$MOONBOOK_ROOT/scripts/maintenance-mode.sh" on \
+  --env-file "$MOONBOOK_ENV_FILE" --confirm-project '<已核对项目名>'
+"$MOONBOOK_ROOT/scripts/maintenance-mode.sh" status --env-file "$MOONBOOK_ENV_FILE"
 compose ps
 ```
 
-验收条件：`gateway`、`reader-ui`、`web`、`server` 均为 stopped；PostgreSQL 和 MinIO 保持 healthy；不存在单独部署的 Worker 或迁移进程。记录 `git rev-parse HEAD`、镜像 digest、迁移版本、PostgreSQL/MinIO 版本和停写时间。
+验收条件：Gateway healthy 且除 `/gateway-health` 外统一返回带 `Retry-After` 的 503；`reader-ui`、`web`、`server` 均为 stopped；PostgreSQL 和 MinIO 保持 healthy；不存在单独部署的 Worker 或迁移进程。记录 `git rev-parse HEAD`、镜像 digest、迁移版本、PostgreSQL/MinIO 版本和停写时间。完整状态机和失败处置见 `maintenance-mode.md`。
 
 ## 创建备份
 
@@ -139,7 +140,8 @@ restore_compose down --volumes --remove-orphans
 备份目录不得随演练环境删除。正式环境只有在备份验收通过且切换负责人批准后，才按切换 Runbook 恢复服务；普通本地备份可以执行：
 
 ```bash
-compose up -d server web reader-ui gateway
+"$MOONBOOK_ROOT/scripts/maintenance-mode.sh" off \
+  --env-file "$MOONBOOK_ENV_FILE" --confirm-project '<已核对项目名>'
 compose ps
 ```
 

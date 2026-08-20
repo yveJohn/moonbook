@@ -24,10 +24,11 @@ compose() {
   docker compose \
     --project-directory "$MOONBOOK_ROOT" \
     --env-file "$MOONBOOK_ENV_FILE" \
-    -f "$MOONBOOK_ROOT/compose.yaml" "$@"
+    -f "$MOONBOOK_ROOT/compose.yaml" \
+    -f "$MOONBOOK_ROOT/deploy/compose/compose.production.yaml" "$@"
 }
 
-compose config --quiet
+"$MOONBOOK_ROOT/scripts/verify-production-config.sh" "$MOONBOOK_ENV_FILE"
 compose config --images
 compose ps
 ```
@@ -39,7 +40,7 @@ compose ps
 1. 工作目录必须处于发布清单记录的 commit，Compose 和环境文件解析成功。
 2. 当前所有基础设施和应用容器健康，迁移表不存在失败或未解释版本。
 3. 固定镜像已拉取并用 digest 核对，旧镜像仍保留在宿主机或可信镜像仓库。
-4. 已按 `backup-restore.md` 协调停写并完成 PostgreSQL/MinIO 备份，哈希、dump 清单和对象统计全部通过。
+4. 已按 `maintenance-mode.md` 协调停写，并按 `backup-restore.md` 完成 PostgreSQL/MinIO 备份，哈希、dump 清单和对象统计全部通过。
 5. 已确认停机期间支付回调的重试、回放或人工核对方案。
 6. 已审查目标迁移是否允许旧应用读取新结构。没有明确证据时，默认不允许迁移后直接回退旧应用。
 
