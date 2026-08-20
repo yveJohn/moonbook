@@ -16,7 +16,7 @@ import (
 const callbackBodyLimit = 16 * 1024
 
 type CallbackProcessor interface {
-	ProcessAttempt(context.Context, int64, Callback) error
+	ProcessAttempt(context.Context, int64, Callback) (AttemptResult, error)
 }
 
 type RequestMetadata struct {
@@ -31,10 +31,15 @@ type Handler struct {
 	audit        CallbackAuditRepository
 	metadata     RequestMetadataProvider
 	observePanic PanicObserver
+	observer     AttemptObserver
 }
 
-func NewHandler(processor CallbackProcessor, audit CallbackAuditRepository, metadata RequestMetadataProvider, observePanic PanicObserver) *Handler {
-	return &Handler{processor: processor, audit: audit, metadata: metadata, observePanic: observePanic}
+func NewHandler(processor CallbackProcessor, audit CallbackAuditRepository, metadata RequestMetadataProvider, observePanic PanicObserver, observers ...AttemptObserver) *Handler {
+	handler := &Handler{processor: processor, audit: audit, metadata: metadata, observePanic: observePanic}
+	if len(observers) > 0 {
+		handler.observer = observers[0]
+	}
+	return handler
 }
 
 func RegisterRoutes(group *gin.RouterGroup, handler *Handler) {
@@ -49,14 +54,15 @@ func (handler *Handler) Handle(c *gin.Context) {
 	}
 	start, err := NewAttemptStart(body, truncated, meta.RequestID, meta.TraceID, meta.ClientIP, time.Now().UTC())
 	if err != nil || handler == nil || handler.audit == nil || handler.processor == nil {
-		c.String(http.StatusServiceUnavailable, "fail")
+		handler.writeResponse(c, http.StatusServiceUnavailable, "fail")
 		return
 	}
 	attemptID, err := handler.audit.BeginAttempt(c.Request.Context(), start)
 	if err != nil {
-		c.String(http.StatusServiceUnavailable, "fail")
+		handler.writeResponse(c, http.StatusServiceUnavailable, "fail")
 		return
 	}
+	handler.observeAttempt(ResultReceived)
 	defer handler.recoverAttempt(c, attemptID)
 
 	if readErr != nil {
@@ -73,7 +79,8 @@ func (handler *Handler) Handle(c *gin.Context) {
 		return
 	}
 	snapshot := SnapshotFromCallback(callback)
-	if err = handler.processor.ProcessAttempt(c.Request.Context(), attemptID, callback); err != nil {
+	result, err := handler.processor.ProcessAttempt(c.Request.Context(), attemptID, callback)
+	if err != nil {
 		code, signatureValid, orderID := processingErrorDetails(err)
 		if code == "" {
 			code = FailureDependency
@@ -81,7 +88,8 @@ func (handler *Handler) Handle(c *gin.Context) {
 		handler.finishFailure(c, attemptID, code, signatureValid, orderID, &snapshot)
 		return
 	}
-	c.String(http.StatusOK, "success")
+	handler.observeAttempt(result)
+	handler.writeResponse(c, http.StatusOK, "success")
 }
 
 func readCallbackBody(reader io.Reader) ([]byte, bool, error) {
@@ -136,10 +144,11 @@ func (handler *Handler) finishFailure(c *gin.Context, attemptID int64, code Fail
 	}
 	completion := AttemptCompletion{Result: definition.result, FailureCode: code, ResponseStatus: definition.status, SignatureValid: signatureValid, OrderID: orderID, Snapshot: snapshot}
 	if err := handler.audit.FinalizeAttempt(c.Request.Context(), attemptID, completion); err != nil {
-		c.String(http.StatusServiceUnavailable, "fail")
+		handler.writeResponse(c, http.StatusServiceUnavailable, "fail")
 		return
 	}
-	c.String(definition.status, "fail")
+	handler.observeAttempt(definition.result)
+	handler.writeResponse(c, definition.status, "fail")
 }
 
 func (handler *Handler) recoverAttempt(c *gin.Context, attemptID int64) {
@@ -148,11 +157,36 @@ func (handler *Handler) recoverAttempt(c *gin.Context, attemptID int64) {
 	}
 	definition := failureDefinitions[FailurePanic]
 	completion := AttemptCompletion{Result: definition.result, FailureCode: FailurePanic, ResponseStatus: definition.status}
-	_ = handler.audit.FinalizeAttempt(c.Request.Context(), attemptID, completion)
+	if handler.audit.FinalizeAttempt(c.Request.Context(), attemptID, completion) == nil {
+		handler.observeAttempt(ResultFailed)
+	}
 	if handler.observePanic != nil {
 		observePanicSafely(handler.observePanic, c.Request.Context(), attemptID)
 	}
-	c.String(http.StatusServiceUnavailable, "fail")
+	handler.writeResponse(c, http.StatusServiceUnavailable, "fail")
+}
+
+func (handler *Handler) observeAttempt(result AttemptResult) {
+	if handler != nil && handler.observer != nil {
+		observeAttemptSafely(handler.observer, string(result))
+	}
+}
+
+func (handler *Handler) writeResponse(c *gin.Context, status int, body string) {
+	if handler != nil && handler.observer != nil {
+		observeResponseSafely(handler.observer, status)
+	}
+	c.String(status, body)
+}
+
+func observeAttemptSafely(observer AttemptObserver, result string) {
+	defer func() { _ = recover() }()
+	observer.ObserveCallbackAttempt(result)
+}
+
+func observeResponseSafely(observer AttemptObserver, status int) {
+	defer func() { _ = recover() }()
+	observer.ObserveCallbackResponse(status)
 }
 
 func observePanicSafely(observer PanicObserver, ctx context.Context, attemptID int64) {

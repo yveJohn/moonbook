@@ -70,7 +70,7 @@ func TestCallbackCreditsRechargeExactlyOnce(t *testing.T) {
 		wait.Add(1)
 		go func(index int, attemptID int64) {
 			defer wait.Done()
-			errorsByAttempt[index] = r.ProcessAttempt(ctx, attemptID, callback)
+			_, errorsByAttempt[index] = r.ProcessAttempt(ctx, attemptID, callback)
 		}(index, attemptID)
 	}
 	wait.Wait()
@@ -151,12 +151,12 @@ func TestCallbackRollsBackWhenInviteDependencyOrRewardWalletFails(t *testing.T) 
 	callback := Callback{TradeID: "rollback-trade", OrderNo: orderNo, Amount: "2.00", ActualAmount: "2.00", ReceiveAddress: "T-rollback", Token: "usdt", TransactionID: "rollback-tx", Status: 2, Fields: map[string]string{"order_id": orderNo}}
 	failedDependencyRepository := SQLRepository{DB: db, Invites: failingInviteReader{err: readercontract.ErrUnavailable}, Accounts: readerprovider.NewAccount(db)}
 	dependencyAttempt := beginRuntimeAttempt(t, ctx, failedDependencyRepository, "dependency")
-	if err := failedDependencyRepository.ProcessAttempt(ctx, dependencyAttempt, callback); !errors.Is(err, readercontract.ErrUnavailable) || FailureCodeOf(err) != FailureDependency {
+	if _, err := failedDependencyRepository.ProcessAttempt(ctx, dependencyAttempt, callback); !errors.Is(err, readercontract.ErrUnavailable) || FailureCodeOf(err) != FailureDependency {
 		t.Fatalf("invite dependency err=%v", err)
 	}
 	failedTransactionRepository := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}
 	transactionAttempt := beginRuntimeAttempt(t, ctx, failedTransactionRepository, "transaction")
-	if err := failedTransactionRepository.ProcessAttempt(ctx, transactionAttempt, callback); err == nil || FailureCodeOf(err) != FailureTransaction {
+	if _, err := failedTransactionRepository.ProcessAttempt(ctx, transactionAttempt, callback); err == nil || FailureCodeOf(err) != FailureTransaction {
 		t.Fatalf("expected classified inviter wallet overflow: %v", err)
 	}
 	var status string
@@ -254,7 +254,7 @@ func TestCallbackTransactionFailureMatrixLeavesNoFinancialFacts(t *testing.T) {
 			if test.prepare != nil {
 				test.prepare(t, fixture, &callback, attemptID)
 			}
-			err := repository.ProcessAttempt(fixture.ctx, attemptID, callback)
+			_, err := repository.ProcessAttempt(fixture.ctx, attemptID, callback)
 			if FailureCodeOf(err) != test.wantCode {
 				t.Fatalf("code=%s err=%v", FailureCodeOf(err), err)
 			}

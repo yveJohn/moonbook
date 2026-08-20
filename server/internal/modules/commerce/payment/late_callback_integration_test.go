@@ -143,12 +143,12 @@ func TestLateCallbackAllowedStatesCreditExactlyOnce(t *testing.T) {
 			callback := fixture.callback()
 			repository := fixture.repository()
 			firstAttempt := beginRuntimeAttempt(t, fixture.ctx, repository, "late-first-"+fmt.Sprint(index))
-			if err := repository.ProcessAttempt(fixture.ctx, firstAttempt, callback); err != nil {
-				t.Fatal(err)
+			if result, err := repository.ProcessAttempt(fixture.ctx, firstAttempt, callback); err != nil || result != ResultSuccess {
+				t.Fatalf("first callback result=%s err=%v", result, err)
 			}
 			secondAttempt := beginRuntimeAttempt(t, fixture.ctx, repository, "late-second-"+fmt.Sprint(index))
-			if err := repository.ProcessAttempt(fixture.ctx, secondAttempt, callback); err != nil {
-				t.Fatal(err)
+			if result, err := repository.ProcessAttempt(fixture.ctx, secondAttempt, callback); err != nil || result != ResultIdempotent {
+				t.Fatalf("second callback result=%s err=%v", result, err)
 			}
 			var gotStatus string
 			var active sql.NullInt64

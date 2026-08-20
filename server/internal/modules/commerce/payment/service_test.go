@@ -26,10 +26,10 @@ func (stub *verificationRepositoryStub) Process(context.Context, Callback) error
 	return nil
 }
 
-func (stub *verificationRepositoryStub) ProcessAttempt(_ context.Context, attemptID int64, _ Callback) error {
+func (stub *verificationRepositoryStub) ProcessAttempt(_ context.Context, attemptID int64, _ Callback) (AttemptResult, error) {
 	stub.processed++
 	stub.attemptID = attemptID
-	return stub.processErr
+	return ResultSuccess, stub.processErr
 }
 
 func TestServiceAttachesKnownOrderAndSignatureStateToFailures(t *testing.T) {
@@ -42,14 +42,14 @@ func TestServiceAttachesKnownOrderAndSignatureStateToFailures(t *testing.T) {
 	callback := Callback{PID: "merchant", OrderNo: "RC1", Signature: fields["signature"], Fields: fields}
 
 	repository := &verificationRepositoryStub{snapshot: VerificationSnapshot{OrderID: 9223372036854775000}, processErr: newProcessingError(FailureTransaction, ErrRejected)}
-	err = NewService(repository, credentials).ProcessAttempt(context.Background(), 9, callback)
+	_, err = NewService(repository, credentials).ProcessAttempt(context.Background(), 9, callback)
 	code, signatureValid, orderID := processingErrorDetails(err)
 	if code != FailureTransaction || !signatureValid || orderID == nil || *orderID != 9223372036854775000 {
 		t.Fatalf("code=%s signature=%t orderID=%v err=%v", code, signatureValid, orderID, err)
 	}
 
 	repository = &verificationRepositoryStub{snapshot: VerificationSnapshot{OrderID: 9223372036854775001, CredentialRef: "missing"}}
-	err = NewService(repository, credentials).ProcessAttempt(context.Background(), 10, callback)
+	_, err = NewService(repository, credentials).ProcessAttempt(context.Background(), 10, callback)
 	code, signatureValid, orderID = processingErrorDetails(err)
 	if code != FailureUnknownCredential || signatureValid || orderID == nil || *orderID != 9223372036854775001 {
 		t.Fatalf("code=%s signature=%t orderID=%v err=%v", code, signatureValid, orderID, err)
@@ -120,7 +120,7 @@ func TestServiceClassifiesCallbackFailures(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := NewService(test.repository, credentials).ProcessAttempt(context.Background(), 91, test.callback)
+			_, err := NewService(test.repository, credentials).ProcessAttempt(context.Background(), 91, test.callback)
 			if FailureCodeOf(err) != test.wantCode || test.repository.processed != 0 {
 				t.Fatalf("code=%s err=%v processed=%d", FailureCodeOf(err), err, test.repository.processed)
 			}
@@ -136,7 +136,7 @@ func TestServicePassesAttemptIDToRepository(t *testing.T) {
 	fields := map[string]string{"pid": "merchant", "order_id": "RC1", "trade_id": "trade", "amount": "2.00", "actual_amount": "2.00", "receive_address": "T-address", "token": "usdt", "block_transaction_id": "tx", "status": "2"}
 	fields["signature"] = Sign(fields, "secret")
 	repository := &verificationRepositoryStub{}
-	err = NewService(repository, credentials).ProcessAttempt(context.Background(), 9223372036854775000, Callback{PID: "merchant", OrderNo: "RC1", Signature: fields["signature"], Fields: fields})
+	_, err = NewService(repository, credentials).ProcessAttempt(context.Background(), 9223372036854775000, Callback{PID: "merchant", OrderNo: "RC1", Signature: fields["signature"], Fields: fields})
 	if err != nil || repository.attemptID != 9223372036854775000 {
 		t.Fatalf("err=%v attemptID=%d", err, repository.attemptID)
 	}

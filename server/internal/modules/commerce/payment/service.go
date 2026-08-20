@@ -21,58 +21,63 @@ func NewService(repo Repository, credentials *epusdt.CredentialProvider) *Servic
 }
 
 func (s *Service) Process(ctx context.Context, callback Callback) error {
-	return s.process(ctx, callback, func(repository Repository) error {
-		return repository.Process(ctx, callback)
-	})
-}
-
-func (s *Service) ProcessAttempt(ctx context.Context, attemptID int64, callback Callback) error {
-	if attemptID <= 0 {
-		return newProcessingError(FailureTransaction, ErrInvalidAttempt)
+	snapshot, err := s.verify(ctx, callback)
+	if err != nil {
+		return err
 	}
-	return s.process(ctx, callback, func(repository Repository) error {
-		return repository.ProcessAttempt(ctx, attemptID, callback)
-	})
+	return enrichProcessingError(s.Repo.Process(ctx, callback), true, snapshot.OrderID)
 }
 
-func (s *Service) process(ctx context.Context, callback Callback, process func(Repository) error) error {
+func (s *Service) ProcessAttempt(ctx context.Context, attemptID int64, callback Callback) (AttemptResult, error) {
+	if attemptID <= 0 {
+		return "", newProcessingError(FailureTransaction, ErrInvalidAttempt)
+	}
+	snapshot, err := s.verify(ctx, callback)
+	if err != nil {
+		return "", err
+	}
+	result, err := s.Repo.ProcessAttempt(ctx, attemptID, callback)
+	return result, enrichProcessingError(err, true, snapshot.OrderID)
+}
+
+func (s *Service) verify(ctx context.Context, callback Callback) (VerificationSnapshot, error) {
 	if s == nil || s.Repo == nil {
-		return newProcessingError(FailureDependency, readerDependencyUnavailable)
+		return VerificationSnapshot{}, newProcessingError(FailureDependency, readerDependencyUnavailable)
 	}
 	if strings.TrimSpace(callback.OrderNo) == "" {
-		return newProcessingError(FailureUnknownOrder, ErrUnauthorized)
+		return VerificationSnapshot{}, newProcessingError(FailureUnknownOrder, ErrUnauthorized)
 	}
 	snapshot, err := s.Repo.VerificationSnapshot(ctx, callback.OrderNo)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return newProcessingError(FailureUnknownOrder, ErrUnauthorized)
+			return VerificationSnapshot{}, newProcessingError(FailureUnknownOrder, ErrUnauthorized)
 		}
-		return newProcessingError(FailureDependency, readerDependencyUnavailable)
+		return VerificationSnapshot{}, newProcessingError(FailureDependency, readerDependencyUnavailable)
 	}
 	if s.Credentials == nil {
-		return enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
+		return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
 	}
 	credential, ok := s.Credentials.Verification(snapshot.CredentialRef)
 	if !ok {
-		return enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
+		return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
 	}
 	expectedPID := strings.TrimSpace(snapshot.MerchantPID)
 	if expectedPID == "" {
 		if strings.TrimSpace(snapshot.CredentialRef) != "" {
-			return enrichProcessingError(newProcessingError(FailurePIDMismatch, ErrUnauthorized), false, snapshot.OrderID)
+			return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailurePIDMismatch, ErrUnauthorized), false, snapshot.OrderID)
 		}
 		expectedPID = credential.PID()
 	}
 	if credential.PID() != expectedPID || callback.PID != expectedPID || callback.Fields["pid"] != callback.PID {
-		return enrichProcessingError(newProcessingError(FailurePIDMismatch, ErrUnauthorized), false, snapshot.OrderID)
+		return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailurePIDMismatch, ErrUnauthorized), false, snapshot.OrderID)
 	}
 	if callback.Fields["order_id"] != callback.OrderNo {
-		return enrichProcessingError(newProcessingError(FailureSnapshotMismatch, ErrRejected), false, snapshot.OrderID)
+		return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailureSnapshotMismatch, ErrRejected), false, snapshot.OrderID)
 	}
 	if callback.Fields["signature"] != callback.Signature || !Verify(callback.Fields, callback.Signature, credential.Secret()) {
-		return enrichProcessingError(newProcessingError(FailureSignatureInvalid, ErrUnauthorized), false, snapshot.OrderID)
+		return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailureSignatureInvalid, ErrUnauthorized), false, snapshot.OrderID)
 	}
-	return enrichProcessingError(process(s.Repo), true, snapshot.OrderID)
+	return snapshot, nil
 }
 
 var readerDependencyUnavailable = errors.New("payment callback dependency unavailable")

@@ -65,9 +65,7 @@ func holder(routers ...*gin.RouterGroup) {
 	_ = router.RouterGroupApp
 }
 
-func initBizRouter(routers ...*gin.RouterGroup) {
-	privateGroup := routers[0]
-	publicGroup := routers[1]
+func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConfig payment.AuditConfig, callbackObserver payment.AttemptObserver) {
 
 	holder(publicGroup, privateGroup)
 	db, err := global.GVA_DB.DB()
@@ -94,10 +92,6 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
 	paymentConfig, paymentConfigErr := epusdt.LoadConfig(true, os.LookupEnv)
 	callbackCredentials, _ := epusdt.LoadCredentialProvider(os.LookupEnv)
-	callbackAuditConfig, callbackAuditConfigErr := payment.LoadAuditConfig(os.LookupEnv)
-	if callbackAuditConfigErr != nil {
-		panic("load payment callback audit config: " + callbackAuditConfigErr.Error())
-	}
 	unknownReleaseWindow, unknownReleaseErr := epusdt.LoadUnknownReleaseWindow(os.LookupEnv)
 	if paymentConfigErr == nil && unknownReleaseErr != nil {
 		paymentConfigErr = unknownReleaseErr
@@ -119,7 +113,7 @@ func initBizRouter(routers ...*gin.RouterGroup) {
 	commercecompat.RegisterPurchaseRoutes(publicGroup, commerceprovider.NewPurchase(purchase.NewService(purchase.SQLRepository{DB: db}, transactor, readerAccounts, purchaseTargets)), readerService)
 	paymentRepository := payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}
 	paymentService := payment.NewService(paymentRepository, callbackCredentials)
-	payment.RegisterRoutes(publicGroup, payment.NewHandler(paymentService, paymentRepository, paymentRequestMetadata, observePaymentCallbackPanic))
+	payment.RegisterRoutes(publicGroup, payment.NewHandler(paymentService, paymentRepository, paymentRequestMetadata, observePaymentCallbackPanic, callbackObserver))
 	adminrecharge.RegisterRoutes(privateGroup, adminrecharge.NewService(adminrecharge.SQLRepository{DB: db}))
 	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))
 	adminorder.RegisterRoutes(privateGroup, adminorder.NewService(adminorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts))

@@ -8,6 +8,7 @@ import (
 
 	"github.com/flipped-aurora/gin-vue-admin/server/docs"
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/health"
 	platformmetrics "github.com/flipped-aurora/gin-vue-admin/server/internal/platform/metrics"
 	"github.com/flipped-aurora/gin-vue-admin/server/middleware"
@@ -42,13 +43,17 @@ func Routers() *gin.Engine {
 	Router := gin.New()
 	// RequestMeta 必须最先：保证 panic 日志与 X-Request-Id 响应头都带 request_id
 	Router.Use(middleware.RequestMeta())
+	callbackAuditConfig, callbackAuditConfigErr := payment.LoadAuditConfig(os.LookupEnv)
+	if callbackAuditConfigErr != nil {
+		panic("load payment callback audit config: " + callbackAuditConfigErr.Error())
+	}
 	var runtimeMetrics *platformmetrics.Metrics
 	if global.GVA_CONFIG.Metrics.Enabled {
 		var sqlDB *sql.DB
 		if global.GVA_DB != nil {
 			sqlDB, _ = global.GVA_DB.DB()
 		}
-		runtimeMetrics = platformmetrics.New(sqlDB)
+		runtimeMetrics = platformmetrics.New(sqlDB, callbackAuditConfig.StaleAfter)
 		Router.Use(runtimeMetrics.Middleware())
 	}
 	// 使用自定义的 Recovery 中间件，记录 panic 并入库
@@ -133,7 +138,7 @@ func Routers() *gin.Engine {
 	InstallPlugin(PrivateGroup, PublicGroup, Router)
 
 	// 注册业务路由
-	initBizRouter(PrivateGroup, PublicGroup)
+	initBizRouter(PrivateGroup, PublicGroup, callbackAuditConfig, runtimeMetrics)
 
 	global.GVA_ROUTERS = Router.Routes()
 

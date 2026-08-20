@@ -22,10 +22,10 @@ type retryOnceProcessor struct {
 	calls    int
 }
 
-func (processor *retryOnceProcessor) ProcessAttempt(ctx context.Context, attemptID int64, callback Callback) error {
+func (processor *retryOnceProcessor) ProcessAttempt(ctx context.Context, attemptID int64, callback Callback) (AttemptResult, error) {
 	processor.calls++
 	if processor.calls == 1 {
-		return newProcessingError(FailureDependency, readerDependencyUnavailable)
+		return "", newProcessingError(FailureDependency, readerDependencyUnavailable)
 	}
 	return processor.delegate.ProcessAttempt(ctx, attemptID, callback)
 }

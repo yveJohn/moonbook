@@ -20,12 +20,17 @@ type VerificationSnapshot struct {
 type Repository interface {
 	VerificationSnapshot(context.Context, string) (VerificationSnapshot, error)
 	Process(context.Context, Callback) error
-	ProcessAttempt(context.Context, int64, Callback) error
+	ProcessAttempt(context.Context, int64, Callback) (AttemptResult, error)
 }
 
 type CallbackAuditRepository interface {
 	BeginAttempt(context.Context, AttemptStart) (int64, error)
 	FinalizeAttempt(context.Context, int64, AttemptCompletion) error
+}
+
+type AttemptObserver interface {
+	ObserveCallbackAttempt(string)
+	ObserveCallbackResponse(int)
 }
 
 type ProcessingError struct {

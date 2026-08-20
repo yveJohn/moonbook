@@ -134,13 +134,13 @@
 - Modify: `server/initialize/router_biz.go`
 - Create or Modify: `docs/runbooks/epusdt-callback.md`
 
-- [ ] **Step 1：编写指标失败测试。** 固定尝试结果 Counter、503 Counter、幂等重投 Counter、数据库滞留 Gauge 和采集成功 Gauge；label 只能是固定结果/响应类别。
-- [ ] **Step 2：实现低耦合 Observer。** payment 包定义窄接口，Platform Metrics 实现；指标关闭时使用 nil/no-op，不让 payment 依赖 Platform 实现。
-- [ ] **Step 3：实现数据库 collector。** 2 秒超时查询超过配置阈值的 runtime `received`；查询失败只暴露采集失败，不泄漏 SQL、ID 或错误文本 label。
-- [ ] **Step 4：验证低基数。** 指标正文不得包含订单号、交易号、request/trace ID、IP、凭据引用、失败文案或 payload 哈希。
-- [ ] **Step 5：编写 Runbook。** 记录滞留、rejected、failed、503、幂等增长和重试耗尽的含义、查询步骤、禁止自动入账边界及人工核查清单。
-- [ ] **Step 6：固定 EPUSDT 重试要求。** 明确 `callback_retry_base_seconds`、`order_notice_max_retry` 必须非零受控，最大间隔 5 分钟；仅 `200 ok/success` 停止重试。
-- [ ] **Step 7：验证并提交。** 运行指标单元/集成、配置合同、Compose 展开、Shell 语法和秘密扫描；提交信息：`增加EPUSDT回调审计指标`。
+- [x] **Step 1：编写指标失败测试。** 固定尝试结果 Counter、503 Counter、幂等重投 Counter、数据库滞留 Gauge 和采集成功 Gauge；label 只能是固定结果/响应类别。
+- [x] **Step 2：实现低耦合 Observer。** payment 包定义窄接口，Platform Metrics 实现；指标关闭时使用 nil/no-op，不让 payment 依赖 Platform 实现。
+- [x] **Step 3：实现数据库 collector。** 2 秒超时查询超过配置阈值的 runtime `received`；查询失败只暴露采集失败，不泄漏 SQL、ID 或错误文本 label。
+- [x] **Step 4：验证低基数。** 指标正文不得包含订单号、交易号、request/trace ID、IP、凭据引用、失败文案或 payload 哈希。
+- [x] **Step 5：编写 Runbook。** 记录滞留、rejected、failed、503、幂等增长和重试耗尽的含义、查询步骤、禁止自动入账边界及人工核查清单。
+- [x] **Step 6：固定 EPUSDT 重试要求。** 明确 `callback_retry_base_seconds`、`order_notice_max_retry` 必须非零受控，最大间隔 5 分钟；仅 `200 ok/success` 停止重试。
+- [x] **Step 7：验证并提交。** 运行指标单元/集成、配置合同、Compose 展开、Shell 语法和秘密扫描；提交信息：`增加EPUSDT回调审计指标`。
 
 ## Task 7：全量回归与 M4 证据收口
 

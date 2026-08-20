@@ -15,13 +15,16 @@ import (
 )
 
 type Metrics struct {
-	registry      *prometheus.Registry
-	requestsTotal *prometheus.CounterVec
-	duration      *prometheus.HistogramVec
-	inFlight      prometheus.Gauge
+	registry                  *prometheus.Registry
+	requestsTotal             *prometheus.CounterVec
+	duration                  *prometheus.HistogramVec
+	inFlight                  prometheus.Gauge
+	callbackAttempts          *prometheus.CounterVec
+	callbackResponses503      prometheus.Counter
+	callbackIdempotentRetries prometheus.Counter
 }
 
-func New(db *sql.DB) *Metrics {
+func New(db *sql.DB, callbackStaleAfter ...time.Duration) *Metrics {
 	registry := prometheus.NewRegistry()
 	requestsTotal := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "moonbook",
@@ -42,12 +45,52 @@ func New(db *sql.DB) *Metrics {
 		Name:      "requests_in_flight",
 		Help:      "Current number of HTTP requests being handled.",
 	})
+	callbackAttempts := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "moonbook", Subsystem: "payment", Name: "callback_attempts_total",
+		Help: "Payment callback audit state transitions by closed result.",
+	}, []string{"result"})
+	callbackResponses503 := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "moonbook", Subsystem: "payment", Name: "callback_responses_503_total",
+		Help: "Payment callback HTTP 503 responses.",
+	})
+	callbackIdempotentRetries := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "moonbook", Subsystem: "payment", Name: "callback_idempotent_retries_total",
+		Help: "Payment callback retries that completed as valid idempotent attempts.",
+	})
 	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	registry.MustRegister(requestsTotal, duration, inFlight)
+	registry.MustRegister(requestsTotal, duration, inFlight, callbackAttempts, callbackResponses503, callbackIdempotentRetries)
 	if db != nil {
 		registry.MustRegister(newJobCollector(db))
+		staleAfter := defaultCallbackStaleAfter
+		if len(callbackStaleAfter) > 0 && callbackStaleAfter[0] > 0 {
+			staleAfter = callbackStaleAfter[0]
+		}
+		registry.MustRegister(newPaymentCallbackCollector(db, staleAfter))
 	}
-	return &Metrics{registry: registry, requestsTotal: requestsTotal, duration: duration, inFlight: inFlight}
+	return &Metrics{
+		registry: registry, requestsTotal: requestsTotal, duration: duration, inFlight: inFlight,
+		callbackAttempts: callbackAttempts, callbackResponses503: callbackResponses503,
+		callbackIdempotentRetries: callbackIdempotentRetries,
+	}
+}
+
+func (metrics *Metrics) ObserveCallbackAttempt(result string) {
+	if metrics == nil {
+		return
+	}
+	if _, ok := callbackResults[result]; !ok {
+		return
+	}
+	metrics.callbackAttempts.WithLabelValues(result).Inc()
+	if result == "idempotent" {
+		metrics.callbackIdempotentRetries.Inc()
+	}
+}
+
+func (metrics *Metrics) ObserveCallbackResponse(status int) {
+	if metrics != nil && status == http.StatusServiceUnavailable {
+		metrics.callbackResponses503.Inc()
+	}
 }
 
 func (metrics *Metrics) Middleware() gin.HandlerFunc {

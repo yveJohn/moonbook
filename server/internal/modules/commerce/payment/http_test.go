@@ -22,13 +22,13 @@ type callbackProcessorStub struct {
 	attempt  int64
 }
 
-func (stub *callbackProcessorStub) ProcessAttempt(_ context.Context, attemptID int64, _ Callback) error {
+func (stub *callbackProcessorStub) ProcessAttempt(_ context.Context, attemptID int64, _ Callback) (AttemptResult, error) {
 	stub.calls++
 	stub.attempt = attemptID
 	if stub.panicNow {
 		panic("sensitive panic value")
 	}
-	return stub.err
+	return ResultSuccess, stub.err
 }
 
 type callbackAuditStub struct {
@@ -38,6 +38,19 @@ type callbackAuditStub struct {
 	starts       []AttemptStart
 	completions  []AttemptCompletion
 	finalizedIDs []int64
+}
+
+type callbackObserverStub struct {
+	results  []string
+	statuses []int
+}
+
+func (stub *callbackObserverStub) ObserveCallbackAttempt(result string) {
+	stub.results = append(stub.results, result)
+}
+
+func (stub *callbackObserverStub) ObserveCallbackResponse(status int) {
+	stub.statuses = append(stub.statuses, status)
 }
 
 func (stub *callbackAuditStub) BeginAttempt(_ context.Context, start AttemptStart) (int64, error) {
@@ -141,8 +154,9 @@ func TestCallbackHTTPAuditsBeforeParsingAndProcessing(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			processor := &callbackProcessorStub{err: test.processorErr, panicNow: test.panicNow}
 			audit := &callbackAuditStub{beginID: 9223372036854775000, beginErr: test.beginErr, finalizeErr: test.finalizeErr}
+			observer := &callbackObserverStub{}
 			router := gin.New()
-			RegisterRoutes(router.Group(""), NewHandler(processor, audit, testRequestMetadata, nil))
+			RegisterRoutes(router.Group(""), NewHandler(processor, audit, testRequestMetadata, nil, observer))
 			request := httptest.NewRequest(http.MethodPost, "/reader/payment/epusdt/notify", test.body)
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("X-Request-Id", "request-http-test")
@@ -154,6 +168,21 @@ func TestCallbackHTTPAuditsBeforeParsingAndProcessing(t *testing.T) {
 			}
 			if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/plain") {
 				t.Fatalf("content-type=%q", contentType)
+			}
+			if len(observer.statuses) != 1 || observer.statuses[0] != test.wantStatus {
+				t.Fatalf("observed statuses=%v", observer.statuses)
+			}
+			wantResults := make([]string, 0, 2)
+			if test.beginErr == nil {
+				wantResults = append(wantResults, string(ResultReceived))
+				if test.name == "success" {
+					wantResults = append(wantResults, string(ResultSuccess))
+				} else if test.wantResult != "" && test.finalizeErr == nil {
+					wantResults = append(wantResults, string(test.wantResult))
+				}
+			}
+			if strings.Join(observer.results, ",") != strings.Join(wantResults, ",") {
+				t.Fatalf("observed results=%v want=%v", observer.results, wantResults)
 			}
 			if len(audit.starts) != 1 || audit.starts[0].RequestID != "request-http-test" || audit.starts[0].TraceID != "trace-http-test" || audit.starts[0].RequestTime.After(time.Now()) {
 				t.Fatalf("starts=%+v", audit.starts)
