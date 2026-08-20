@@ -87,7 +87,6 @@ func (r SQLRepository) process(ctx context.Context, attemptID *int64, c Callback
 	}
 	baseSnapshotMatches := provider == "epusdt" && currency == "usd" && strings.EqualFold(token, "usdt") && network == "tron" &&
 		decimalEqual(price, c.Amount) && positiveDecimal(c.ActualAmount) &&
-		(!oldTrade.Valid || strings.TrimSpace(oldTrade.String) == "" || oldTrade.String == c.TradeID) &&
 		(!oldActual.Valid || strings.TrimSpace(oldActual.String) == "" || decimalEqual(oldActual.String, c.ActualAmount)) &&
 		(!oldAddress.Valid || strings.TrimSpace(oldAddress.String) == "" || oldAddress.String == c.ReceiveAddress)
 	if status == "paid" {
@@ -118,6 +117,9 @@ func (r SQLRepository) process(ctx context.Context, attemptID *int64, c Callback
 	}
 	if usedTrade > 0 || usedTransaction > 0 {
 		return "", newProcessingError(FailureReplay, ErrRejected)
+	}
+	if oldTrade.Valid && strings.TrimSpace(oldTrade.String) != "" && oldTrade.String != c.TradeID {
+		return "", newProcessingError(FailureSnapshotMismatch, ErrRejected)
 	}
 	key := "epusdt_recharge:" + c.OrderNo
 	biz := new(string)
