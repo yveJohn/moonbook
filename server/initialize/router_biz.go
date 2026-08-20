@@ -53,6 +53,7 @@ import (
 	readerme "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/me"
 	readerprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/provider"
 	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobmonitor"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
@@ -151,6 +152,7 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	txtimport.RegisterRoutes(privateGroup, txtimport.NewService(txtimport.SQLRepository{DB: db}), txtimport.MinIOFileStore{Blobs: blobs})
 	fetchlog.RegisterRoutes(privateGroup, fetchlog.NewService(fetchlog.SQLRepository{DB: db}))
 	readerseo.RegisterRoutes(privateGroup, db)
+	jobmonitor.RegisterRoutes(privateGroup, jobmonitor.NewService(jobmonitor.SQLRepository{DB: db}))
 	novelPublic := novelprovider.NewPublic(db, objects)
 	readerPublic := readerpublic.NewService(db, novelPublic, novelPublic, novelPublic, commerceprovider.NewAccess(commerce))
 	readerpublic.RegisterRoutes(publicGroup, readerPublic, readerService)

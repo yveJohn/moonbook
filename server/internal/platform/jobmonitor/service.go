@@ -33,22 +33,22 @@ func (s *Service) List(ctx context.Context, filters Filters, page, size int) ([]
 		"module": filters.Module, "job type": filters.JobType, "lease owner": filters.LeaseOwner,
 	} {
 		if len(value) > maxFilterLength {
-			return nil, 0, fmt.Errorf("%s filter is too long", name)
+			return nil, 0, fmt.Errorf("%w: %s filter is too long", ErrInvalidArgument, name)
 		}
 	}
 	if filters.Status != "" && !validStatus(filters.Status) {
-		return nil, 0, errors.New("invalid job status")
+		return nil, 0, fmt.Errorf("%w: invalid job status", ErrInvalidArgument)
 	}
 	from, err := parseTime(filters.From)
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid from time: %w", err)
+		return nil, 0, fmt.Errorf("%w: invalid from time: %v", ErrInvalidArgument, err)
 	}
 	to, err := parseTime(filters.To)
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid to time: %w", err)
+		return nil, 0, fmt.Errorf("%w: invalid to time: %v", ErrInvalidArgument, err)
 	}
 	if !from.IsZero() && !to.IsZero() && !from.Before(to) {
-		return nil, 0, errors.New("from time must be before to time")
+		return nil, 0, fmt.Errorf("%w: from time must be before to time", ErrInvalidArgument)
 	}
 	return s.Repo.List(ctx, filters, page, size)
 }
@@ -57,7 +57,7 @@ func (s *Service) Get(ctx context.Context, id string) (Detail, error) {
 	id = strings.TrimSpace(id)
 	parsed, err := strconv.ParseInt(id, 10, 64)
 	if err != nil || parsed <= 0 {
-		return Detail{}, errors.New("invalid job id")
+		return Detail{}, fmt.Errorf("%w: invalid job id", ErrInvalidArgument)
 	}
 	return s.Repo.Get(ctx, id)
 }

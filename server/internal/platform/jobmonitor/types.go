@@ -1,6 +1,14 @@
 package jobmonitor
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var (
+	ErrInvalidArgument = errors.New("invalid argument")
+	ErrNotFound        = errors.New("platform job not found")
+)
 
 type Job struct {
 	ID, Module, JobType, Status, LeaseOwner, LastErrorCode, LastErrorMessage string

@@ -47,6 +47,9 @@ func (r SQLRepository) List(ctx context.Context, f Filters, page, size int) ([]J
 func (r SQLRepository) Get(ctx context.Context, id string) (Detail, error) {
 	var detail Detail
 	if err := scanJob(r.DB.QueryRowContext(ctx, `SELECT `+jobColumns+` FROM platform_jobs j WHERE j.id=$1`, id), &detail.Job); err != nil {
+		if err == sql.ErrNoRows {
+			return Detail{}, ErrNotFound
+		}
 		return Detail{}, err
 	}
 	rows, err := r.DB.QueryContext(ctx, `SELECT id::text,job_id::text,attempt_number,worker_id,started_at::text,

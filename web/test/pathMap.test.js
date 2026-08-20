@@ -133,7 +133,7 @@ test('matches every tracked management Vue component', async () => {
   const committedContent = await readFile(path.join(webRoot, 'src/pathInfo.json'), 'utf8')
   const committed = JSON.parse(committedContent)
 
-  assert.equal(Object.keys(generated).length, 133)
+  assert.equal(Object.keys(generated).length, 134)
   assert.deepEqual(generated, committed)
   assert.equal(serializePathMap(generated), committedContent)
   assert.equal(generated['/src/view/novel/books/index.vue'], 'NovelBooks')
