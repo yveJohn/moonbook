@@ -42,6 +42,15 @@ go run ./cmd/moonbook-legacy-migrate novel-book-merge
 
 该命令依次迁移合并任务、源书和章节明细。仅当目标书籍、论坛导入任务、源章节及已激活正文对象已经迁移时才写入血缘；清洗正文引用还必须对应目标中 active 且成功的清洗结果。旧运行中任务转为失败，非法计数、论坛来源缺失、目标章节/对象缺失均进入错误清单。旧对象 ID 不直接复制，源/目标对象按书籍和章节重新解析；三个阶段各有独立 checkpoint 和来源键。
 
+章节简介补全历史可单独执行：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-chapter-summary
+```
+
+该命令迁移摘要配置和执行日志。旧配置的 `api_key` 与任务日志的 `latest_raw_response` 均不写入目标；旧配置缺少有效 AI 配置 ID 时，仅在目标已有可选配置的情况下选择第一条并写入结构化警告。运行中日志转为失败，状态、计数和当前结果/书籍/章节引用按已迁移记录保留。
+
 M2 小说分类与作者迁移：
 
 ```bash
