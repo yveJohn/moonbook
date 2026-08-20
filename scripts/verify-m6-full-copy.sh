@@ -71,7 +71,16 @@ compose_base=(docker compose --project-directory "$root_dir" --env-file "$MOONBO
 
 if [[ "$action" == "--cleanup" ]]; then
   [[ "${MOONBOOK_FULL_COPY_CLEANUP_CONFIRM:-}" == "$MOONBOOK_FULL_COPY_PROJECT" ]] || full_copy_die "cleanup confirmation must exactly equal the project name"
-  "${compose_base[@]}" down --volumes --remove-orphans
+  cleanup_compose=("${compose_base[@]}")
+  cleanup_overlay="$work_dir/compose.full-copy.yaml"
+  if [[ -e "$cleanup_overlay" ]]; then
+    full_copy_require_absolute_file cleanup_overlay "$cleanup_overlay"
+    cleanup_compose+=(-f "$cleanup_overlay")
+  fi
+  "${cleanup_compose[@]}" down --volumes --remove-orphans
+  remaining_containers="$(docker ps -aq --filter "label=com.docker.compose.project=$MOONBOOK_FULL_COPY_PROJECT")"
+  remaining_volumes="$(docker volume ls -q --filter "label=com.docker.compose.project=$MOONBOOK_FULL_COPY_PROJECT")"
+  [[ -z "$remaining_containers" && -z "$remaining_volumes" ]] || full_copy_die "isolated project still has containers or volumes after cleanup"
   printf 'removed isolated project %s; container and volume data are not recoverable\n' "$MOONBOOK_FULL_COPY_PROJECT"
   exit 0
 fi
