@@ -104,12 +104,12 @@
 - Modify: `compose.yaml`
 - Modify: `server/config/config_contract_test.go`
 
-- [ ] **Step 1：固定 Secret 合同。** 来源只保存安全引用和 `cookieConfigured`，创建/更新不接受或返回 Cookie 明文；引用格式使用受控环境变量名，不允许路径、模板或任意表达式。
-- [ ] **Step 2：前向迁移。** 增加 `cookie_secret_ref` 并拒绝新明文；历史 `cookie_text` 不复制到 Git 或报告，迁移后清空明文字段前必须生成仅含来源 ID 哈希和处置状态的审计。
-- [ ] **Step 3：运行时解析。** Worker 在执行请求前从进程环境解析引用；缺失、空值和超限值使用稳定错误码并禁止任务发出请求。
-- [ ] **Step 4：管理兼容。** 页面仅编辑引用和显示已配置状态，不显示环境值；Long ID 保持字符串。
-- [ ] **Step 5：真实验证。** 覆盖空库/升级/重跑、明文清理、环境 Secret 注入、未配置失败、日志脱敏和论坛 HTTP 替身实际收到 Cookie。
-- [ ] **Step 6：提交。** 提交信息：`改用Secret引用配置论坛Cookie`。
+- [x] **Step 1：固定 Secret 合同。** 来源只保存安全引用和 `cookieConfigured`，创建/更新不接受或返回 Cookie 明文；引用格式使用受控环境变量名，不允许路径、模板或任意表达式。
+- [x] **Step 2：前向迁移。** 增加 `cookie_secret_ref` 并拒绝新明文；历史 `cookie_text` 不复制到 Git 或报告，迁移后清空明文字段前必须生成仅含来源 ID 哈希和处置状态的审计。
+- [x] **Step 3：运行时解析。** Worker 在执行请求前从进程环境解析引用；缺失、空值和超限值使用稳定错误码并禁止任务发出请求。
+- [x] **Step 4：管理兼容。** 页面仅编辑引用和显示已配置状态，不显示环境值；Long ID 保持字符串。
+- [x] **Step 5：真实验证。** 覆盖空库/升级/重跑、明文清理、环境 Secret 注入、未配置失败、日志脱敏和论坛 HTTP 替身实际收到 Cookie。
+- [x] **Step 6：提交。** 提交信息：`改用Secret引用配置论坛Cookie`。
 
 ## Task 5：补论坛连接检查和内容 Worker 重启恢复
 

@@ -147,7 +147,7 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	chapters.RegisterRoutes(privateGroup, db, objects)
 	crawlsource.RegisterRoutes(privateGroup, crawlsource.NewService(crawlsource.SQLRepository{DB: db}))
 	crawlboard.RegisterRoutes(privateGroup, crawlboard.NewService(crawlboard.SQLRepository{DB: db}))
-	candidate.RegisterRoutes(privateGroup, candidate.NewService(candidate.SQLRepository{DB: db}))
+	candidate.RegisterRoutes(privateGroup, candidate.NewService(candidate.SQLRepository{DB: db}, crawlsource.EnvSecretResolver{Lookup: os.LookupEnv}))
 	importtask.RegisterRoutes(privateGroup, importtask.NewService(importtask.SQLRepository{DB: db}))
 	txtimport.RegisterRoutes(privateGroup, txtimport.NewService(txtimport.SQLRepository{DB: db}), txtimport.MinIOFileStore{Blobs: blobs})
 	fetchlog.RegisterRoutes(privateGroup, fetchlog.NewService(fetchlog.SQLRepository{DB: db}))

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlsource"
 )
 
 type DiscoveryWorker struct {
@@ -16,6 +18,7 @@ type DiscoveryWorker struct {
 	WorkerID     string
 	PollInterval time.Duration
 	Client       *http.Client
+	Secrets      crawlsource.SecretResolver
 }
 
 func (w *DiscoveryWorker) RunOnce(ctx context.Context) (int, error) {
@@ -34,6 +37,7 @@ func (w *DiscoveryWorker) RunOnce(ctx context.Context) (int, error) {
 	}
 	defer rows.Close()
 	processed := 0
+	var runErr error
 	for rows.Next() {
 		var boardID string
 		if err := rows.Scan(&boardID); err != nil {
@@ -56,6 +60,15 @@ func (w *DiscoveryWorker) RunOnce(ctx context.Context) (int, error) {
 			repo := SQLRepository{DB: conn}
 			target, targetErr := repo.GetBoardTarget(ctx, boardID)
 			if targetErr != nil {
+				if runErr == nil {
+					runErr = targetErr
+				}
+				return
+			}
+			if targetErr = resolveTargetCookie(&target, w.Secrets); targetErr != nil {
+				if runErr == nil {
+					runErr = targetErr
+				}
 				return
 			}
 			items, discoverErr := DiscoverBoard(ctx, target, w.client())
@@ -70,7 +83,7 @@ func (w *DiscoveryWorker) RunOnce(ctx context.Context) (int, error) {
 	if err := rows.Err(); err != nil {
 		return processed, err
 	}
-	return processed, nil
+	return processed, runErr
 }
 
 func (w *DiscoveryWorker) Run(ctx context.Context) error {

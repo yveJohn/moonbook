@@ -23,7 +23,7 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 }
 
 func render(v Source) map[string]any {
-	return map[string]any{"id": v.ID, "sourceName": v.SourceName, "baseUrl": v.BaseURL, "requestCharset": v.RequestCharset, "cookieConfigured": v.CookieConfigured, "userAgent": v.UserAgent, "requestIntervalMs": v.RequestIntervalMs, "enabled": v.Enabled, "sortOrder": v.SortOrder, "remark": v.Remark, "createdAt": v.CreatedAt, "updatedAt": v.UpdatedAt}
+	return map[string]any{"id": v.ID, "sourceName": v.SourceName, "baseUrl": v.BaseURL, "requestCharset": v.RequestCharset, "cookieSecretRef": v.CookieSecretRef, "cookieConfigured": v.CookieConfigured, "userAgent": v.UserAgent, "requestIntervalMs": v.RequestIntervalMs, "enabled": v.Enabled, "sortOrder": v.SortOrder, "remark": v.Remark, "createdAt": v.CreatedAt, "updatedAt": v.UpdatedAt}
 }
 func (h *Handler) list(c *gin.Context) {
 	p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

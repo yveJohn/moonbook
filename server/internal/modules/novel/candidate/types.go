@@ -13,6 +13,7 @@ type Candidate struct {
 type BoardTarget struct {
 	SourceID, SourceName, BoardID, BoardName string
 	BoardURL, BoardURLTemplate, UserAgent    string
+	CookieSecretRef, sourceCookie            string
 	Enabled                                  bool
 }
 

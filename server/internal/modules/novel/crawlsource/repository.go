@@ -8,11 +8,11 @@ import (
 
 type SQLRepository struct{ DB *sql.DB }
 
-const sourceSelect = `SELECT id::text,source_name,base_url,request_charset,(cookie_text IS NOT NULL AND cookie_text <> ''),COALESCE(user_agent,''),request_interval_ms::text,enabled,sort_order::text,COALESCE(remark,''),created_at::text,updated_at::text FROM novel_crawl_forum_source`
-const sourceReturning = `id::text,source_name,base_url,request_charset,(cookie_text IS NOT NULL AND cookie_text <> ''),COALESCE(user_agent,''),request_interval_ms::text,enabled,sort_order::text,COALESCE(remark,''),created_at::text,updated_at::text`
+const sourceSelect = `SELECT id::text,source_name,base_url,request_charset,cookie_secret_ref,(cookie_secret_ref <> ''),COALESCE(user_agent,''),request_interval_ms::text,enabled,sort_order::text,COALESCE(remark,''),created_at::text,updated_at::text FROM novel_crawl_forum_source`
+const sourceReturning = `id::text,source_name,base_url,request_charset,cookie_secret_ref,(cookie_secret_ref <> ''),COALESCE(user_agent,''),request_interval_ms::text,enabled,sort_order::text,COALESCE(remark,''),created_at::text,updated_at::text`
 
 func scan(row interface{ Scan(...any) error }, v *Source) error {
-	return row.Scan(&v.ID, &v.SourceName, &v.BaseURL, &v.RequestCharset, &v.CookieConfigured, &v.UserAgent, &v.RequestIntervalMs, &v.Enabled, &v.SortOrder, &v.Remark, &v.CreatedAt, &v.UpdatedAt)
+	return row.Scan(&v.ID, &v.SourceName, &v.BaseURL, &v.RequestCharset, &v.CookieSecretRef, &v.CookieConfigured, &v.UserAgent, &v.RequestIntervalMs, &v.Enabled, &v.SortOrder, &v.Remark, &v.CreatedAt, &v.UpdatedAt)
 }
 func (r SQLRepository) List(ctx context.Context, keyword, enabled string, page, size int) ([]Source, int64, error) {
 	where := ` WHERE ($1='' OR source_name ILIKE '%'||$1||'%' OR base_url ILIKE '%'||$1||'%') AND ($2='' OR enabled=($2='true'))`
@@ -37,12 +37,12 @@ func (r SQLRepository) List(ctx context.Context, keyword, enabled string, page, 
 }
 func (r SQLRepository) Create(ctx context.Context, in Input) (Source, error) {
 	var v Source
-	err := scan(r.DB.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_source(source_name,base_url,request_charset,cookie_text,user_agent,request_interval_ms,enabled,sort_order,remark) VALUES($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7,$8,$9) RETURNING `+sourceReturning, in.SourceName, in.BaseURL, in.RequestCharset, in.CookieText, in.UserAgent, in.RequestIntervalMs, in.Enabled, in.SortOrder, in.Remark), &v)
+	err := scan(r.DB.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_source(source_name,base_url,request_charset,cookie_secret_ref,user_agent,request_interval_ms,enabled,sort_order,remark) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,$7,$8,$9) RETURNING `+sourceReturning, in.SourceName, in.BaseURL, in.RequestCharset, in.CookieSecretRef, in.UserAgent, in.RequestIntervalMs, in.Enabled, in.SortOrder, in.Remark), &v)
 	return v, err
 }
 func (r SQLRepository) Update(ctx context.Context, id int64, in Input) (Source, error) {
 	var v Source
-	err := scan(r.DB.QueryRowContext(ctx, `UPDATE novel_crawl_forum_source SET source_name=$1,base_url=$2,request_charset=$3,cookie_text=CASE WHEN $4='' THEN cookie_text ELSE $4 END,user_agent=NULLIF($5,''),request_interval_ms=$6,enabled=$7,sort_order=$8,remark=$9,updated_at=now() WHERE id=$10 RETURNING `+sourceReturning, in.SourceName, in.BaseURL, in.RequestCharset, in.CookieText, in.UserAgent, in.RequestIntervalMs, in.Enabled, in.SortOrder, in.Remark, id), &v)
+	err := scan(r.DB.QueryRowContext(ctx, `UPDATE novel_crawl_forum_source SET source_name=$1,base_url=$2,request_charset=$3,cookie_secret_ref=$4,user_agent=NULLIF($5,''),request_interval_ms=$6,enabled=$7,sort_order=$8,remark=$9,updated_at=now() WHERE id=$10 RETURNING `+sourceReturning, in.SourceName, in.BaseURL, in.RequestCharset, in.CookieSecretRef, in.UserAgent, in.RequestIntervalMs, in.Enabled, in.SortOrder, in.Remark, id), &v)
 	return v, err
 }
 func (r SQLRepository) Delete(ctx context.Context, id int64) error {

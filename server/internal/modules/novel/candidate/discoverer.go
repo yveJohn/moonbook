@@ -43,6 +43,9 @@ func DiscoverBoard(ctx context.Context, target BoardTarget, client *http.Client)
 		if target.UserAgent != "" {
 			req.Header.Set("User-Agent", target.UserAgent)
 		}
+		if target.sourceCookie != "" {
+			req.Header.Set("Cookie", target.sourceCookie)
+		}
 		resp, e := client.Do(req)
 		if e != nil {
 			return nil, e

@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlsource"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/fetchlog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobs"
-	"time"
 )
 
 const JobModule = "novel"
@@ -40,6 +42,7 @@ type Worker struct {
 	Logs         fetchlog.SQLRepository
 	Executor     Executor
 	Writer       ChapterWriter
+	Secrets      crawlsource.SecretResolver
 	WorkerID     string
 	Lease        time.Duration
 	PollInterval time.Duration
@@ -192,9 +195,22 @@ func (w *Worker) loadTask(ctx context.Context, id int64) (Task, error) {
 		return Task{}, err
 	}
 	var intervalMS int
-	err = w.DB.QueryRowContext(ctx, `SELECT request_interval_ms,COALESCE(user_agent,''),COALESCE(cookie_text,'') FROM novel_crawl_forum_source WHERE id=$1::bigint`, v.SourceID).Scan(&intervalMS, &v.sourceUserAgent, &v.sourceCookie)
+	var cookieSecretRef string
+	err = w.DB.QueryRowContext(ctx, `SELECT request_interval_ms,COALESCE(user_agent,''),cookie_secret_ref FROM novel_crawl_forum_source WHERE id=$1::bigint`, v.SourceID).Scan(&intervalMS, &v.sourceUserAgent, &cookieSecretRef)
+	if err != nil {
+		return Task{}, err
+	}
+	if cookieSecretRef != "" {
+		if w.Secrets == nil {
+			return Task{}, crawlsource.ErrCookieSecretNotConfigured
+		}
+		v.sourceCookie, err = w.Secrets.ResolveCookie(cookieSecretRef)
+		if err != nil {
+			return Task{}, err
+		}
+	}
 	v.requestInterval = time.Duration(intervalMS) * time.Millisecond
-	return v, err
+	return v, nil
 }
 
 func (w *Worker) appendFetchLogs(ctx context.Context, task Task, fetches []PageFetch) {

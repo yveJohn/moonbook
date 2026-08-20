@@ -17,7 +17,7 @@ func TestHTTPExecutorWithLocalSubstitute(t *testing.T) {
 	server := newHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests = append(requests, r.URL.Path)
 		if r.Header.Get("User-Agent") != "Forum-Fixture/1.0" || r.Header.Get("Cookie") != "session=fixture" {
-			t.Errorf("unexpected source headers: user-agent=%q cookie=%q", r.Header.Get("User-Agent"), r.Header.Get("Cookie"))
+			t.Errorf("unexpected source headers: user-agent-matched=%t cookie-configured=%t", r.Header.Get("User-Agent") == "Forum-Fixture/1.0", r.Header.Get("Cookie") != "")
 		}
 		switch r.URL.Path {
 		case "/thread/1":

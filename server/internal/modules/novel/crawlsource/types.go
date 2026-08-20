@@ -3,21 +3,22 @@ package crawlsource
 import "context"
 
 type Source struct {
-	ID, SourceName, BaseURL, RequestCharset, UserAgent, RequestIntervalMs, SortOrder, Remark, CreatedAt, UpdatedAt string
-	CookieConfigured                                                                                               bool
-	Enabled                                                                                                        bool
+	ID, SourceName, BaseURL, RequestCharset, CookieSecretRef, UserAgent, RequestIntervalMs, SortOrder, Remark, CreatedAt, UpdatedAt string
+	CookieConfigured                                                                                                                bool
+	Enabled                                                                                                                         bool
 }
 
 type Input struct {
-	SourceName        string `json:"sourceName"`
-	BaseURL           string `json:"baseUrl"`
-	RequestCharset    string `json:"requestCharset"`
-	CookieText        string `json:"cookieText"`
-	UserAgent         string `json:"userAgent"`
-	RequestIntervalMs string `json:"requestIntervalMs"`
-	Enabled           bool   `json:"enabled"`
-	SortOrder         string `json:"sortOrder"`
-	Remark            string `json:"remark"`
+	SourceName        string  `json:"sourceName"`
+	BaseURL           string  `json:"baseUrl"`
+	RequestCharset    string  `json:"requestCharset"`
+	CookieSecretRef   string  `json:"cookieSecretRef"`
+	CookieText        *string `json:"cookieText"`
+	UserAgent         string  `json:"userAgent"`
+	RequestIntervalMs string  `json:"requestIntervalMs"`
+	Enabled           bool    `json:"enabled"`
+	SortOrder         string  `json:"sortOrder"`
+	Remark            string  `json:"remark"`
 }
 
 type Repository interface {

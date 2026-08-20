@@ -25,6 +25,9 @@ func (s *Service) List(ctx context.Context, keyword, enabled string, page, size 
 	return s.Repo.List(ctx, keyword, enabled, page, size)
 }
 func (s *Service) Create(ctx context.Context, in Input) (Source, error) {
+	if in.CookieText != nil {
+		return Source{}, errors.New("forum cookie plaintext is not accepted")
+	}
 	in = normalize(in)
 	if err := valid(in); err != nil {
 		return Source{}, err
@@ -32,6 +35,9 @@ func (s *Service) Create(ctx context.Context, in Input) (Source, error) {
 	return s.Repo.Create(ctx, in)
 }
 func (s *Service) Update(ctx context.Context, id int64, in Input) (Source, error) {
+	if in.CookieText != nil {
+		return Source{}, errors.New("forum cookie plaintext is not accepted")
+	}
 	in = normalize(in)
 	if id <= 0 {
 		return Source{}, errors.New("invalid source id")
@@ -62,7 +68,10 @@ func valid(in Input) error {
 	if charset == "" || len(charset) > 40 {
 		return errors.New("invalid request charset")
 	}
-	if len(in.CookieText) > 8192 || len(in.UserAgent) > 500 || len([]rune(in.Remark)) > 500 {
+	if err := ValidateCookieSecretRef(in.CookieSecretRef); err != nil {
+		return err
+	}
+	if len(in.UserAgent) > 500 || len([]rune(in.Remark)) > 500 {
 		return errors.New("forum source field too long")
 	}
 	interval, err := strconv.Atoi(in.RequestIntervalMs)
@@ -80,7 +89,7 @@ func normalize(in Input) Input {
 	in.SourceName = strings.TrimSpace(in.SourceName)
 	in.BaseURL = strings.TrimSpace(in.BaseURL)
 	in.RequestCharset = strings.TrimSpace(in.RequestCharset)
-	in.CookieText = strings.TrimSpace(in.CookieText)
+	in.CookieSecretRef = strings.TrimSpace(in.CookieSecretRef)
 	in.UserAgent = strings.TrimSpace(in.UserAgent)
 	in.RequestIntervalMs = strings.TrimSpace(in.RequestIntervalMs)
 	in.SortOrder = strings.TrimSpace(in.SortOrder)

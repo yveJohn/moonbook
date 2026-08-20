@@ -5,11 +5,22 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlsource"
 )
 
-type Service struct{ Repo Repository }
+type Service struct {
+	Repo    Repository
+	Secrets crawlsource.SecretResolver
+}
 
-func NewService(repo Repository) *Service { return &Service{Repo: repo} }
+func NewService(repo Repository, secrets ...crawlsource.SecretResolver) *Service {
+	s := &Service{Repo: repo}
+	if len(secrets) > 0 {
+		s.Secrets = secrets[0]
+	}
+	return s
+}
 func (s *Service) List(ctx context.Context, keyword, sourceID, boardID, status string, page, size int) ([]Candidate, int64, error) {
 	if page < 1 {
 		page = 1
@@ -63,9 +74,27 @@ func (s *Service) DiscoverWithClient(ctx context.Context, boardID string, client
 	if !target.Enabled {
 		return DiscoverResult{}, errors.New("board or source is disabled")
 	}
+	if err := resolveTargetCookie(&target, s.Secrets); err != nil {
+		return DiscoverResult{}, err
+	}
 	items, err := DiscoverBoard(ctx, target, client)
 	if err != nil {
 		return DiscoverResult{}, err
 	}
 	return s.Repo.UpsertDiscovered(ctx, target, items)
+}
+
+func resolveTargetCookie(target *BoardTarget, resolver crawlsource.SecretResolver) error {
+	if target.CookieSecretRef == "" {
+		return nil
+	}
+	if resolver == nil {
+		return crawlsource.ErrCookieSecretNotConfigured
+	}
+	cookie, err := resolver.ResolveCookie(target.CookieSecretRef)
+	if err != nil {
+		return err
+	}
+	target.sourceCookie = cookie
+	return nil
 }

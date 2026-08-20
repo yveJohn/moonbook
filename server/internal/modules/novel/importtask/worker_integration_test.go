@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlsource"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/fetchlog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobs"
 )
@@ -38,7 +39,7 @@ func TestWorkerRunOnceCompletesPersistedImportJob(t *testing.T) {
 	boardName := fmt.Sprintf("worker测试板块-%d", suffix)
 	threadID := fmt.Sprintf("worker-thread-%d", suffix)
 	var sourceID, boardID, candidateID, retryCandidateID string
-	if err := db.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_source(source_name,base_url,request_interval_ms,user_agent,cookie_text) VALUES($1,'https://worker.example.test',1234,'Worker-Fixture/1.0','session=worker') RETURNING id::text`, sourceName).Scan(&sourceID); err != nil {
+	if err := db.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_source(source_name,base_url,request_interval_ms,user_agent,cookie_secret_ref) VALUES($1,'https://worker.example.test',1234,'Worker-Fixture/1.0','MOONBOOK_FORUM_COOKIE_WORKER_TEST') RETURNING id::text`, sourceName).Scan(&sourceID); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRowContext(ctx, `INSERT INTO novel_crawl_forum_board(source_id,source_name,board_name,board_url) VALUES($1,$2,$3,'https://worker.example.test/forum') RETURNING id::text`, sourceID, sourceName, boardName).Scan(&boardID); err != nil {
@@ -70,7 +71,9 @@ func TestWorkerRunOnceCompletesPersistedImportJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	seenTask := make(chan Task, 1)
-	worker := &Worker{DB: db, Jobs: jobs.NewRepository(db), Logs: fetchlog.SQLRepository{DB: db}, Executor: integrationExecutor{task: seenTask}, WorkerID: "worker-integration", Lease: time.Minute}
+	worker := &Worker{DB: db, Jobs: jobs.NewRepository(db), Logs: fetchlog.SQLRepository{DB: db}, Executor: integrationExecutor{task: seenTask}, Secrets: crawlsource.EnvSecretResolver{Lookup: func(key string) (string, bool) {
+		return "session=worker", key == "MOONBOOK_FORUM_COOKIE_WORKER_TEST"
+	}}, WorkerID: "worker-integration", Lease: time.Minute}
 	deadJob, err := worker.Jobs.Claim(ctx, jobs.ClaimOptions{WorkerID: "worker-integration-dead", Module: "novel", Types: []string{JobType}, LeaseDuration: time.Minute})
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +107,7 @@ func TestWorkerRunOnceCompletesPersistedImportJob(t *testing.T) {
 	}
 	loaded := <-seenTask
 	if loaded.requestInterval != 1234*time.Millisecond || loaded.sourceUserAgent != "Worker-Fixture/1.0" || loaded.sourceCookie != "session=worker" {
-		t.Fatalf("source request policy was not loaded: interval=%s userAgent=%q cookie=%q", loaded.requestInterval, loaded.sourceUserAgent, loaded.sourceCookie)
+		t.Fatalf("source request policy was not loaded: interval=%s userAgent=%q cookieConfigured=%t", loaded.requestInterval, loaded.sourceUserAgent, loaded.sourceCookie != "")
 	}
 	var lastPage, pageLogs int
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(last_import_page_no,0) FROM novel_crawl_thread_candidate WHERE id=$1`, candidateID).Scan(&lastPage); err != nil {

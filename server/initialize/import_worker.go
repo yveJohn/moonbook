@@ -16,6 +16,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapterclean"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chapters"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/chaptersummary"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/crawlsource"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/fetchlog"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/importtask"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
@@ -48,12 +49,14 @@ func StartImportWorker() error {
 	if err != nil {
 		return err
 	}
+	forumSecrets := crawlsource.EnvSecretResolver{Lookup: os.LookupEnv}
 	worker := &importtask.Worker{
 		DB:           db,
 		Jobs:         jobs.NewRepository(db),
 		Logs:         fetchlog.SQLRepository{DB: db},
 		Executor:     executor,
 		Writer:       importtask.ChaptersWriter{Service: chapters.NewService(db, objectstore.NewService(db, blobs))},
+		Secrets:      forumSecrets,
 		WorkerID:     "novel-import-" + global.GVA_CONFIG.App.Node,
 		Lease:        10 * time.Minute,
 		PollInterval: time.Second,
@@ -86,6 +89,7 @@ func StartImportWorker() error {
 	discoveryWorker := &candidate.DiscoveryWorker{
 		DB: db, WorkerID: "novel-forum-discovery-" + global.GVA_CONFIG.App.Node,
 		PollInterval: time.Minute, Client: &http.Client{Timeout: 30 * time.Second},
+		Secrets: forumSecrets,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

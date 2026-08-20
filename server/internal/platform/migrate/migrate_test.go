@@ -114,9 +114,30 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00066_disable_system_config_write.sql",
 		"00067_platform_job_monitor_admin.sql",
 		"00068_remove_unused_email_plugin.sql",
+		"00069_forum_cookie_secret_reference.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestForumCookieSecretReferenceMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00069_forum_cookie_secret_reference.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"cookie_secret_ref varchar(128)",
+		"^MOONBOOK_FORUM_COOKIE_[A-Z0-9_]+$",
+		"encode(sha256(convert_to(id::text, 'UTF8')), 'hex')",
+		"SET cookie_text = NULL",
+		"CHECK (cookie_text IS NULL)",
+		"Moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("forum cookie secret migration missing %q", required)
+		}
 	}
 }
 

@@ -91,7 +91,7 @@ func (r SQLRepository) Delete(ctx context.Context, ids []int64) error {
 
 func (r SQLRepository) GetBoardTarget(ctx context.Context, boardID string) (BoardTarget, error) {
 	var v BoardTarget
-	err := r.DB.QueryRowContext(ctx, `SELECT s.id::text,s.source_name,b.id::text,b.board_name,b.board_url,COALESCE(b.board_url_template,''),COALESCE(s.user_agent,''),s.enabled AND b.enabled FROM novel_crawl_forum_board b JOIN novel_crawl_forum_source s ON s.id=b.source_id WHERE b.id=$1`, boardID).Scan(&v.SourceID, &v.SourceName, &v.BoardID, &v.BoardName, &v.BoardURL, &v.BoardURLTemplate, &v.UserAgent, &v.Enabled)
+	err := r.DB.QueryRowContext(ctx, `SELECT s.id::text,s.source_name,b.id::text,b.board_name,b.board_url,COALESCE(b.board_url_template,''),COALESCE(s.user_agent,''),s.cookie_secret_ref,s.enabled AND b.enabled FROM novel_crawl_forum_board b JOIN novel_crawl_forum_source s ON s.id=b.source_id WHERE b.id=$1`, boardID).Scan(&v.SourceID, &v.SourceName, &v.BoardID, &v.BoardName, &v.BoardURL, &v.BoardURLTemplate, &v.UserAgent, &v.CookieSecretRef, &v.Enabled)
 	return v, err
 }
 

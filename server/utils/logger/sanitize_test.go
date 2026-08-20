@@ -29,3 +29,14 @@ func TestTruncate(t *testing.T) {
 		t.Fatal("long should be replaced with mark")
 	}
 }
+
+func TestSanitizeBodyMasksCookieFields(t *testing.T) {
+	body := `{"cookieText":"session=plaintext","nested":{"cookie":"other-secret"},"cookieSecretRef":"MOONBOOK_FORUM_COOKIE_EXAMPLE"}`
+	got := SanitizeBody("application/json", body)
+	if strings.Contains(got, "session=plaintext") || strings.Contains(got, "other-secret") {
+		t.Fatalf("cookie value was not masked: %s", got)
+	}
+	if !strings.Contains(got, "MOONBOOK_FORUM_COOKIE_EXAMPLE") {
+		t.Fatalf("non-secret reference was unexpectedly masked: %s", got)
+	}
+}

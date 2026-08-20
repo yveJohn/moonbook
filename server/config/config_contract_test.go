@@ -134,6 +134,36 @@ func TestEPUSDTEnvironmentContract(t *testing.T) {
 	}
 }
 
+func TestForumCookieSecretEnvironmentContract(t *testing.T) {
+	const key = "MOONBOOK_FORUM_COOKIE_EXAMPLE"
+	content, err := os.ReadFile("../../.env.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, exists := parseEnvironmentExample(string(content))[key]; !exists || value != "" {
+		t.Fatalf("%s must be declared with an empty example value", key)
+	}
+
+	composeContent, err := os.ReadFile("../../compose.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compose struct {
+		Services map[string]struct {
+			Environment map[string]any `yaml:"environment"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(composeContent, &compose); err != nil {
+		t.Fatal(err)
+	}
+	for _, serviceName := range []string{"migrate", "admin-bootstrap", "server"} {
+		value, exists := compose.Services[serviceName].Environment[key]
+		if !exists || !strings.Contains(fmt.Sprint(value), "${"+key) {
+			t.Errorf("service %s does not receive %s by environment injection", serviceName, key)
+		}
+	}
+}
+
 func parseEnvironmentExample(content string) map[string]string {
 	values := make(map[string]string)
 	for _, line := range strings.Split(content, "\n") {
