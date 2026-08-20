@@ -1,0 +1,6 @@
+{
+  "root": "./legacy-txt-files",
+  "files": {
+    "1001": "1001/example-book.txt"
+  }
+}

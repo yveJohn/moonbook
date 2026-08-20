@@ -12,6 +12,7 @@ import (
 
 	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/objectstore"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/txtimport"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/legacymigrate"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -21,8 +22,8 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	flag.Parse()
-	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-crawl-import-tasks" && flag.Arg(0) != "novel-crawl-fetch-logs" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
-		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-crawl-sources|novel-crawl-candidates|novel-crawl-import-tasks|novel-crawl-fetch-logs|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
+	if flag.NArg() != 1 || (flag.Arg(0) != "all" && flag.Arg(0) != "preflight" && flag.Arg(0) != "novel-metadata" && flag.Arg(0) != "novel-books" && flag.Arg(0) != "novel-chapters" && flag.Arg(0) != "novel-crawl-sources" && flag.Arg(0) != "novel-crawl-candidates" && flag.Arg(0) != "novel-crawl-import-tasks" && flag.Arg(0) != "novel-crawl-fetch-logs" && flag.Arg(0) != "novel-txt-imports" && flag.Arg(0) != "novel-reader-seo" && flag.Arg(0) != "reader-identity" && flag.Arg(0) != "reader-commerce" && flag.Arg(0) != "reader-finance" && flag.Arg(0) != "reader-activity") {
+		fmt.Fprintln(os.Stderr, "usage: moonbook-legacy-migrate [all|preflight|novel-metadata|novel-books|novel-chapters|novel-crawl-sources|novel-crawl-candidates|novel-crawl-import-tasks|novel-crawl-fetch-logs|novel-txt-imports|novel-reader-seo|reader-identity|reader-commerce|reader-finance|reader-activity]")
 		return 2
 	}
 	sourceDSN := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_MYSQL_DSN"))
@@ -73,6 +74,11 @@ func run() int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
+		txtStage, err := legacyTXTStage()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
 		stages = append(stages,
 			legacymigrate.NovelCategoryDictionaryStage{},
 			legacymigrate.LegacyBookCategoryStage{},
@@ -87,6 +93,7 @@ func run() int {
 			legacymigrate.NovelCrawlCandidatesStage{},
 			legacymigrate.NovelCrawlImportTasksStage{},
 			legacymigrate.NovelCrawlFetchLogsStage{},
+			txtStage,
 			legacymigrate.NovelReaderSEOStage{},
 			readerIdentity,
 			legacymigrate.ReaderCommerceStage{},
@@ -105,6 +112,14 @@ func run() int {
 	}
 	if command == "novel-crawl-fetch-logs" {
 		stages = append(stages, legacymigrate.NovelCrawlSourcesStage{}, legacymigrate.NovelCrawlCandidatesStage{}, legacymigrate.NovelCrawlImportTasksStage{}, legacymigrate.NovelCrawlFetchLogsStage{})
+	}
+	if command == "novel-txt-imports" {
+		txtStage, err := legacyTXTStage()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		stages = append(stages, txtStage)
 	}
 	if command == "reader-identity" || command == "reader-commerce" || command == "reader-finance" || command == "reader-activity" {
 		stages = append(stages, readerIdentity)
@@ -161,22 +176,7 @@ func migrationTimeout(raw string) (time.Duration, error) {
 }
 
 func coverDependencies(target *sql.DB) (*objectstore.Service, *legacymigrate.CoverDownloader, error) {
-	endpoint := strings.TrimSpace(os.Getenv("MOONBOOK_MINIO_ENDPOINT"))
-	accessKey := strings.TrimSpace(os.Getenv("MINIO_ROOT_USER"))
-	secretKey := strings.TrimSpace(os.Getenv("MINIO_ROOT_PASSWORD"))
-	bucket := strings.TrimSpace(os.Getenv("MINIO_BUCKET"))
-	if endpoint == "" || accessKey == "" || secretKey == "" || bucket == "" {
-		return nil, nil, fmt.Errorf("object migration requires MOONBOOK_MINIO_ENDPOINT, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD, and MINIO_BUCKET")
-	}
-	useSSL := false
-	if raw := strings.TrimSpace(os.Getenv("MOONBOOK_MINIO_USE_SSL")); raw != "" {
-		value, err := strconv.ParseBool(raw)
-		if err != nil {
-			return nil, nil, fmt.Errorf("MOONBOOK_MINIO_USE_SSL must be true or false")
-		}
-		useSSL = value
-	}
-	store, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: endpoint, AccessKey: accessKey, SecretKey: secretKey, Bucket: bucket, UseSSL: useSSL})
+	store, err := minIOStore()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -189,4 +189,39 @@ func coverDependencies(target *sql.DB) (*objectstore.Service, *legacymigrate.Cov
 		return nil, nil, err
 	}
 	return objectstore.NewService(target, store), downloader, nil
+}
+
+func legacyTXTStage() (legacymigrate.NovelTXTImportsStage, error) {
+	store, err := minIOStore()
+	if err != nil {
+		return legacymigrate.NovelTXTImportsStage{}, err
+	}
+	manifest, err := legacymigrate.LoadLegacyTXTManifest(os.Getenv("MOONBOOK_LEGACY_TXT_MANIFEST"))
+	if err != nil {
+		return legacymigrate.NovelTXTImportsStage{}, err
+	}
+	return legacymigrate.NovelTXTImportsStage{Manifest: manifest, Files: txtimport.MinIOFileStore{Blobs: store}}, nil
+}
+
+func minIOStore() (*objectstore.MinIOStore, error) {
+	endpoint := strings.TrimSpace(os.Getenv("MOONBOOK_MINIO_ENDPOINT"))
+	accessKey := strings.TrimSpace(os.Getenv("MINIO_ROOT_USER"))
+	secretKey := strings.TrimSpace(os.Getenv("MINIO_ROOT_PASSWORD"))
+	bucket := strings.TrimSpace(os.Getenv("MINIO_BUCKET"))
+	if endpoint == "" || accessKey == "" || secretKey == "" || bucket == "" {
+		return nil, fmt.Errorf("object migration requires MOONBOOK_MINIO_ENDPOINT, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD, and MINIO_BUCKET")
+	}
+	useSSL := false
+	if raw := strings.TrimSpace(os.Getenv("MOONBOOK_MINIO_USE_SSL")); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, fmt.Errorf("MOONBOOK_MINIO_USE_SSL must be true or false")
+		}
+		useSSL = value
+	}
+	store, err := objectstore.NewMinIOStore(objectstore.MinIOConfig{Endpoint: endpoint, AccessKey: accessKey, SecretKey: secretKey, Bucket: bucket, UseSSL: useSSL})
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
 }

@@ -22,7 +22,7 @@ cd server
 go run ./cmd/moonbook-legacy-migrate all
 ```
 
-`all` 固定执行 `preflight`、小说分类/作者、书籍/副分类/封面、章节正文、Reader SEO、Reader 身份和 Reader Commerce。小说对象阶段需要额外注入 MinIO 端点、凭据和 Bucket；所有 DSN、凭据和允许的封面主机只能通过 Secret/环境变量注入。每个 stage 仍由同一个 Runner 使用独立 checkpoint，失败后重新执行会从最近提交的游标继续。该入口只编排当前已实现的 stage，不代表尚未实现的业务表或 8GB 生产副本演练已经完成。
+`all` 固定执行 `preflight`、小说分类/作者、书籍/副分类/封面、章节正文、论坛来源/候选/导入任务/抓取日志、TXT 导入任务、Reader SEO、Reader 身份和 Reader Commerce。小说与 TXT 对象阶段需要额外注入 MinIO 端点、凭据和 Bucket；TXT 阶段还要求 `MOONBOOK_LEGACY_TXT_MANIFEST`。所有 DSN、凭据和允许的封面主机只能通过 Secret/环境变量注入。每个 stage 仍由同一个 Runner 使用独立 checkpoint，失败后重新执行会从最近提交的游标继续。该入口只编排当前已实现的 stage，不代表尚未实现的业务表或 8GB 生产副本演练已经完成。
 
 M2 小说分类与作者迁移：
 
@@ -58,5 +58,18 @@ go run ./cmd/moonbook-legacy-migrate novel-chapters
 每章正文限制为有效 UTF-8 且不超过 `(16 MiB)-1`，按 Unicode code point 排除空白重算字数。对象写入 MinIO 并以 `StatObject` 校验大小和 SHA-256 后，章节元数据、对象引用和书籍统计才在同一 PostgreSQL 事务提交。缺书、缺正文、非法状态、非法字段、上传失败和激活失败均写入 `migration_errors`；字数修正使用非重试错误码 `WORD_COUNT_RECALCULATED` 留下可核对证据。
 
 章节来源指纹不依赖 migration name。已完成 checkpoint 会正常跳过；即使检查点丢失并使用新的 migration name 重跑，已有 legacy 正文对象也会被复用，不会生成重复版本。目标中同 ID 的人工或其他非 legacy 章节只记录 `CHAPTER_ID_CONFLICT`，不会覆盖。
+
+## M5 TXT 导入任务和原文件迁移
+
+旧 Java 实现只在上传请求内存中解析 TXT，数据库仅保存文件名和字节数，不保存文件路径或对象键。因此迁移程序不会猜测磁盘路径，也不会生成占位文件。执行前必须建立受控文件清单：
+
+```bash
+cd server
+go run ./cmd/moonbook-legacy-migrate novel-txt-imports
+```
+
+清单格式参考 `docs/migration/legacy-txt-manifest.example.json`。`root` 相对于清单文件解析，也可以使用绝对目录；`files` 的键是旧任务 bigint ID，值只能是根目录内的相对路径。迁移会解析符号链接并拒绝逃逸根目录、目录项、缺失文件和未在清单登记的任务。清单只保存路径和 ID，不得包含凭据或正文。
+
+每个文件限制为非空且不超过 `(16 MiB)-1`。若旧表的 `file_size_bytes` 大于零，实际字节数必须完全一致。文件以 `imports/txt/legacy/{taskId}/{sha256}.txt` 上传 MinIO，并在 `StatObject` 的大小和 SHA-256 校验通过后写入任务和 `platform_jobs`。缺文件、大小不符、目标书籍缺失和对象校验失败均进入 `migration_errors`，禁止伪造对象。旧 `running` 状态转为失败并等待人工复核，不会在切换后自动执行导入。
 
 整个命令默认最多运行 12 小时，可用 `MOONBOOK_MIGRATION_TIMEOUT` 在 `1m` 至 `24h` 间调整，例如 `6h`。超时只会中断当前批次；已提交批次的 checkpoint 保留，重新执行同一命令会从游标继续。正式演练必须根据容量和耗时报告设置小于停机窗口且留有核对、冒烟和回退余量的值。

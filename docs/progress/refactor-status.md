@@ -11,8 +11,8 @@
 | M2 小说核心与对象存储 | 已完成 | 分类、作者、书籍、章节、读者 SEO 管理、PostgreSQL+MinIO 版本化对象服务及旧库迁移均已实现；整体回归、空库迁移、HTTP E2E、对象完整性、Long ID、Reader 零差异和秘密扫描通过 |
 | M3 读者域与零修改兼容 | 已完成 | 冻结 Reader 树、全部调用面契约、真实 PostgreSQL/Redis/MinIO、SSR 异常、生产构建和 Playwright 关键旅程均通过统一验收；8GB 副本容量演练归属 M6 |
 | M4 交易、支付与运营 | 实施中 | 钱包、签到、购买、奖励、运营概览、财务表迁移、EPUSDT 本地创建/回调审计、运营页签和 Full 财务核对器已实现并验收；真实最小金额支付仍待补齐 |
-| M5 内容生产与长任务 | 实施中 | 论坛、TXT、清洗、摘要和画像 Worker 的租约续期、失租停止、重启接管与结果唯一性已通过真实 PostgreSQL/MinIO 验证；已新增内容生产 legacy 来源键及论坛来源/板块、候选、导入任务、抓取日志迁移 stage，其余内容生产映射仍待补齐 |
-| M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader 身份/Commerce 分批 stage 和 checkpoint；约 8 GB 候选副本已只读定位，论坛来源/板块、候选、导入任务与抓取日志 stage 已接入，其他内容生产 stage、对象完整性校验、全量演练和差异报告仍待完成 |
+| M5 内容生产与长任务 | 实施中 | 论坛、TXT、清洗、摘要和画像 Worker 恢复与结果唯一性已有真实验证；已新增内容生产 legacy 来源键、论坛全链路及 TXT 任务/原文件迁移 stage，其余清洗、合并、AI 映射仍待补齐 |
+| M6 全量迁移与校验 | 实施中 | 已实现小说、SEO、Reader、论坛和 TXT 分批 stage/checkpoint；约 8 GB 候选副本已只读定位，TXT 原文件需要显式清单，其他内容生产 stage、对象完整性校验、全量演练和差异报告仍待完成 |
 | M7 生产切换就绪验收 | 审计中 | 备份恢复、Compose 升级和空库短时性能基线已有隔离证据；真实数据容量、监控告警、安全、统一 CI 和最终报告仍存在明确缺口 |
 
 ## M0 已完成
@@ -33,7 +33,7 @@
 - 冻结旧仓库已只读定位 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节，结合 gzip ISIZE 模值和用户提供信息推算单成员原始大小约 8,129,574,556 字节。Moonbook PostgreSQL 与 MinIO 数据目录所在 Docker 文件系统当前可用约 934.68 GiB，容量不是当前直接阻断项；文件仍未解压、未校验、未导入且保持未跟踪，完整副本演练仍须先完成内容生产 stage、对象转换和全域核对器，详见 `docs/verification/m6-data-copy-discovery.md`。
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
 - M4 已关闭 Reader EPUSDT 创建、失败分类、替换、过期、并发、历史凭据回调和每次 HTTP 回调尝试审计缺口；两个运营审计页签、财务全域核对及受控真实最小金额支付仍未完成。详细证据和退出门见 `docs/verification/m4-exit-audit.md`。
-- M5/M6 审计确认内容生产旧表尚未进入 `moonbook-legacy-migrate all`，目标表缺少通用 legacy 幂等来源键，TXT/清洗/合并对象迁移及核对器未实现；论坛 Cookie 当前仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
+- M5/M6 已接入论坛全链路和基于受控文件清单的 TXT 对象迁移；清洗/合并/AI 迁移及全域核对器仍未实现，论坛运行时 Cookie 仍以明文存 PostgreSQL，且自动发现/自动跟进只有配置没有调度器。详细证据见 `docs/verification/m5-m6-content-migration-audit.md`。
 - M7 首次审计确认最终报告仍是模板，备份恢复文档包含错误迁移表名、一次性容器 `exec`、未挂载 MinIO 备份目录和可能校验错误 Compose 项目等不可执行步骤；性能、安全、告警、故障处理、升级和统一最终验收均无闭环报告。详细证据见 `docs/verification/m7-readiness-audit.md`。
 - M7 GVA 基座审计确认通用 `/system/getSystemConfig` 会回显 JWT、Redis、数据库、邮件和 MinIO 等 Secret，`setSystemConfig` 还能改写运行配置，生产前必须关闭或白名单化；平台任务无统一只读监控，旧在线状态和通知公告也没有确定等价结论。详细证据见 `docs/verification/m7-gva-foundation-audit.md`。
 - M7 已完成一次双项目、独立命名卷的本地合成备份恢复演练，修正 MinIO 客户端挂载、稳定 SHA-256 清单、空库恢复顺序、一次性迁移调用和版本表名，并把财务核对命令纳入 Server 镜像；恢复后 106 张表、版本 58/59 条记录、1 个 43 字节对象与源端一致，迁移 `applied=0`、基础设施 healthy、财务 `mismatches=0`，完整 Compose 栈及三项健康入口通过。该证据只关闭命令级可执行性和基础启动冒烟，真实业务数据、协调停写、支付回调和认证业务旅程仍待完成，详见 `docs/verification/m7-backup-restore-rehearsal.md`。
