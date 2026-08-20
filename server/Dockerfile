@@ -1,4 +1,4 @@
-FROM golang:1.24.2-alpine3.21 AS builder
+FROM golang:1.25.13-alpine3.23@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69 AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-migration-audit ./cmd/moonbook-migration-audit \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-config ./cmd/moonbook-config
 
-FROM alpine:3.21
+FROM alpine:3.23.5@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
 
 RUN apk add --no-cache ca-certificates curl tzdata \
     && addgroup -S moonbook \
