@@ -4,7 +4,7 @@
 
 **架构：** 保持 Go 模块化单体、GVA 管理端、冻结 Reader、PostgreSQL、Redis、MinIO 和根 Docker Compose。业务任务继续由各模块状态机管理，Platform 只提供只读任务观测、指标、迁移和统一运维能力。所有结构变更使用前向 Goose 迁移，所有外部 Secret 由环境变量或 Secret 引用注入。
 
-**技术栈：** Go 1.24、Gin、Vue 3、Element Plus、PostgreSQL 17、Redis 7、MinIO、Docker Compose、Prometheus、Alertmanager、Playwright、Go race/vet、Node test、ESLint、Gitleaks、Trivy、Syft。
+**技术栈：** Go 1.25、Gin、Vue 3、Element Plus、PostgreSQL 17、Redis 7、MinIO、Docker Compose、Prometheus、Alertmanager、Playwright、Go race/vet、Node test、ESLint、Gitleaks、Trivy、Syft。
 
 **批准规格：** `docs/superpowers/specs/2026-08-21-moonbook-remaining-refactor-convergence-design.md`
 
@@ -215,12 +215,14 @@
 - Create: `docs/verification/m7-sbom-licenses.md`
 - Modify: `docs/verification/m7-security-supply-chain-audit.md`
 
-- [ ] **Step 1：固定扫描工具。** 固定 govulncheck、Trivy、Syft 和许可证扫描版本/digest，扫描源码锁文件、最终镜像和 SBOM。
-- [ ] **Step 2：升级基础镜像和依赖。** 优先关闭已有修复版本的 high/critical；每次升级按 Server/Web/Reader 独立提交和回归，不跨模块混合。
-- [ ] **Step 3：冻结 Reader 决策。** 只有契约、536 项测试、SSR 和关键旅程均通过才允许依赖升级；无法兼容时保留冻结源码并形成具体缓解和用户批准项。
-- [ ] **Step 4：安全行为门。** 验证 RBAC、暴力登录、限流、安全响应头、敏感日志、Secret 注入和最小权限凭据。
-- [ ] **Step 5：SBOM 和许可证。** 为三个最终镜像输出 SPDX/CycloneDX 摘要和许可证结论；GVA BSL 1.1 商业授权明确列为外部证据。
-- [ ] **Step 6：提交。** 按实际逻辑分别使用 `升级后端安全依赖`、`升级管理端安全依赖`、`更新基础镜像安全版本`、`补充供应链验收证据`。
+- [x] **Step 1：固定扫描工具。** 固定 govulncheck、Trivy、Syft 和许可证扫描版本/digest，扫描源码锁文件、最终镜像和 SBOM。
+- [x] **Step 2：升级基础镜像和依赖。** 优先关闭已有修复版本的 high/critical；每次升级按 Server/Web/Reader 独立提交和回归，不跨模块混合。
+- [x] **Step 3：冻结 Reader 决策。** 只有契约、536 项测试、SSR 和关键旅程均通过才允许依赖升级；无法兼容时保留冻结源码并形成具体缓解和用户批准项。
+- [x] **Step 4：安全行为门。** 验证 RBAC、暴力登录、限流、安全响应头、敏感日志、Secret 注入和最小权限凭据。
+- [x] **Step 5：SBOM 和许可证。** 为三个最终镜像输出 SPDX/CycloneDX 摘要和许可证结论；GVA BSL 1.1 商业授权明确列为外部证据。
+- [x] **Step 6：提交。** 按实际逻辑分别使用 `升级后端安全依赖`、`升级管理端安全依赖`、`更新基础镜像安全版本`、`补充供应链验收证据`。
+
+验收记录见 `docs/verification/m7-sbom-licenses.md` 和 `docs/verification/m7-security-supply-chain-audit.md`。技术漏洞门已关闭；GVA BSL 1.1 Production Use 商业授权、第三方许可证法律复核和生产 TLS/HSTS 证据继续作为外部或后续 Go/No-Go 项跟踪。
 
 ## Task 10：建立 M0-M7 统一验证入口
 

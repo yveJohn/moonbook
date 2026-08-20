@@ -1,12 +1,29 @@
 # M7 依赖与供应链安全审计
 
-审计时间：2026-08-15 01:15-01:21 UTC
+初始审计时间：2026-08-15 01:15-01:21 UTC
+
+最终复审时间：2026-08-21
 
 ## 结论
 
-当前 `moonbook/server:local`、`moonbook/web:local` 和 `moonbook/reader-ui:local` 仍均不能作为生产候选镜像。2026-08-16 的专项整改已删除管理端三个确定的恶意/破坏性直接构建依赖，并以源码、锁文件、安装树和最终容器产物扫描证明对应注入入口关闭；但管理端其余依赖、Alpine 基础镜像、Server、Reader 和商业授权阻断仍未关闭。
+可修复漏洞整改已经完成：Server、管理端 Web 和冻结 Reader 的最终候选镜像在固定 Trivy 口径下均为 0 High/0 Critical，三个源码锁文件也没有可达或生产依赖漏洞。管理端三个确定的恶意/破坏性构建依赖已经删除并由仓库内实现替代；统一 Gateway 已补充通用浏览器安全响应头。
+
+这不等于生产放行。GVA BSL 1.1 Production Use 商业授权尚未提供，Server 静态二进制许可证元数据存在大量 `NOASSERTION`，生产 TLS/HSTS、凭据轮换和第三方许可证履约仍需后续或外部证据，因此项目整体仍为 No-Go。
 
 本审计只读取锁文件、依赖图和本地镜像，不连接生产环境，不把“发现漏洞”误报为“已修复”。
+
+## 2026-08-21 最终整改结果
+
+- 管理端生产依赖审计：225 个生产依赖，所有严重级别均为 0；35 项测试、ESLint、Vite 生产构建和供应链产物门通过。
+- Reader 依赖升级保持冻结业务源码边界，536 项基线、SSR/SEO、契约和关键旅程已在依赖升级批次通过；最终 `npm audit --omit=dev` 所有严重级别为 0。
+- Server 升级到 Go 1.25.13 及兼容依赖后，govulncheck 可达 0、已导入 0；仅保留未导入、无调用路径且无修复版本的模块级 `GO-2026-5932`。
+- 三个 Dockerfile 均固定 `tag@sha256`。Web 精确安装 Alpine 已修复包；Reader 运行层删除不参与 SSR 的全局 npm CLI，直接由 Node 启动同一 `@react-router/serve` 入口。
+- 最终镜像 ID 分别为 Server `80d3c762...`、Web `e17a048d...`、Reader `9505ce37...`；镜像与 CycloneDX SBOM 双扫描均为 0 个已有修复版本的 High/Critical。
+- `scripts/scan-supply-chain.sh` 固定 govulncheck 1.1.4、Trivy 0.67.2 和 Syft 1.51.0，生成 SPDX/CycloneDX、许可证摘要、漏洞 JSON 和 SHA-256 清单。完整证据见 `docs/verification/m7-sbom-licenses.md`。
+- 管理 RBAC、首次改密、注销/黑名单、受限角色拒绝、配置 Secret 白名单/拒写已有真实 PostgreSQL/Redis HTTP 证据；管理员与 Reader 登录限流有定向测试；监控 PostgreSQL 用户已证明非 superuser 且仅持有 `pg_monitor`。
+- Gateway 对管理与 Reader 入口统一增加 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy` 和 `Permissions-Policy`，固定 Nginx 配置检查通过。HSTS 必须由实际 TLS 终止层设置，留给生产部署 Runbook 和真实 TLS 验收，内部 HTTP Gateway 不伪造 HSTS。
+
+下方各节保留 2026-08-15 至 2026-08-16 的发现与整改历史；其中旧镜像漏洞数量只作为修复前基线，不代表当前状态。
 
 ## 扫描基线
 
