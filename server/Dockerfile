@@ -10,6 +10,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-migrate ./cmd/moonbook-migrate \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-admin ./cmd/moonbook-admin \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-finance-reconcile ./cmd/moonbook-finance-reconcile \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-legacy-migrate ./cmd/moonbook-legacy-migrate \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-migration-audit ./cmd/moonbook-migration-audit \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/moonbook-config ./cmd/moonbook-config
 
 FROM alpine:3.21

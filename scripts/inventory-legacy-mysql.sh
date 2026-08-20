@@ -18,7 +18,11 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   exit 0
 fi
 
-for name in MYSQL_HOST MYSQL_PORT MYSQL_USER MYSQL_PASSWORD MYSQL_DATABASE; do
+required_names=(MYSQL_USER MYSQL_PASSWORD MYSQL_DATABASE)
+if [[ -z "${MYSQL_DOCKER_CONTAINER:-}" ]]; then
+  required_names+=(MYSQL_HOST MYSQL_PORT)
+fi
+for name in "${required_names[@]}"; do
   if [[ -z "${!name:-}" ]]; then
     echo "missing required environment variable: ${name}" >&2
     usage >&2
@@ -26,26 +30,32 @@ for name in MYSQL_HOST MYSQL_PORT MYSQL_USER MYSQL_PASSWORD MYSQL_DATABASE; do
   fi
 done
 
-if ! command -v mysql >/dev/null 2>&1; then
-  echo "mysql client is required" >&2
-  exit 3
+if [[ -n "${MYSQL_DOCKER_CONTAINER:-}" ]]; then
+  command -v docker >/dev/null 2>&1 || { echo "docker is required for MYSQL_DOCKER_CONTAINER" >&2; exit 3; }
+else
+  command -v mysql >/dev/null 2>&1 || { echo "mysql client is required" >&2; exit 3; }
 fi
 
 output="${1:-legacy-mysql-inventory.tsv}"
 temp_file="$(mktemp)"
 trap 'rm -f "$temp_file"' EXIT
 
-mysql_args=(
-  --batch
-  --raw
-  --skip-column-names
-  --host="$MYSQL_HOST"
-  --port="$MYSQL_PORT"
-  --user="$MYSQL_USER"
-  --database="$MYSQL_DATABASE"
-)
+if [[ -n "${MYSQL_DOCKER_CONTAINER:-}" ]]; then
+  mysql_command=(docker exec -i -e MYSQL_PWD="$MYSQL_PASSWORD" "$MYSQL_DOCKER_CONTAINER" mysql --batch --raw --skip-column-names --user="$MYSQL_USER" --database="$MYSQL_DATABASE")
+else
+  mysql_args=(
+    --batch
+    --raw
+    --skip-column-names
+    --host="$MYSQL_HOST"
+    --port="$MYSQL_PORT"
+    --user="$MYSQL_USER"
+    --database="$MYSQL_DATABASE"
+  )
+  mysql_command=(env MYSQL_PWD="$MYSQL_PASSWORD" mysql "${mysql_args[@]}")
+fi
 
-MYSQL_PWD="$MYSQL_PASSWORD" mysql "${mysql_args[@]}" <<'SQL' >"$temp_file"
+"${mysql_command[@]}" <<'SQL' >"$temp_file"
 SELECT 'database', DATABASE(), '', '', '';
 SELECT 'server_version', VERSION(), '', '', '';
 SELECT

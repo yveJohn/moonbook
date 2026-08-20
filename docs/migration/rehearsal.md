@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-迁移工具的 Reader 身份与商业数据已在隔离 MySQL 8.4 和真实 PostgreSQL 上完成小数据夹具演练。该结果只证明字段映射、只读门、分批检查点、错误清单、幂等和序列推进可执行，不代表约 8GB 生产数据副本的容量、完整性或 12 小时窗口验收通过。
+迁移工具的 Reader 身份与商业数据已完成小数据夹具演练，全域核对器也已通过真实 MySQL、PostgreSQL 和 MinIO 故障注入。完整副本演练入口为 `scripts/verify-m6-full-copy.sh`；在 `docs/verification/m6-full-copy-rehearsal.md` 写入真实完成结果前，约 8GB 副本的容量、完整性和 12 小时窗口仍不得视为通过。
 
 ## 2026-08-15 Reader 小夹具演练
 
@@ -25,11 +25,29 @@ CGO_ENABLED=0 GOCACHE=/tmp/moonbook-gocache \
 go test -count=1 -run '^TestReaderMigrationWithMySQLAndPostgres$' -v ./internal/platform/legacymigrate
 ```
 
-## 8GB 副本待验
+## 8GB 副本执行入口
 
-冻结旧仓库已定位到 `exports/moonbook_admin_20260715_175649.sql.gz` 候选：压缩大小 1,065,163,488 字节；结合 gzip ISIZE 模值和用户提供的约 8 GB 信息，单成员候选原始大小约为 8,129,574,556 字节。本次没有读取、校验或导入 SQL，完整元数据和安全门见 `docs/verification/m6-data-copy-discovery.md`。
+冻结旧仓库候选为 `exports/moonbook_admin_20260715_175649.sql.gz`，压缩大小 1,065,163,488 字节，固定 SHA-256 为 `94d86df76780cc85cdec4690265866140b202bb2b5d908826bf37783c9c8cbe3`，完整 `gzip -t` 已通过。候选只读保留在旧仓库；实际恢复字节数必须由演练脚本记录，不能继续使用 gzip ISIZE 推算值替代。
 
-完整演练仍需先关闭内容生产 stage、对象转换和全域核对器缺口，再在受控隔离环境执行。验收必须记录源表容量/行数、各阶段耗时和吞吐、峰值磁盘与连接、目标行数/主键/关联/枚举、财务零差异、MinIO 对象数量/字节/哈希、全量重跑结果，以及是否稳定低于 12 小时并保留回退余量。在取得这些证据前，M6 不得关闭。
+脚本默认只做预检，不启动容器。`--run` 恢复到唯一 `moonbook_verify_m6_*` Compose 项目，冻结源 MySQL，执行结构迁移、全部业务 stage、全域核对和结构/业务幂等重跑，并保存事件、资源、源盘点和脱敏审计报告。容器和卷在运行后保留供核验，只有项目名二次确认完全匹配时 `--cleanup` 才删除隔离资源。
+
+TXT 原文件门在恢复源库后决定：源表不存在或任务数为零时，脚本生成只含空映射的清单；任务数大于零时，必须提供外部只读 `MOONBOOK_FULL_COPY_TXT_MANIFEST` 和 `MOONBOOK_FULL_COPY_TXT_ROOT`。找不到任一原文件时必须 No-Go，禁止伪造或跳过任务。
+
+演练环境文件必须位于仓库外，并为端口、数据库和 Secret 使用本次隔离值。执行方式：
+
+```bash
+export MOONBOOK_FULL_COPY_BACKUP=/Users/yve/Documents/moonbook/exports/moonbook_admin_20260715_175649.sql.gz
+export MOONBOOK_FULL_COPY_SHA256=94d86df76780cc85cdec4690265866140b202bb2b5d908826bf37783c9c8cbe3
+export MOONBOOK_FULL_COPY_PROJECT=moonbook_verify_m6_YYYYMMDD
+export MOONBOOK_FULL_COPY_ENV_FILE=/private/tmp/moonbook-m6-rehearsal.env
+export MOONBOOK_FULL_COPY_WORK_DIR=/private/tmp/moonbook-m6-full-copy-YYYYMMDD
+export MOONBOOK_FULL_COPY_CONFIRM=M6_FULL_COPY_LOCAL_ISOLATED
+
+scripts/verify-m6-full-copy.sh --preflight
+scripts/verify-m6-full-copy.sh --run
+MOONBOOK_FULL_COPY_CLEANUP_CONFIRM="$MOONBOOK_FULL_COPY_PROJECT" \
+  scripts/verify-m6-full-copy.sh --cleanup
+```
 
 ## 可重复的只读核对命令
 
