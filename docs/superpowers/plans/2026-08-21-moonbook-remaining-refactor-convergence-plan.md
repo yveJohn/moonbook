@@ -171,13 +171,13 @@
 - Create: `docs/verification/m6-full-copy-rehearsal.md`
 - Modify: `docs/runbooks/production-cutover.md`
 
-- [ ] **Step 1：只读预检。** 脚本要求明确备份绝对路径、期望 SHA-256、隔离 Compose 项目名和确认标记；拒绝工作区根目录、冻结仓库目录和非本项目容器。
-- [ ] **Step 2：可恢复恢复流程。** 创建隔离 MySQL、PostgreSQL、Redis、MinIO 和网络；恢复后立即启用 `read_only`、`super_read_only` 并记录源行数哈希。
+- [x] **Step 1：只读预检。** 脚本要求明确备份绝对路径、期望 SHA-256、隔离 Compose 项目名和确认标记；拒绝工作区根目录、冻结仓库目录和非本项目容器。
+- [x] **Step 2：可恢复恢复流程。** 隔离 MySQL、PostgreSQL、Redis、MinIO 和网络已创建；源库恢复后启用 `read_only`、`super_read_only` 并记录源行数哈希。
 - [ ] **Step 3：空目标迁移。** 从版本 0 执行结构迁移和所有业务 stage，保存每 stage 行数、错误、耗时、吞吐及资源采样。
 - [ ] **Step 4：全域核对。** 运行 Task 6 核对器、财务核对、对象数量/字节/哈希和 Reader 契约；任一差异退出非零。
 - [ ] **Step 5：幂等重跑。** 重新运行结构和业务迁移，证明结构 `applied=0`、业务结果不增长、检查点稳定和源库未改变。
 - [ ] **Step 6：完成约 8GB 演练。** 使用已定位候选生成固定报告，记录总耗时、各阶段耗时、峰值资源、错误处置、12 小时余量和清理结果。
-- [ ] **Step 7：提交。** 先提交脚本和模板：`新增完整数据副本迁移演练`；真实报告另提交：`记录完整数据副本迁移结果`。
+- [x] **Step 7：提交。** 脚本以 `新增完整数据副本迁移演练` 提交；真实运行以 `记录完整副本恢复阻断结果` 提交。Step 3-6 因 16 个 TXT 原文件/清单缺失保持未完成。
 
 ## Task 8：增加 Compose 监控栈
 
@@ -294,16 +294,17 @@ Task 12 已把 M4/M5 的本地完成项与外部验收分离，M6 明确为“�
 
 - Modify: `docs/verification/final-report.md`
 - Create: `docs/verification/artifacts/README.md`
+- Modify: `docs/verification/m7-readiness-audit.md`
 - Modify: `docs/progress/refactor-status.md`
 - Modify: this plan
 
-- [ ] **Step 1：选择候选 commit。** 所有 R1-R4 实现和证据已提交，工作区除明确忽略内容外干净。
-- [ ] **Step 2：运行统一门。** 执行 `make verify` 及完整副本演练报告校验，记录工具版本、commit、命令摘要和结果。
-- [ ] **Step 3：复核完成判据。** 对目标文档每个交付物逐项检查直接证据，不用局部测试支持全局结论。
-- [ ] **Step 4：检查外部项。** 仅允许真实支付/AI/论坛/代理/SMTP、GVA 商业授权和生产权限留待用户；每项必须具备精确验收步骤。
-- [ ] **Step 5：最终报告。** 删除模板占位，记录 M0-M7、完整副本、财务、对象、性能、安全、恢复、提交和服务重启要求。
-- [ ] **Step 6：最终提交。** 提交信息：`完成Moonbook生产切换就绪验收`。
-- [ ] **Step 7：最终状态。** `git status` 干净，未 push，未执行任何生产动作；此时才声明“生产切换就绪”。
+- [x] **Step 1：选择候选 commit。** 所有 R1-R4 实现和证据已提交，固定候选为 `a1c193821ea0bf7f7551d72741b39a2aa2fccc40`，验收前工作区干净。
+- [x] **Step 2：运行统一门。** `make verify` 九阶段全部通过；工具版本、commit、UTC、耗时和结果已写入 artifact 索引。完整副本报告仍明确为 TXT 输入阻断的 No-Go。
+- [x] **Step 3：复核完成判据。** M0-M7、完整副本、财务、对象、性能、安全和恢复均按直接证据分别下结论，未用合成或局部测试替代完整迁移。
+- [x] **Step 4：检查外部项。** 真实支付/AI/论坛/代理/SMTP、GVA 商业授权、许可证处置和生产权限均有精确外部验收入口。
+- [x] **Step 5：最终报告。** 模板占位已删除，最终报告和 artifact 索引明确记录通过项、阻断项、生产动作和服务影响。
+- [x] **Step 6：最终提交。** 提交信息：`完成Moonbook生产切换就绪验收`。
+- [x] **Step 7：最终状态。** 提交后检查 `git status`，不 push、不执行生产动作；因 M6 完整副本和外部证据未关闭，结论保持生产 No-Go，不声明“生产切换就绪”。
 
 ## 服务影响
 

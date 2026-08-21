@@ -6,7 +6,7 @@
 
 Moonbook 的本地实现、自动化和单机 Compose 运维合同已收敛，但当前仍是生产 No-Go。唯一阻止完整本地数据演练的输入缺口是 16 个旧 `novel_txt_import_task` 原文件及受控清单；没有这些文件，3,834,607,260 字节源库只完成恢复和只读预检，业务迁移、对象/财务核对、完整耗时与回退时间均不能宣称通过。
 
-真实支付、AI、论坛/代理、SMTP、GVA 商业授权、生产 TLS/DNS 和流量权限是外部验收项，按 `docs/runbooks/external-validation.md` 管理，不再混写为代码缺口。Task 13 仍需在当前实现全部提交后选择固定候选 commit，运行九阶段 `make verify` 并替换最终报告模板。
+真实支付、AI、论坛/代理、SMTP、GVA 商业授权、生产 TLS/DNS 和流量权限是外部验收项，按 `docs/runbooks/external-validation.md` 管理，不再混写为代码缺口。Task 13 已在固定候选 `a1c193821ea0bf7f7551d72741b39a2aa2fccc40` 完成九阶段 `make verify`，全部通过；最终摘要见 `docs/verification/artifacts/README.md`，但该自动门不能替代完整副本和外部生产证据。
 
 ## 里程碑状态
 
@@ -16,7 +16,7 @@ Moonbook 的本地实现、自动化和单机 Compose 运维合同已收敛，�
 | M4 | 本地完成 | `docs/verification/m4-exit-audit.md`：支付状态机、回调全尝试审计、运营页签、Full 财务核对 | 真实 EPUSDT 最小金额支付 |
 | M5 | 本地完成 | `m5-content-worker-connection-and-recovery.md`、`m5-forum-cookie-secret-reference.md`、`m5-m6-content-migration-audit.md` | 真实论坛与 AI 授权环境 |
 | M6 | 核对器完成、完整副本阻断 | `m6-global-migration-object-audit.md`、`m6-full-copy-rehearsal.md` | 16 个 TXT 原文件/清单，随后重跑全部 Stage 与核对 |
-| M7 | 本地门基本完成、最终固定验收待执行 | GVA、模块边界、监控、安全、CI、备份/升级/维护演练报告 | Task 13 固定提交全门；生产外部授权 |
+| M7 | 本地自动门完成、生产 No-Go | 固定候选九阶段全门、GVA、模块边界、监控、安全、CI、备份/升级/维护演练报告 | M6 完整副本；生产外部授权与许可证证据 |
 
 ## 已关闭的原审计缺口
 
@@ -48,10 +48,10 @@ Moonbook 的本地实现、自动化和单机 Compose 运维合同已收敛，�
 ### 统一验收
 
 - 根 `make verify` 已统一 quality、management、reader、integration、migration、e2e、compose、monitoring、security 九阶段；GitHub Actions 同名 job 由最终 `required` 强制全部成功。
-- Task 10 本地九阶段逐项通过并产生 JSON 摘要；Task 13 必须在 Task 12 提交后的固定 commit 重跑，不能沿用工作树结果冒充候选制品证据。
+- Task 13 已在 Task 12 提交后的固定 commit `a1c1938` 重跑九阶段，结果全部通过；UTC、耗时和工具版本已写入 artifact 索引，没有沿用工作树结果冒充候选制品证据。
 
 ## Go/No-Go 判据
 
-本地 Go 必须同时满足：提供 16 个 TXT 原文件及清单；完整副本全部 Stage、幂等、行数/主键/关联、对象、财务和耗时通过；固定 commit 的九阶段统一门通过；最终报告和 artifact 索引不含模板占位。
+固定 commit 九阶段统一门、最终报告和 artifact 索引已完成。本地整体 Go 仍必须满足：提供 16 个 TXT 原文件及清单，并让完整副本全部 Stage、幂等、行数/主键/关联、对象、财务和耗时通过。
 
 生产 Go 还必须满足：真实支付/AI/论坛等已启用外部项通过，GVA 商业授权与许可证处置有书面证据，生产 TLS/DNS/备份/容量/值班责任人和回退窗口获批。任何一项缺失都保持 No-Go，不执行生产写入、迁移、DNS 或流量切换。

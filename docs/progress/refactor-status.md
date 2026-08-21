@@ -13,7 +13,7 @@
 | M4 交易、支付与运营 | 本地完成，外部待验收 | 支付状态机、回调全尝试审计、运营页签和 Full 财务核对已验收；仅真实 EPUSDT 最小金额支付需授权 |
 | M5 内容生产与长任务 | 本地完成，外部待验收 | 论坛安全连接、Secret 引用、自动发现和六类 Worker 恢复/重载已验收；真实论坛/AI 联网归外部清单 |
 | M6 全量迁移与校验 | 核对器完成，输入阻断 | `all` Stage、双库行数/主键/关联、Full 财务和 MinIO 逐对象核对已形成非零门；16 个 TXT 原文件/清单缺失阻止完整副本业务迁移 |
-| M7 生产切换就绪验收 | 最终固定验收中 | 监控、安全、统一 CI、备份/升级、维护模式、生产 Compose 与切换/回退合同已闭环；Task 13 固定 commit 全门和最终报告待执行 |
+| M7 生产切换就绪验收 | 本地自动门完成，生产 No-Go | 固定候选 `a1c1938` 的九阶段全门通过，最终报告与 artifact 索引已完成；M6 完整副本、外部验收和许可证证据仍阻断生产 |
 
 ## M0 已完成
 
@@ -35,7 +35,7 @@
 - 当前有效第三方集成的生产启用状态不能仅凭仓库默认配置确定，需要后续脱敏环境清单或用户确认。
 - M4 本地代码门已关闭：两个运营审计页签和 Full 财务核对均通过；仅受控真实最小金额支付按外部清单待验收，详见 `docs/verification/m4-exit-audit.md`。
 - M5 本地代码门已关闭；M6 Stage 与全域核对器已闭环。真实第三方论坛/AI 属外部验收，完整副本因 16 个 TXT 原文件清单缺失保持 No-Go，详见 `docs/verification/m5-m6-content-migration-audit.md` 与 `docs/verification/m6-full-copy-rehearsal.md`。
-- M7 原审计中的备份命令、升级、监控、安全、模块边界、统一 CI、维护停写、生产资源/日志/可信代理和切换/回退 Runbook 缺口均已关闭；当前只剩 Task 13 固定提交全门以及完整副本/外部授权，详见 `docs/verification/m7-readiness-audit.md`。
+- M7 原审计中的备份命令、升级、监控、安全、模块边界、统一 CI、维护停写、生产资源/日志/可信代理和切换/回退 Runbook 缺口均已关闭；固定候选 `a1c1938` 的 Task 13 九阶段全门也已通过。完整副本、外部授权和许可证证据仍为生产 No-Go，详见 `docs/verification/final-report.md`。
 - M7 GVA 管理基座已完成本地最终验收：系统配置仅返回安全白名单和 Secret 配置状态且不可写，邮件插件/API/策略由 `00068` 精确移除；平台任务只读列表、筛选、详情与 attempt 审计已完成。真实 PostgreSQL/Redis HTTP 覆盖验证码登录、首次改密、JWT 撤销、RBAC、组织岗位、字典参数、日志、定时任务及数据权限；桌面和 `390x844` 浏览器覆盖配置、操作历史、定时任务及平台任务，控制台 0 error/0 warning。旧通知公告、通用 OSS、SMTP 和在线会话 UI 已依据旧库与代码证据明确移出范围，详见 `docs/verification/m7-gva-foundation-final.md`。
 - M7 备份恢复演练已验证 dump、MinIO mirror、哈希、隔离恢复、迁移幂等、财务和全栈健康；Task 11 又补齐 503 维护停写与支付重投合同。真实业务恢复仍依赖解除 TXT 完整副本阻断。
 - M7 升级/应用回退、生产 digest/资源/日志合同、TLS/可信代理边界、12 小时停止点和回退事实封存均已完成；真实 TLS/DNS 和生产流量仍需授权。
@@ -44,7 +44,7 @@
 - M7 原后端质量审计发现的 15 处跨模块 import 和 11 处跨域 SQL 已通过合同/Provider、组合根和 Context 事务整改清零；边界测试未放宽并进入统一 quality 门。
 - M7 已把上述违规归并为 9 类跨域工作流，固定 Reader 路由兼容、公开内容投影、账号商业视图、邀请注册奖励、个人内容投影、点赞汇总、Commerce 读者校验、首充奖励及购买报价的所有权和回归不变量；注册奖励、点赞、购买和首充奖励的同库事务语义不得在整改中弱化。该事实清单不批准实现方案，详见 `docs/verification/m7-module-boundary-workflow-inventory.md`。
 - M7 监控 profile 已覆盖 8 个 target、21 条规则、最小权限和业务核对指标，Reader 故障注入 firing/resolved 通过，详见 `docs/verification/m7-monitoring-alerting.md`。
-- M7 根 `make verify` 与 CI 已统一九阶段，登录后管理 E2E 和结构化 artifact 均纳入；Task 13 只需在固定提交最终重跑并索引结果。
+- M7 根 `make verify` 与 CI 已统一九阶段；Task 13 已在固定候选 `a1c1938` 以全新真实依赖、隔离 Compose 和登录后管理 E2E 完整通过，结构化摘要见 `docs/verification/artifacts/README.md`。
 - M7 模块边界整改的架构、合同、上下文事务、批量投影、错误和测试设计，以及 Commerce 自有最小 Reader 搜索投影补充方案均已获用户确认；书面规格正式批准，详细实施计划已形成。投影只用于 Commerce 管理搜索与展示，Reader 仍是事实源，鉴权和交易判断必须走实时合同；实施不得弱化冻结 Reader 契约、跨域原子性或现有边界测试，详见 `docs/superpowers/specs/2026-08-15-moonbook-module-boundary-remediation-design.md` 和 `docs/superpowers/plans/2026-08-15-moonbook-module-boundary-remediation-plan.md`。
 - M7 模块边界整改 Task 1 已完成 Context 绑定的 Platform Transactor：支持最外层提交/回滚、嵌套加入、rollback-only、panic 回滚、既有 Runner 事务接入、事务内 Executor 和提交后回调；提交后回调失败可识别为事实已提交，外部事务禁止静默注册回调。脚本化 driver 单元测试、`gofmt`、`go vet` 和项目浏览器隔离 PostgreSQL 上的提交/回滚/四路并发集成测试通过。
 - M7 模块边界整改 Task 2 已建立 Reader、Commerce、Novel 三域窄合同和稳定错误分类，覆盖账号校验/锁定/批量显示、邀请关系、Commerce 搜索投影与 Reader 兼容交易能力、公开内容/SEO/批量展示、商品目标/购买快照和点赞汇总。合同 DTO 不含 Gin/GVA/数据库实现句柄，Long ID 保持 Go `int64`；AST import 白名单、DTO 形状、错误脱敏、定向单元测试和 `go vet` 通过。Provider 将按后续工作流任务逐项实现，当前运行时行为未改变。
