@@ -26,7 +26,7 @@ func (NovelCategoryDictionaryStage) RunBatch(ctx context.Context, source *sql.DB
 		return BatchResult{}, err
 	}
 	rows, err := source.QueryContext(ctx, `
-		SELECT dict_code, dict_value, dict_label, dict_type, COALESCE(dict_sort,0), COALESCE(status,'0')
+		SELECT dict_code, dict_value, dict_label, dict_type, COALESCE(dict_sort,0)
 		FROM sys_dict_data
 		WHERE dict_type IN ('novel_book_category','novel_book_sub_category') AND dict_code > ?
 		ORDER BY dict_code LIMIT ?`, lastID, limit)
@@ -37,9 +37,9 @@ func (NovelCategoryDictionaryStage) RunBatch(ctx context.Context, source *sql.DB
 	result := BatchResult{NextCursor: cursor, Metadata: map[string]any{"source": "sys_dict_data"}}
 	for rows.Next() {
 		var id int64
-		var code, name, dictType, status string
+		var code, name, dictType string
 		var sort int
-		if err := rows.Scan(&id, &code, &name, &dictType, &sort, &status); err != nil {
+		if err := rows.Scan(&id, &code, &name, &dictType, &sort); err != nil {
 			return BatchResult{}, err
 		}
 		kind := "primary"
@@ -53,7 +53,7 @@ func (NovelCategoryDictionaryStage) RunBatch(ctx context.Context, source *sql.DB
 			(id,code,name,kind,sort,enabled,source) VALUES ($1,$2,$3,$4,$5,$6,'legacy_dict')
 			ON CONFLICT (id) DO UPDATE SET code=EXCLUDED.code,name=EXCLUDED.name,kind=EXCLUDED.kind,
 			sort=EXCLUDED.sort,enabled=EXCLUDED.enabled,source='legacy_dict',updated_at=now(),deleted_at=NULL`,
-			id, code, name, kind, sort, status == "0"); err != nil {
+			id, code, name, kind, sort, true); err != nil {
 			return BatchResult{}, err
 		}
 		result.Processed++
