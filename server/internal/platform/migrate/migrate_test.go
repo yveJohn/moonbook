@@ -116,6 +116,7 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00068_remove_unused_email_plugin.sql",
 		"00069_forum_cookie_secret_reference.sql",
 		"00070_forum_source_connection_check.sql",
+		"00071_legacy_txt_database_facts.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)

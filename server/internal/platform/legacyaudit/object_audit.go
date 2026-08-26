@@ -66,7 +66,7 @@ func AuditObjects(ctx context.Context, db *sql.DB, blobs objectVerifier) (Object
 	}
 	rows.Close()
 
-	txtRows, err := db.QueryContext(ctx, `SELECT id::text,target_book_id,object_key,object_sha256,object_byte_size FROM novel_txt_import_task ORDER BY id`)
+	txtRows, err := db.QueryContext(ctx, `SELECT id::text,target_book_id,COALESCE(object_key,''),COALESCE(object_sha256,''),COALESCE(object_byte_size,0) FROM novel_txt_import_task ORDER BY id`)
 	if err != nil {
 		return report, fmt.Errorf("query TXT objects: %w", err)
 	}
@@ -75,6 +75,9 @@ func AuditObjects(ctx context.Context, db *sql.DB, blobs objectVerifier) (Object
 		if err := txtRows.Scan(&candidate.identity, &candidate.bookID, &candidate.key, &candidate.sha256, &candidate.byteSize); err != nil {
 			txtRows.Close()
 			return report, fmt.Errorf("scan TXT object: %w", err)
+		}
+		if candidate.key == "" || candidate.sha256 == "" || candidate.byteSize <= 0 {
+			continue
 		}
 		candidate.kind, candidate.expectedKind = "txt_import", "txt_import"
 		candidate.ownerID, candidate.expectedBookID, candidate.expectedOwnerID = parseIdentity(candidate.identity), candidate.bookID, parseIdentity(candidate.identity)

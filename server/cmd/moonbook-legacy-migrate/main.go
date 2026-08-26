@@ -215,11 +215,15 @@ func coverDependencies(target *sql.DB) (*objectstore.Service, *legacymigrate.Cov
 }
 
 func legacyTXTStage() (legacymigrate.NovelTXTImportsStage, error) {
+	manifestPath := strings.TrimSpace(os.Getenv("MOONBOOK_LEGACY_TXT_MANIFEST"))
+	if manifestPath == "" {
+		return legacymigrate.NovelTXTImportsStage{}, nil
+	}
 	store, err := minIOStore()
 	if err != nil {
 		return legacymigrate.NovelTXTImportsStage{}, err
 	}
-	manifest, err := legacymigrate.LoadLegacyTXTManifest(os.Getenv("MOONBOOK_LEGACY_TXT_MANIFEST"))
+	manifest, err := legacymigrate.LoadLegacyTXTManifest(manifestPath)
 	if err != nil {
 		return legacymigrate.NovelTXTImportsStage{}, err
 	}

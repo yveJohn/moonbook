@@ -34,9 +34,7 @@ type legacyTXTImport struct {
 }
 
 func (stage NovelTXTImportsStage) RunBatch(ctx context.Context, source *sql.DB, target *sql.Tx, cursor string, limit int) (BatchResult, error) {
-	if stage.Manifest == nil || stage.Files == nil {
-		return BatchResult{}, errors.New("TXT migration requires a file manifest and MinIO file store")
-	}
+	databaseFactsOnly := stage.Manifest == nil || stage.Files == nil
 	lastID, err := parseCursor(cursor)
 	if err != nil {
 		return BatchResult{}, err
@@ -70,24 +68,6 @@ func (stage NovelTXTImportsStage) RunBatch(ctx context.Context, source *sql.DB, 
 			result.Errors = append(result.Errors, txtError(result.NextCursor, "SOURCE_KEY_CONFLICT", err.Error()))
 			continue
 		}
-		path, err := stage.Manifest.Resolve(item.id)
-		if err != nil {
-			code := "TXT_FILE_UNAVAILABLE"
-			if !errors.Is(err, os.ErrNotExist) {
-				code = "TXT_FILE_INVALID"
-			}
-			result.Errors = append(result.Errors, txtError(result.NextCursor, code, "legacy TXT file is missing from or invalid in the migration manifest"))
-			continue
-		}
-		data, err := readLegacyTXT(path)
-		if err != nil {
-			result.Errors = append(result.Errors, txtError(result.NextCursor, "TXT_FILE_READ_FAILED", err.Error()))
-			continue
-		}
-		if item.fileSize > 0 && item.fileSize != int64(len(data)) {
-			result.Errors = append(result.Errors, txtError(result.NextCursor, "TXT_FILE_SIZE_MISMATCH", "legacy TXT file size does not match the database snapshot"))
-			continue
-		}
 		bookArg := nullableID(item.targetBookID)
 		if bookArg != nil {
 			var found bool
@@ -119,22 +99,27 @@ func (stage NovelTXTImportsStage) RunBatch(ctx context.Context, source *sql.DB, 
 				item.failReason = "legacy TXT import was interrupted during cutover"
 			}
 		}
-		hash := sha256.Sum256(data)
-		hashText := hex.EncodeToString(hash[:])
-		var existingTaskID int64
-		err = target.QueryRowContext(ctx, `SELECT id FROM novel_txt_import_task WHERE target_book_id IS NOT DISTINCT FROM $1::bigint AND object_sha256=$2 ORDER BY id LIMIT 1`, targetBook, hashText).Scan(&existingTaskID)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return BatchResult{}, err
-		}
-		if err == nil && existingTaskID != item.id {
-			result.Errors = append(result.Errors, txtError(result.NextCursor, "TXT_OBJECT_CONFLICT", "another target TXT task already owns the same book and file hash"))
-			continue
-		}
-		objectKey := fmt.Sprintf("imports/txt/legacy/%d/%s.txt", item.id, hashText)
-		meta, err := stage.Files.Put(ctx, objectKey, data, "text/plain; charset=utf-8")
-		if err != nil || meta.ByteSize != int64(len(data)) || !strings.EqualFold(meta.SHA256, hashText) {
-			result.Errors = append(result.Errors, txtError(result.NextCursor, "TXT_OBJECT_UPLOAD_FAILED", "legacy TXT upload or size/SHA-256 verification failed"))
-			continue
+		var objectKey, hashText, objectSize any
+		if !databaseFactsOnly {
+			path, err := stage.Manifest.Resolve(item.id)
+			if err != nil {
+				result.Errors = append(result.Errors, txtError(result.NextCursor, "TXT_FILE_UNAVAILABLE", "legacy TXT file is missing from or invalid in the migration manifest"))
+				continue
+			}
+			data, err := readLegacyTXT(path)
+			if err != nil || (item.fileSize > 0 && item.fileSize != int64(len(data))) {
+				result.Errors = append(result.Errors, txtError(result.NextCursor, "TXT_FILE_READ_FAILED", "legacy TXT file cannot be read or does not match the database snapshot"))
+				continue
+			}
+			hash := sha256.Sum256(data)
+			hashValue := hex.EncodeToString(hash[:])
+			keyValue := fmt.Sprintf("imports/txt/legacy/%d/%s.txt", item.id, hashValue)
+			meta, err := stage.Files.Put(ctx, keyValue, data, "text/plain; charset=utf-8")
+			if err != nil || meta.ByteSize != int64(len(data)) || !strings.EqualFold(meta.SHA256, hashValue) {
+				result.Errors = append(result.Errors, txtError(result.NextCursor, "TXT_OBJECT_UPLOAD_FAILED", "legacy TXT upload or size/SHA-256 verification failed"))
+				continue
+			}
+			objectKey, hashText, objectSize = meta.Key, strings.ToLower(meta.SHA256), meta.ByteSize
 		}
 		payload, _ := json.Marshal(map[string]string{"txtImportTaskId": result.NextCursor})
 		jobStatus := status
@@ -142,12 +127,14 @@ func (stage NovelTXTImportsStage) RunBatch(ctx context.Context, source *sql.DB, 
 		if err := target.QueryRowContext(ctx, `INSERT INTO platform_jobs(module,job_type,idempotency_key,status,payload,max_attempts,finished_at,last_error_code,last_error_message) VALUES('novel','txt_import',$1,$2,$3,3,CASE WHEN $2 IN ('succeeded','failed','cancelled') THEN now() END,CASE WHEN $2='failed' THEN 'LEGACY_INTERRUPTED' END,CASE WHEN $2='failed' THEN 'legacy TXT task requires operator review' END) ON CONFLICT(module,job_type,idempotency_key) DO UPDATE SET status=EXCLUDED.status,payload=EXCLUDED.payload,finished_at=EXCLUDED.finished_at,last_error_code=EXCLUDED.last_error_code,last_error_message=EXCLUDED.last_error_message RETURNING id`, "txt-import:"+result.NextCursor, jobStatus, payload).Scan(&jobID); err != nil {
 			return BatchResult{}, err
 		}
-		_, err = target.ExecContext(ctx, `INSERT INTO novel_txt_import_task(id,target_book_id,platform_job_id,original_filename,object_key,object_sha256,object_byte_size,status,quality_status,quality_summary,total_chapter_count,imported_chapter_count,empty_chapter_count,duplicate_chapter_count,fail_reason,operator_name,attempt_count,max_attempts,start_time,end_time,created_at,updated_at,legacy_source_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,0,3,$17,$18,COALESCE($19,now()),COALESCE($20,now()),$21) ON CONFLICT(id) DO UPDATE SET target_book_id=EXCLUDED.target_book_id,platform_job_id=EXCLUDED.platform_job_id,original_filename=EXCLUDED.original_filename,object_key=EXCLUDED.object_key,object_sha256=EXCLUDED.object_sha256,object_byte_size=EXCLUDED.object_byte_size,status=EXCLUDED.status,quality_status=EXCLUDED.quality_status,quality_summary=EXCLUDED.quality_summary,total_chapter_count=EXCLUDED.total_chapter_count,imported_chapter_count=EXCLUDED.imported_chapter_count,empty_chapter_count=EXCLUDED.empty_chapter_count,duplicate_chapter_count=EXCLUDED.duplicate_chapter_count,fail_reason=EXCLUDED.fail_reason,operator_name=EXCLUDED.operator_name,start_time=EXCLUDED.start_time,end_time=EXCLUDED.end_time,updated_at=EXCLUDED.updated_at,legacy_source_key=EXCLUDED.legacy_source_key`, item.id, targetBook, jobID, filepath.Base(item.fileName), meta.Key, strings.ToLower(meta.SHA256), meta.ByteSize, status, quality, strings.TrimSpace(item.qualitySummary), item.total, item.imported, item.empty, item.duplicate, strings.TrimSpace(item.failReason), strings.TrimSpace(item.operator), item.start, item.end, item.created, item.updated, key)
+		_, err = target.ExecContext(ctx, `INSERT INTO novel_txt_import_task(id,target_book_id,platform_job_id,original_filename,object_key,object_sha256,object_byte_size,status,quality_status,quality_summary,total_chapter_count,imported_chapter_count,empty_chapter_count,duplicate_chapter_count,fail_reason,operator_name,attempt_count,max_attempts,start_time,end_time,created_at,updated_at,legacy_source_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,0,3,$17,$18,COALESCE($19,now()),COALESCE($20,now()),$21) ON CONFLICT(id) DO UPDATE SET target_book_id=EXCLUDED.target_book_id,platform_job_id=EXCLUDED.platform_job_id,original_filename=EXCLUDED.original_filename,object_key=EXCLUDED.object_key,object_sha256=EXCLUDED.object_sha256,object_byte_size=EXCLUDED.object_byte_size,status=EXCLUDED.status,quality_status=EXCLUDED.quality_status,quality_summary=EXCLUDED.quality_summary,total_chapter_count=EXCLUDED.total_chapter_count,imported_chapter_count=EXCLUDED.imported_chapter_count,empty_chapter_count=EXCLUDED.empty_chapter_count,duplicate_chapter_count=EXCLUDED.duplicate_chapter_count,fail_reason=EXCLUDED.fail_reason,operator_name=EXCLUDED.operator_name,start_time=EXCLUDED.start_time,end_time=EXCLUDED.end_time,updated_at=EXCLUDED.updated_at,legacy_source_key=EXCLUDED.legacy_source_key`, item.id, targetBook, jobID, filepath.Base(item.fileName), objectKey, hashText, objectSize, status, quality, strings.TrimSpace(item.qualitySummary), item.total, item.imported, item.empty, item.duplicate, strings.TrimSpace(item.failReason), strings.TrimSpace(item.operator), item.start, item.end, item.created, item.updated, key)
 		if err != nil {
 			return BatchResult{}, fmt.Errorf("upsert legacy TXT import %d: %w", item.id, err)
 		}
-		result.Metadata["objectCount"] = result.Metadata["objectCount"].(int) + 1
-		result.Metadata["objectBytes"] = result.Metadata["objectBytes"].(int64) + meta.ByteSize
+		if objectSize != nil {
+			result.Metadata["objectCount"] = result.Metadata["objectCount"].(int) + 1
+			result.Metadata["objectBytes"] = result.Metadata["objectBytes"].(int64) + objectSize.(int64)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return BatchResult{}, err
