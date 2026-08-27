@@ -16,7 +16,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:3.23.5@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
 
-RUN apk add --no-cache ca-certificates curl tzdata \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates curl tzdata \
     && addgroup -S moonbook \
     && adduser -S -G moonbook -h /app moonbook
 

@@ -13,6 +13,7 @@ FROM node:22.23.2-alpine3.23@sha256:46825fbbd4e996a78b7a2cdc08d75e38a5a505bdab95
 ENV NODE_ENV=production \
     PORT=3000
 WORKDIR /app
+RUN apk upgrade --no-cache
 COPY reader-ui/package.json reader-ui/package-lock.json ./
 RUN --mount=type=cache,id=moonbook-reader-npm,target=/root/.npm,sharing=locked npm ci --omit=dev \
     && npm cache clean --force \
