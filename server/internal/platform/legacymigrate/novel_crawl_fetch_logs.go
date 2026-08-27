@@ -54,7 +54,7 @@ func (NovelCrawlFetchLogsStage) RunBatch(ctx context.Context, source *sql.DB, ta
 			result.Errors = append(result.Errors, crawlError("novel_crawl_fetch_log", result.NextCursor, code, message))
 			continue
 		}
-		stage, ok := mapLegacyFetchStage(item.stage)
+		stage, ok := mapLegacyFetchStage(item.stage, item.taskID.Valid && item.taskID.Int64 > 0)
 		if !ok {
 			result.Errors = append(result.Errors, crawlError("novel_crawl_fetch_log", result.NextCursor, "INVALID_FETCH_STAGE", "legacy fetch log stage is unsupported"))
 			continue
@@ -125,10 +125,17 @@ func validateLegacyFetchLog(item legacyCrawlFetchLog) (string, string) {
 	return "", ""
 }
 
-func mapLegacyFetchStage(value string) (string, bool) {
+func mapLegacyFetchStage(value string, hasTask bool) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "discover", "thread", "chapter", "import", "quality":
 		return strings.ToLower(strings.TrimSpace(value)), true
+	case "fetch", "rate_limit":
+		if hasTask {
+			return "thread", true
+		}
+		return "discover", true
+	case "parse":
+		return "chapter", true
 	default:
 		return "", false
 	}
