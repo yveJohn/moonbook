@@ -37,7 +37,11 @@ func (NovelChapterCleanTasksStage) RunBatch(ctx context.Context, source *sql.DB,
 	if err != nil {
 		return BatchResult{}, err
 	}
-	rows, err := source.QueryContext(ctx, fmt.Sprintf(`SELECT id,book_id,COALESCE(book_name,''),status,COALESCE(force_reclean,0),COALESCE(total_count,0),COALESCE(processed_count,0),COALESCE(success_count,0),COALESCE(discard_count,0),COALESCE(fail_count,0),COALESCE(skip_count,0),COALESCE(all_chapters_discarded,0),COALESCE(stop_requested,0),COALESCE(operator,''),COALESCE(error_summary,''),start_time,end_time,create_time,update_time FROM %s WHERE id>? ORDER BY id LIMIT ?`, table), last, limit)
+	operatorColumn, err := legacyColumn(ctx, source, table, "operator_name", "operator")
+	if err != nil {
+		return BatchResult{}, err
+	}
+	rows, err := source.QueryContext(ctx, fmt.Sprintf(`SELECT id,book_id,COALESCE(book_name,''),status,COALESCE(force_reclean,0),COALESCE(total_count,0),COALESCE(processed_count,0),COALESCE(success_count,0),COALESCE(discard_count,0),COALESCE(fail_count,0),COALESCE(skip_count,0),COALESCE(all_chapters_discarded,0),COALESCE(stop_requested,0),COALESCE(%s,''),COALESCE(error_summary,''),start_time,end_time,create_time,update_time FROM %s WHERE id>? ORDER BY id LIMIT ?`, operatorColumn, table), last, limit)
 	if err != nil {
 		return BatchResult{}, fmt.Errorf("query legacy clean tasks: %w", err)
 	}
@@ -124,7 +128,19 @@ func (stage NovelChapterCleanResultsStage) RunBatch(ctx context.Context, source 
 	if err != nil {
 		return BatchResult{}, err
 	}
-	rows, err := source.QueryContext(ctx, fmt.Sprintf(`SELECT id,COALESCE(task_id,0),book_id,index_id,COALESCE(source_index_num,0),COALESCE(content_type,''),is_novel_body,COALESCE(chapter_title,''),COALESCE(cleaned_text,''),COALESCE(cleaned_word_count,0),removed_non_novel,confidence,COALESCE(raw_response,''),status,COALESCE(error_message,''),COALESCE(active,1),create_time,update_time FROM %s WHERE id>? ORDER BY id LIMIT ?`, table), last, limit)
+	chapterColumn, err := legacyColumn(ctx, source, table, "chapter_id", "index_id")
+	if err != nil {
+		return BatchResult{}, err
+	}
+	sourceNoColumn, err := legacyColumn(ctx, source, table, "source_chapter_no", "source_index_num")
+	if err != nil {
+		return BatchResult{}, err
+	}
+	titleColumn, err := legacyColumn(ctx, source, table, "cleaned_chapter_name", "chapter_title")
+	if err != nil {
+		return BatchResult{}, err
+	}
+	rows, err := source.QueryContext(ctx, fmt.Sprintf(`SELECT id,COALESCE(task_id,0),book_id,%s,COALESCE(%s,0),COALESCE(content_type,''),is_novel_body,COALESCE(%s,''),COALESCE(cleaned_text,''),COALESCE(cleaned_word_count,0),removed_non_novel,confidence,COALESCE(raw_response,''),status,COALESCE(error_message,''),COALESCE(active,1),create_time,update_time FROM %s WHERE id>? ORDER BY id LIMIT ?`, chapterColumn, sourceNoColumn, titleColumn, table), last, limit)
 	if err != nil {
 		return BatchResult{}, fmt.Errorf("query legacy clean results: %w", err)
 	}
@@ -227,6 +243,20 @@ func legacyCleanTable(ctx context.Context, source *sql.DB, kind string) (string,
 	}
 	return "", nil
 }
+
+func legacyColumn(ctx context.Context, source *sql.DB, table string, candidates ...string) (string, error) {
+	for _, column := range candidates {
+		var exists bool
+		if err := source.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?)`, table, column).Scan(&exists); err != nil {
+			return "", err
+		}
+		if exists {
+			return column, nil
+		}
+	}
+	return "", fmt.Errorf("legacy table %s has none of the supported columns %s", table, strings.Join(candidates, ","))
+}
+
 func mapLegacyCleanTaskStatus(v string) (string, bool, bool) {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "running", "processing", "pending", "queued":
