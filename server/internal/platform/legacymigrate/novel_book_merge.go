@@ -161,7 +161,12 @@ func (NovelBookMergeSourcesStage) RunBatch(ctx context.Context, source *sql.DB, 
 			result.Errors = append(result.Errors, mergeError(table, result.NextCursor, "MERGE_SOURCE_REFERENCE_NOT_FOUND", "merge source task, book, or import task was not migrated"))
 			continue
 		}
-		_, err = target.ExecContext(ctx, `INSERT INTO novel_book_merge_source(id,task_id,source_book_id,source_book_name,source_author_name,source_import_task_id,source_name,source_thread_id,source_thread_title,source_thread_url,sort_time,sort_time_source,source_order,old_publish_status,archived_publish_status,archive_time,created_at,legacy_source_key) SELECT $1,$2,$3,$4,$5,$6,i.source_name,$7,$8,$9,$10,$11,$12,$13,$14,COALESCE($15,now()),COALESCE($16,now()),$17 FROM novel_crawl_import_task i WHERE i.id=$6 ON CONFLICT(id) DO NOTHING`, item.id, item.taskID, item.bookID, strings.TrimSpace(item.bookName), strings.TrimSpace(item.authorName), item.importTaskID, strings.TrimSpace(item.threadID), strings.TrimSpace(item.threadTitle), strings.TrimSpace(item.threadURL), item.sortTime, strings.TrimSpace(item.sortSource), item.order, strings.TrimSpace(item.oldStatus), strings.TrimSpace(item.archivedStatus), item.archiveTime, item.created, key)
+		sortSource, ok := mapLegacyMergeSortTimeSource(item.sortSource)
+		if !ok {
+			result.Errors = append(result.Errors, mergeError(table, result.NextCursor, "INVALID_SORT_TIME_SOURCE", "merge source sort time source is unsupported"))
+			continue
+		}
+		_, err = target.ExecContext(ctx, `INSERT INTO novel_book_merge_source(id,task_id,source_book_id,source_book_name,source_author_name,source_import_task_id,source_name,source_thread_id,source_thread_title,source_thread_url,sort_time,sort_time_source,source_order,old_publish_status,archived_publish_status,archive_time,created_at,legacy_source_key) SELECT $1,$2,$3,$4,$5,$6,i.source_name,$7,$8,$9,$10,$11,$12,$13,$14,COALESCE($15,now()),COALESCE($16,now()),$17 FROM novel_crawl_import_task i WHERE i.id=$6 ON CONFLICT(id) DO NOTHING`, item.id, item.taskID, item.bookID, strings.TrimSpace(item.bookName), strings.TrimSpace(item.authorName), item.importTaskID, strings.TrimSpace(item.threadID), strings.TrimSpace(item.threadTitle), strings.TrimSpace(item.threadURL), item.sortTime, sortSource, item.order, strings.TrimSpace(item.oldStatus), strings.TrimSpace(item.archivedStatus), item.archiveTime, item.created, key)
 		if err != nil {
 			return BatchResult{}, fmt.Errorf("upsert merge source %d: %w", item.id, err)
 		}
@@ -289,7 +294,12 @@ func (NovelBookMergeChaptersStage) RunBatch(ctx context.Context, source *sql.DB,
 				continue
 			}
 		}
-		_, err = target.ExecContext(ctx, `INSERT INTO novel_book_merge_chapter(id,task_id,source_book_id,source_chapter_id,source_chapter_no,source_chapter_name,source_object_id,target_book_id,target_chapter_id,target_chapter_no,target_chapter_name,target_object_id,content_source,clean_result_id,sort_time,sort_time_source,duplicate_flag,duplicate_reason,excluded,exclude_reason,created_at,legacy_source_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,COALESCE($21,now()),$22) ON CONFLICT(id) DO NOTHING`, item.id, item.taskID, item.sourceBookID, item.sourceChapterID, item.sourceNo, strings.TrimSpace(item.sourceName), sourceObjectID, targetBook, targetChapter, targetNo, targetName, targetObject, item.contentSource, cleanID, item.sortTime, strings.TrimSpace(item.sortSource), item.duplicate != 0, strings.TrimSpace(item.duplicateReason), item.excluded != 0, strings.TrimSpace(item.excludeReason), item.created, key)
+		sortSource, ok := mapLegacyMergeSortTimeSource(item.sortSource)
+		if !ok {
+			result.Errors = append(result.Errors, mergeError(table, result.NextCursor, "INVALID_SORT_TIME_SOURCE", "merge chapter sort time source is unsupported"))
+			continue
+		}
+		_, err = target.ExecContext(ctx, `INSERT INTO novel_book_merge_chapter(id,task_id,source_book_id,source_chapter_id,source_chapter_no,source_chapter_name,source_object_id,target_book_id,target_chapter_id,target_chapter_no,target_chapter_name,target_object_id,content_source,clean_result_id,sort_time,sort_time_source,duplicate_flag,duplicate_reason,excluded,exclude_reason,created_at,legacy_source_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,COALESCE($21,now()),$22) ON CONFLICT(id) DO NOTHING`, item.id, item.taskID, item.sourceBookID, item.sourceChapterID, item.sourceNo, strings.TrimSpace(item.sourceName), sourceObjectID, targetBook, targetChapter, targetNo, targetName, targetObject, item.contentSource, cleanID, item.sortTime, sortSource, item.duplicate != 0, strings.TrimSpace(item.duplicateReason), item.excluded != 0, strings.TrimSpace(item.excludeReason), item.created, key)
 		if err != nil {
 			return BatchResult{}, fmt.Errorf("upsert merge chapter %d: %w", item.id, err)
 		}
@@ -326,6 +336,16 @@ func mapLegacyMergeTaskStatus(v string) (string, bool, bool) {
 		return "failed", false, true
 	default:
 		return "", false, false
+	}
+}
+func mapLegacyMergeSortTimeSource(v string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "thread_create_time", "thread_created_at":
+		return "thread_created_at", true
+	case "import_task_create_time", "import_task_created_at":
+		return "import_task_created_at", true
+	default:
+		return "", false
 	}
 }
 func mergeError(table, id, code, msg string) RecordError {

@@ -21,3 +21,22 @@ func TestMapLegacyMergeTaskStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestMapLegacyMergeSortTimeSource(t *testing.T) {
+	tests := map[string]string{
+		"thread_create_time":        "thread_created_at",
+		"thread_created_at":         "thread_created_at",
+		"import_task_create_time":   "import_task_created_at",
+		"import_task_created_at":    "import_task_created_at",
+		" IMPORT_TASK_CREATE_TIME ": "import_task_created_at",
+	}
+	for input, want := range tests {
+		got, ok := mapLegacyMergeSortTimeSource(input)
+		if !ok || got != want {
+			t.Fatalf("mapLegacyMergeSortTimeSource(%q) = (%q,%v), want (%q,true)", input, got, ok, want)
+		}
+	}
+	if got, ok := mapLegacyMergeSortTimeSource("unknown"); ok || got != "" {
+		t.Fatalf("mapLegacyMergeSortTimeSource(unknown) = (%q,%v), want (\"\",false)", got, ok)
+	}
+}
