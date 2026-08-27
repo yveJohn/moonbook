@@ -70,6 +70,7 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_invite_relations WHERE id=9007199254741102 AND invite_code_id=9007199254741101`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_products WHERE id=9007199254741201 AND target_id=$1 AND source_type='legacy'`, []any{bookID}, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_products WHERE id IN (9007199254741202,9007199254741203) AND product_type='membership' AND target_id IS NULL AND source_type='legacy'`, nil, 2)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_membership_grants WHERE id=9007199254741301 AND grant_type='admin' AND status='active' AND source_ref='MG-FIXTURE-1'`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_entitlements WHERE id=9007199254741401 AND permanent AND source_type='legacy_order' AND source_ref='ORDER-FIXTURE-1'`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_entitlements WHERE id=9007199254741402 AND NOT permanent AND source_type='legacy' AND status='disabled'`, nil, 1)
@@ -103,7 +104,7 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND (metadata->>'done')::boolean`, []any{migration}, 4)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-identity' AND processed_count=3 AND error_count=1`, []any{migration}, 1)
-	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-commerce' AND processed_count=13 AND error_count=2`, []any{migration}, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-commerce' AND processed_count=15 AND error_count=2`, []any{migration}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-finance' AND processed_count=19 AND error_count=2`, []any{migration}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_checkpoints WHERE migration_name=$1 AND stage='reader-activity' AND processed_count=3 AND error_count=1`, []any{migration}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM migration_errors WHERE migration_name=$1 AND error_code IN ('INVALID_PASSWORD_HASH','INVALID_MEMBERSHIP_GRANT_TYPE','INVALID_ENTITLEMENT_TYPE','INVALID_PURCHASE_ORDER','INVALID_PAYMENT_CALLBACK')`, []any{migration}, 5)

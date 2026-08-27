@@ -51,7 +51,9 @@ CREATE TABLE reader_product (
     create_time datetime NOT NULL, update_time datetime NOT NULL
 );
 INSERT INTO reader_product VALUES
-    (9007199254741201,'book',9007199254742001,'迁移整书',88,1,NULL,'on_sale',3,'2026-06-03 00:00:00','2026-07-03 00:00:00');
+    (9007199254741201,'book',9007199254742001,'迁移整书',88,1,NULL,'on_sale',3,'2026-06-03 00:00:00','2026-07-03 00:00:00'),
+    (9007199254741202,'membership',NULL,'迁移月卡',10,0,30,'on_sale',1,'2026-06-03 00:00:00','2026-07-03 00:00:00'),
+    (9007199254741203,'membership',NULL,'迁移年卡',80,0,365,'on_sale',2,'2026-06-03 00:00:00','2026-07-03 00:00:00');
 
 CREATE TABLE reader_membership_grant (
     id bigint NOT NULL PRIMARY KEY, reader_id bigint NOT NULL, grant_type varchar(20) NOT NULL,
