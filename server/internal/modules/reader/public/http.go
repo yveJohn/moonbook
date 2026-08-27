@@ -70,7 +70,9 @@ func parseID(c *gin.Context, name string) (int64, error) {
 	}
 	return value, nil
 }
-func category(c Category) map[string]string { return map[string]string{"code": c.Code, "name": c.Name} }
+func category(c Category) map[string]string {
+	return map[string]string{"categoryCode": c.Code, "categoryName": c.Name}
+}
 
 func summary(book Book) map[string]any {
 	subs := make([]map[string]string, 0, len(book.SubCategories))

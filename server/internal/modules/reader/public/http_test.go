@@ -33,6 +33,18 @@ func TestSummaryKeepsLongIDsAsStrings(t *testing.T) {
 	}
 }
 
+func TestCategoryUsesFrozenReaderFieldNames(t *testing.T) {
+	got := category(Category{Code: "science-fiction", Name: "科幻"})
+	if got["categoryCode"] != "science-fiction" || got["categoryName"] != "科幻" {
+		t.Fatalf("unexpected category: %+v", got)
+	}
+	for _, legacyKey := range []string{"code", "name"} {
+		if _, exists := got[legacyKey]; exists {
+			t.Fatalf("category must not expose %q: %+v", legacyKey, got)
+		}
+	}
+}
+
 func TestProductStatusKeepsLongIDsAndLoginFreeContract(t *testing.T) {
 	status := productStatus(normalizeBookStatus(commercecontract.AccessResult{
 		BookID: math.MaxInt64, ChargeMode: "login_free", AccessReason: "free_chapter",

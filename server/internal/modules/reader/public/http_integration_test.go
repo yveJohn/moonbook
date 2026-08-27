@@ -138,7 +138,13 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 	}
 	containsCategory := func(items []any, want string) bool {
 		for _, item := range items {
-			if value, ok := item.(map[string]any); ok && value["code"] == want {
+			if value, ok := item.(map[string]any); ok && value["categoryCode"] == want && value["categoryName"] == want {
+				if _, hasCode := value["code"]; hasCode {
+					t.Fatalf("category exposes legacy code field: %v", value)
+				}
+				if _, hasName := value["name"]; hasName {
+					t.Fatalf("category exposes legacy name field: %v", value)
+				}
 				return true
 			}
 		}
@@ -190,6 +196,10 @@ func TestReaderPublicHTTPContractWithRealDependencies(t *testing.T) {
 	status, statusOK := detailData["productStatus"].(map[string]any)
 	if !ok || detailData["bookId"] != fmt.Sprint(book) || detailData["lastChapterId"] != fmt.Sprint(chapter) || !statusOK || status["readable"] != true || status["accessReason"] != "login_free" {
 		t.Fatalf("book detail response=%v", detail)
+	}
+	detailSubCategories, ok := detailData["subCategories"].([]any)
+	if !ok || !containsCategory(detailSubCategories, code+"-sub") {
+		t.Fatalf("book detail sub-categories=%v", detailData["subCategories"])
 	}
 	assertDateTime("book last chapter", detailData["lastChapterUpdateTime"])
 	chapters := request(http.MethodGet, fmt.Sprintf("/reader/books/%d/chapters", book), true)

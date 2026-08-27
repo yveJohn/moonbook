@@ -71,6 +71,8 @@
 | GET | `/reader/me/preference` | Bearer Token | `ReaderPreference` | 浏览器 |
 | PUT | `/reader/me/preference` | `ReaderPreferencePayload` | `ReaderPreference` | 浏览器 |
 
+`ReaderCategory` 以及书籍响应中的 `subCategories` 必须使用 `categoryCode`、`categoryName`，不得缩写为 `code`、`name`。冻结版 Reader 直接读取前一组字段，字段名变化会渲染出有按钮但无文字的空分类。
+
 ## SEO 原始资源
 
 这些接口不使用 JSON 包装，SSR 将上游 Response 原样代理：
