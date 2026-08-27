@@ -107,7 +107,7 @@ minio:
   access-key-id: ${MINIO_ROOT_USER}
   access-key-secret: ${MINIO_ROOT_PASSWORD}
   bucket-name: ${MINIO_BUCKET}
-  use-ssl: false
+  use-ssl: ${MOONBOOK_MINIO_USE_SSL}
   base-path: ""
   bucket-url: ${MOONBOOK_MINIO_BUCKET_URL}
 

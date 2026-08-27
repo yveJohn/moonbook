@@ -61,6 +61,40 @@ func TestRenderRejectsMissingValues(t *testing.T) {
 	}
 }
 
+func TestRenderValidatesMinIOUseSSL(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	templatePath := filepath.Join(dir, "config.yaml.tpl")
+	if err := os.WriteFile(templatePath, []byte("use-ssl: ${MOONBOOK_MINIO_USE_SSL}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	values := completeValues()
+	values["MOONBOOK_MINIO_USE_SSL"] = "true"
+	outputPath := filepath.Join(dir, "config.yaml")
+	if err := Render(templatePath, outputPath, mapLookup(values)); err != nil {
+		t.Fatal(err)
+	}
+	var rendered struct {
+		UseSSL bool `yaml:"use-ssl"`
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := yaml.Unmarshal(content, &rendered); err != nil {
+		t.Fatal(err)
+	}
+	if !rendered.UseSSL {
+		t.Fatal("use-ssl was not rendered as a boolean true")
+	}
+
+	values["MOONBOOK_MINIO_USE_SSL"] = "invalid"
+	err = Render(templatePath, outputPath, mapLookup(values))
+	if err == nil || !strings.Contains(err.Error(), "MOONBOOK_MINIO_USE_SSL must be true or false") {
+		t.Fatalf("expected invalid boolean error, got %v", err)
+	}
+}
+
 func TestDatabaseDSNRoundTripsSpecialCharacters(t *testing.T) {
 	t.Parallel()
 	values := completeValues()
@@ -122,6 +156,7 @@ func completeValues() map[string]string {
 	}
 	values["MOONBOOK_POSTGRES_HOST"] = "postgres"
 	values["MOONBOOK_POSTGRES_PORT"] = "5432"
+	values["MOONBOOK_MINIO_USE_SSL"] = "false"
 	return values
 }
 

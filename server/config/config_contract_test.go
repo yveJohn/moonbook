@@ -36,6 +36,7 @@ func TestShippedServerConfigsMatchSchema(t *testing.T) {
 				"MINIO_ROOT_USER":          "moonbook",
 				"MINIO_ROOT_PASSWORD":      "test-minio-password",
 				"MINIO_BUCKET":             "moonbook-content",
+				"MOONBOOK_MINIO_USE_SSL":   "false",
 				"MOONBOOK_ADMIN_ORIGIN":    "http://localhost:8080",
 				"MOONBOOK_READER_ORIGIN":   "http://localhost:8081",
 			},

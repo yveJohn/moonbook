@@ -18,7 +18,7 @@ var templateVariables = []string{
 	"REDIS_PASSWORD", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "MINIO_BUCKET",
 	"MOONBOOK_JWT_SIGNING_KEY", "MOONBOOK_METRICS_TOKEN", "MOONBOOK_SERVER_PORT",
 	"MOONBOOK_POSTGRES_HOST", "MOONBOOK_POSTGRES_PORT", "MOONBOOK_REDIS_ADDR",
-	"MOONBOOK_MINIO_ENDPOINT", "MOONBOOK_MINIO_BUCKET_URL",
+	"MOONBOOK_MINIO_ENDPOINT", "MOONBOOK_MINIO_BUCKET_URL", "MOONBOOK_MINIO_USE_SSL",
 	"MOONBOOK_ADMIN_ORIGIN", "MOONBOOK_READER_ORIGIN",
 }
 
@@ -36,6 +36,13 @@ func Render(templatePath, outputPath string, lookup Lookup) error {
 		value, ok := lookup(name)
 		if !ok || value == "" {
 			missing = append(missing, name)
+			continue
+		}
+		if name == "MOONBOOK_MINIO_USE_SSL" {
+			if value != "true" && value != "false" {
+				return fmt.Errorf("MOONBOOK_MINIO_USE_SSL must be true or false")
+			}
+			result = strings.ReplaceAll(result, "${"+name+"}", value)
 			continue
 		}
 		encoded, err := yaml.Marshal(value)
