@@ -94,7 +94,15 @@ func (NovelBookProfileSuggestionsStage) RunBatch(ctx context.Context, source *sq
 	if err != nil {
 		return BatchResult{}, err
 	}
-	rows, err := source.QueryContext(ctx, `SELECT id,book_id,COALESCE(status,''),COALESCE(trigger_type,'manual'),COALESCE(input_mode,''),COALESCE(input_digest,''),COALESCE(original_book_name,''),COALESCE(original_category_code,''),COALESCE(original_category_name,''),COALESCE(original_book_desc,''),COALESCE(original_sub_categories_json,''),COALESCE(suggested_book_name,''),COALESCE(suggested_category_code,''),COALESCE(suggested_category_name,''),COALESCE(suggested_unmatched_category_name,''),COALESCE(category_reason,''),COALESCE(suggested_sub_categories_json,''),COALESCE(sub_category_reason,''),COALESCE(suggested_book_desc,''),confidence,COALESCE(review_book_name,''),COALESCE(review_category_code,''),COALESCE(review_category_name,''),COALESCE(review_book_desc,''),COALESCE(review_sub_categories_json,''),COALESCE(reviewer_name,''),COALESCE(reject_reason,''),review_time,apply_time,COALESCE(error_message,''),COALESCE(retry_source_id,0),COALESCE(retry_target_id,0),create_time,update_time FROM novel_book_profile_suggestion WHERE id>? ORDER BY id LIMIT ?`, last, limit)
+	rejectReason := "''"
+	var hasRejectReason bool
+	if err := source.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='novel_book_profile_suggestion' AND column_name='reject_reason')`).Scan(&hasRejectReason); err != nil {
+		return BatchResult{}, err
+	}
+	if hasRejectReason {
+		rejectReason = "reject_reason"
+	}
+	rows, err := source.QueryContext(ctx, fmt.Sprintf(`SELECT id,book_id,COALESCE(status,''),COALESCE(trigger_type,'manual'),COALESCE(input_mode,''),COALESCE(input_digest,''),COALESCE(original_book_name,''),COALESCE(original_category_code,''),COALESCE(original_category_name,''),COALESCE(original_book_desc,''),COALESCE(original_sub_categories_json,''),COALESCE(suggested_book_name,''),COALESCE(suggested_category_code,''),COALESCE(suggested_category_name,''),COALESCE(suggested_unmatched_category_name,''),COALESCE(category_reason,''),COALESCE(suggested_sub_categories_json,''),COALESCE(sub_category_reason,''),COALESCE(suggested_book_desc,''),confidence,COALESCE(review_book_name,''),COALESCE(review_category_code,''),COALESCE(review_category_name,''),COALESCE(review_book_desc,''),COALESCE(review_sub_categories_json,''),COALESCE(reviewer_name,''),COALESCE(%s,''),review_time,apply_time,COALESCE(error_message,''),COALESCE(retry_source_id,0),COALESCE(retry_target_id,0),create_time,update_time FROM novel_book_profile_suggestion WHERE id>? ORDER BY id LIMIT ?`, rejectReason), last, limit)
 	if err != nil {
 		return BatchResult{}, fmt.Errorf("query legacy profile suggestions: %w", err)
 	}
