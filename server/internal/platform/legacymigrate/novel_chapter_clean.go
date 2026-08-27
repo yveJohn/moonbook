@@ -211,12 +211,18 @@ func (stage NovelChapterCleanResultsStage) RunBatch(ctx context.Context, source 
 				return BatchResult{}, err
 			}
 		} else {
-			err = stage.Objects.ActivateWithTx(ctx, obj.ID, func(tx *sql.Tx, _ objectstore.Target) error {
-				return insertCleanResult(ctx, tx, item, status, original, &obj.ID, key)
-			})
+			activated, err := target.ExecContext(ctx, `UPDATE novel_objects SET state='active',activated_at=now() WHERE id=$1 AND state='verified'`, obj.ID)
 			if err != nil {
-				result.Errors = append(result.Errors, cleanError(table, result.NextCursor, "CLEAN_RESULT_ACTIVATE_FAILED", err.Error()))
-				continue
+				return BatchResult{}, fmt.Errorf("activate legacy clean object %d: %w", obj.ID, err)
+			}
+			if count, _ := activated.RowsAffected(); count != 1 {
+				return BatchResult{}, fmt.Errorf("activate legacy clean object %d: object is not verified", obj.ID)
+			}
+			if _, err := target.ExecContext(ctx, `INSERT INTO novel_object_events(object_id,event_type) VALUES($1,'activated')`, obj.ID); err != nil {
+				return BatchResult{}, fmt.Errorf("record legacy clean object activation %d: %w", obj.ID, err)
+			}
+			if err := insertCleanResult(ctx, target, item, status, original, &obj.ID, key); err != nil {
+				return BatchResult{}, err
 			}
 		}
 		result.Metadata["objectCount"] = result.Metadata["objectCount"].(int) + 1
