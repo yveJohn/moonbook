@@ -165,16 +165,22 @@ func (NovelBookProfileSuggestionsStage) RunBatch(ctx context.Context, source *sq
 				result.Errors = append(result.Errors, mergeError("novel_book_profile_suggestion", result.NextCursor, "BLOCKING_SUGGESTION_CONFLICT", "older pending suggestion was archived to satisfy target uniqueness"))
 			}
 		}
-		var retrySource, retryTarget any
+		var retrySource any
 		if item.retrySource > 0 {
 			retrySource = item.retrySource
 		}
-		if item.retryTarget > 0 {
-			retryTarget = item.retryTarget
-		}
-		_, err = target.ExecContext(ctx, `INSERT INTO novel_book_profile_suggestion(id,book_id,status,trigger_type,input_mode,input_digest,input_snapshot,original_snapshot,suggested_snapshot,review_snapshot,raw_response,raw_response_expires_at,reviewer_name,reject_reason,reviewed_at,applied_at,error_message,failure_type,retry_source_id,retry_target_id,created_at,updated_at,legacy_source_key) VALUES($1,$2,$3,$4,$5,$6,'{}'::jsonb,$7,$8,$9,'',NULL,$10,$11,$12,$13,$14,'', $15,$16,COALESCE($17,now()),COALESCE($18,now()),$19) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status,trigger_type=EXCLUDED.trigger_type,input_mode=EXCLUDED.input_mode,input_digest=EXCLUDED.input_digest,input_snapshot=EXCLUDED.input_snapshot,original_snapshot=EXCLUDED.original_snapshot,suggested_snapshot=EXCLUDED.suggested_snapshot,review_snapshot=EXCLUDED.review_snapshot,raw_response='',raw_response_expires_at=NULL,reviewer_name=EXCLUDED.reviewer_name,reject_reason=EXCLUDED.reject_reason,reviewed_at=EXCLUDED.reviewed_at,applied_at=EXCLUDED.applied_at,error_message=EXCLUDED.error_message,retry_source_id=EXCLUDED.retry_source_id,retry_target_id=EXCLUDED.retry_target_id,updated_at=EXCLUDED.updated_at,legacy_source_key=EXCLUDED.legacy_source_key`, item.id, item.bookID, status, trigger, mode, digest, original, suggested, review, item.reviewer, item.rejectReason, item.reviewed, item.applied, item.errorMessage, retrySource, retryTarget, item.created, item.updated, key)
+		_, err = target.ExecContext(ctx, `INSERT INTO novel_book_profile_suggestion(id,book_id,status,trigger_type,input_mode,input_digest,input_snapshot,original_snapshot,suggested_snapshot,review_snapshot,raw_response,raw_response_expires_at,reviewer_name,reject_reason,reviewed_at,applied_at,error_message,failure_type,retry_source_id,retry_target_id,created_at,updated_at,legacy_source_key) VALUES($1,$2,$3,$4,$5,$6,'{}'::jsonb,$7,$8,$9,'',NULL,$10,$11,$12,$13,$14,'',$15,NULL,COALESCE($16,now()),COALESCE($17,now()),$18) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status,trigger_type=EXCLUDED.trigger_type,input_mode=EXCLUDED.input_mode,input_digest=EXCLUDED.input_digest,input_snapshot=EXCLUDED.input_snapshot,original_snapshot=EXCLUDED.original_snapshot,suggested_snapshot=EXCLUDED.suggested_snapshot,review_snapshot=EXCLUDED.review_snapshot,raw_response='',raw_response_expires_at=NULL,reviewer_name=EXCLUDED.reviewer_name,reject_reason=EXCLUDED.reject_reason,reviewed_at=EXCLUDED.reviewed_at,applied_at=EXCLUDED.applied_at,error_message=EXCLUDED.error_message,retry_source_id=EXCLUDED.retry_source_id,retry_target_id=COALESCE(EXCLUDED.retry_target_id,novel_book_profile_suggestion.retry_target_id),updated_at=EXCLUDED.updated_at,legacy_source_key=EXCLUDED.legacy_source_key`, item.id, item.bookID, status, trigger, mode, digest, original, suggested, review, item.reviewer, item.rejectReason, item.reviewed, item.applied, item.errorMessage, retrySource, item.created, item.updated, key)
 		if err != nil {
 			return BatchResult{}, fmt.Errorf("upsert profile suggestion %d: %w", item.id, err)
+		}
+		if item.retrySource > 0 {
+			linked, err := target.ExecContext(ctx, `UPDATE novel_book_profile_suggestion SET retry_target_id=$1,updated_at=now() WHERE id=$2 AND (retry_target_id IS NULL OR retry_target_id=$1)`, item.id, item.retrySource)
+			if err != nil {
+				return BatchResult{}, fmt.Errorf("link profile suggestion retry %d: %w", item.id, err)
+			}
+			if count, _ := linked.RowsAffected(); count != 1 {
+				return BatchResult{}, fmt.Errorf("link profile suggestion retry %d: source target conflicts", item.id)
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
