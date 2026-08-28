@@ -27,7 +27,7 @@
 - [x] 执行相关 Go 单元测试、真实 PostgreSQL 集成测试、`go vet` 和 Commerce 全包回归。
 - [x] 更新 `docs/progress/refactor-status.md`，记录生产根因、实现和验证证据。
 - [x] 检查全部修改、敏感信息、`git diff --check` 和暂存区，使用简体中文逻辑提交。
-- [ ] 通过 `scripts/deploy-production.sh` 发布固定提交，核对镜像、迁移、健康、HTTPS 和日志。
+- [x] 通过 `scripts/deploy-production.sh` 发布固定提交，核对镜像、迁移、健康、HTTPS 和日志。
 
 ## 3. 完成标准
 
