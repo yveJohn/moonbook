@@ -16,7 +16,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/secretcrypto"
 )
 
-const channelColumns = `id,display_name,provider,enabled,currency,token,network,(merchant_pid_ciphertext<>''),(secret_ciphertext<>''),create_url,notify_url,redirect_url,health_url,sync_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes,archived_at,created_at,updated_at`
+const channelColumns = `id,display_name,provider,enabled,currency,token,network,(merchant_pid_ciphertext<>''),(secret_ciphertext<>''),epusdt_base_url,reader_base_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes,archived_at,created_at,updated_at`
 
 type SQLRepository struct {
 	DB     *sql.DB
@@ -59,7 +59,7 @@ func (r SQLRepository) Create(ctx context.Context, input ChannelInput) (Channel,
 	}
 	defer tx.Rollback()
 	var id int64
-	err = tx.QueryRowContext(ctx, `INSERT INTO reader_payment_channels(display_name,provider,enabled,currency,token,network,create_url,notify_url,redirect_url,health_url,sync_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes) VALUES($1,$2,false,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`, input.DisplayName, input.Provider, input.Currency, input.Token, input.Network, input.CreateURL, input.NotifyURL, input.RedirectURL, input.HealthURL, input.SyncURL, input.ConnectTimeoutMS, input.RequestTimeoutMS, input.UnknownReleaseMinutes).Scan(&id)
+	err = tx.QueryRowContext(ctx, `INSERT INTO reader_payment_channels(display_name,provider,enabled,currency,token,network,epusdt_base_url,reader_base_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes) VALUES($1,$2,false,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, input.DisplayName, input.Provider, input.Currency, input.Token, input.Network, input.EPUSDTBaseURL, input.ReaderBaseURL, input.ConnectTimeoutMS, input.RequestTimeoutMS, input.UnknownReleaseMinutes).Scan(&id)
 	if err != nil {
 		return Channel{}, channelWriteError(err)
 	}
@@ -122,7 +122,7 @@ func (r SQLRepository) Update(ctx context.Context, id int64, input ChannelInput)
 			return Channel{}, unavailable()
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE reader_payment_channels SET display_name=$1,provider=$2,enabled=$3,currency=$4,token=$5,network=$6,merchant_pid_ciphertext=$7,secret_ciphertext=$8,create_url=$9,notify_url=$10,redirect_url=$11,health_url=$12,sync_url=$13,connect_timeout_ms=$14,request_timeout_ms=$15,unknown_release_minutes=$16,updated_at=now() WHERE id=$17`, input.DisplayName, input.Provider, input.Enabled, input.Currency, input.Token, input.Network, pidCipher, secretCipher, input.CreateURL, input.NotifyURL, input.RedirectURL, input.HealthURL, input.SyncURL, input.ConnectTimeoutMS, input.RequestTimeoutMS, input.UnknownReleaseMinutes, id)
+	_, err = tx.ExecContext(ctx, `UPDATE reader_payment_channels SET display_name=$1,provider=$2,enabled=$3,currency=$4,token=$5,network=$6,merchant_pid_ciphertext=$7,secret_ciphertext=$8,epusdt_base_url=$9,reader_base_url=$10,connect_timeout_ms=$11,request_timeout_ms=$12,unknown_release_minutes=$13,updated_at=now() WHERE id=$14`, input.DisplayName, input.Provider, input.Enabled, input.Currency, input.Token, input.Network, pidCipher, secretCipher, input.EPUSDTBaseURL, input.ReaderBaseURL, input.ConnectTimeoutMS, input.RequestTimeoutMS, input.UnknownReleaseMinutes, id)
 	if err != nil {
 		return Channel{}, channelWriteError(err)
 	}
@@ -186,9 +186,9 @@ func (r SQLRepository) runtime(ctx context.Context, where string, args []any) (R
 		return RuntimeConfig{}, unavailable()
 	}
 	var id int64
-	var pidCipher, secretCipher, createURL, notifyURL, redirectURL, healthURL, syncURL string
+	var pidCipher, secretCipher, epusdtBaseURL, readerBaseURL string
 	var connectMS, requestMS, unknownMinutes int
-	err := r.DB.QueryRowContext(ctx, `SELECT id,merchant_pid_ciphertext,secret_ciphertext,create_url,notify_url,redirect_url,health_url,sync_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes FROM reader_payment_channels WHERE `+where, args...).Scan(&id, &pidCipher, &secretCipher, &createURL, &notifyURL, &redirectURL, &healthURL, &syncURL, &connectMS, &requestMS, &unknownMinutes)
+	err := r.DB.QueryRowContext(ctx, `SELECT id,merchant_pid_ciphertext,secret_ciphertext,epusdt_base_url,reader_base_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes FROM reader_payment_channels WHERE `+where, args...).Scan(&id, &pidCipher, &secretCipher, &epusdtBaseURL, &readerBaseURL, &connectMS, &requestMS, &unknownMinutes)
 	if err != nil {
 		return RuntimeConfig{}, unavailable()
 	}
@@ -204,18 +204,18 @@ func (r SQLRepository) runtime(ctx context.Context, where string, args []any) (R
 	if err != nil {
 		return RuntimeConfig{}, unavailable()
 	}
-	parsed := make([]*url.URL, 3)
-	for index, raw := range []string{createURL, notifyURL, redirectURL} {
-		if validateURL(raw) != nil {
-			return RuntimeConfig{}, unavailable()
-		}
-		parsed[index], _ = url.Parse(raw)
+	endpoints, err := deriveEndpoints(epusdtBaseURL, readerBaseURL)
+	if err != nil {
+		return RuntimeConfig{}, unavailable()
 	}
+	createURL, _ := url.Parse(endpoints.CreateURL)
+	notifyURL, _ := url.Parse(endpoints.NotifyURL)
+	redirectURL, _ := url.Parse(endpoints.RedirectURL)
 	return RuntimeConfig{ChannelID: id, EPUSDT: epusdt.Config{
-		Enabled: true, Credentials: credentials, CreateURL: parsed[0], NotifyURL: parsed[1], RedirectURL: parsed[2],
+		Enabled: true, Credentials: credentials, CreateURL: createURL, NotifyURL: notifyURL, RedirectURL: redirectURL,
 		ConnectTimeout: time.Duration(connectMS) * time.Millisecond, RequestTimeout: time.Duration(requestMS) * time.Millisecond,
 		UnknownReleaseWindow: time.Duration(unknownMinutes) * time.Minute,
-	}, HealthURL: healthURL, SyncURL: syncURL}, nil
+	}, HealthURL: endpoints.HealthURL, SyncURL: endpoints.SyncURL}, nil
 }
 
 func (r SQLRepository) encrypt(id int64, field, plaintext string) (string, error) {
@@ -242,7 +242,7 @@ func getChannelTx(ctx context.Context, tx *sql.Tx, id int64) (Channel, error) {
 	return item, err
 }
 func scanChannel(row interface{ Scan(...any) error }, item *Channel) error {
-	return row.Scan(&item.ID, &item.DisplayName, &item.Provider, &item.Enabled, &item.Currency, &item.Token, &item.Network, &item.PIDConfigured, &item.SecretConfigured, &item.CreateURL, &item.NotifyURL, &item.RedirectURL, &item.HealthURL, &item.SyncURL, &item.ConnectTimeoutMS, &item.RequestTimeoutMS, &item.UnknownReleaseMinutes, &item.ArchivedAt, &item.CreatedAt, &item.UpdatedAt)
+	return row.Scan(&item.ID, &item.DisplayName, &item.Provider, &item.Enabled, &item.Currency, &item.Token, &item.Network, &item.PIDConfigured, &item.SecretConfigured, &item.EPUSDTBaseURL, &item.ReaderBaseURL, &item.ConnectTimeoutMS, &item.RequestTimeoutMS, &item.UnknownReleaseMinutes, &item.ArchivedAt, &item.CreatedAt, &item.UpdatedAt)
 }
 func channelWriteError(err error) error {
 	if strings.Contains(err.Error(), "reader_payment_channels_active_provider_uidx") {

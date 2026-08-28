@@ -10,14 +10,25 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
 
+const (
+	syncResponseLimit = 16 * 1024
+	syncTradeIDToken  = "{trade_id}"
+)
+
 var errSyncUnavailable = errors.New("payment sync is unavailable")
+
+type gmPayStatusEnvelope struct {
+	StatusCode int `json:"status_code"`
+	Data       *struct {
+		TradeID string `json:"trade_id"`
+		Status  int    `json:"status"`
+	} `json:"data"`
+}
 
 func (r SQLRepository) Sync(ctx context.Context, id int64) (Order, error) {
 	if id <= 0 {
@@ -39,115 +50,128 @@ func (r SQLRepository) Sync(ctx context.Context, id int64) (Order, error) {
 	if o.Status != "pending" && o.Status != "gateway_unknown" && o.Status != "callback_exception" {
 		return Order{}, apperror.New(apperror.CodeConflict, http.StatusConflict, "当前订单状态不允许主动同步")
 	}
+	if strings.TrimSpace(o.GatewayTradeID) == "" {
+		return Order{}, apperror.New(apperror.CodeConflict, http.StatusConflict, "订单缺少网关交易号，无法同步")
+	}
 	if r.PaymentRuntime == nil {
 		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "支付主动同步未配置")
 	}
 	runtimeConfig, configErr := r.PaymentRuntime(ctx)
-	if configErr != nil || runtimeConfig.EPUSDT.Credentials == nil {
+	if configErr != nil || runtimeConfig.EPUSDT.Credentials == nil || runtimeConfig.EPUSDT.RequestTimeout <= 0 {
 		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "支付主动同步未配置")
 	}
-	credential := runtimeConfig.EPUSDT.Credentials.Current()
-	pid := credential.PID()
-	secret := credential.Secret()
-	syncURL := strings.TrimSpace(runtimeConfig.SyncURL)
-	parsed, parseErr := url.Parse(syncURL)
-	if pid == "" || secret == "" || parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil {
+	syncURL, err := buildSyncURL(runtimeConfig.SyncURL, o.GatewayTradeID)
+	if err != nil {
 		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "支付主动同步未配置")
 	}
-	requestFields := map[string]string{"pid": pid, "order_id": o.OrderNo}
-	requestFields["signature"] = payment.Sign(requestFields, secret)
-	body, _ := json.Marshal(requestFields)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, parsed.String(), strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, syncURL, nil)
 	if err != nil {
 		return Order{}, errSyncUnavailable
 	}
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: runtimeConfig.EPUSDT.RequestTimeout}
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{Timeout: runtimeConfig.EPUSDT.RequestTimeout}).Do(req)
 	if err != nil {
+		_ = r.recordSyncFailure(ctx, id, hashSyncFailure("network_error"), "网关状态请求失败")
 		return Order{}, errSyncUnavailable
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16385))
-	if err != nil || len(raw) == 0 || len(raw) > 16384 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, syncResponseLimit+1))
+	payloadHash := hashSyncPayload(raw)
+	if err != nil || len(raw) == 0 || len(raw) > syncResponseLimit || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_ = r.recordSyncFailure(ctx, id, payloadHash, "网关状态响应无效")
 		return Order{}, errSyncUnavailable
 	}
-	fields, err := responseFields(raw)
-	hash := sha256.Sum256(raw)
-	payloadHash := hex.EncodeToString(hash[:])
-	if err != nil || fields["pid"] != pid || fields["order_id"] != o.OrderNo || !payment.Verify(fields, fields["signature"], secret) {
-		_ = r.recordSyncFailure(ctx, id, payloadHash, "响应签名或订单不匹配")
-		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusBadGateway, "支付同步响应校验失败")
-	}
-	status, err := strconv.Atoi(fields["status"])
+	status, err := parseGMStatus(raw, o.GatewayTradeID)
 	if err != nil {
-		_ = r.recordSyncFailure(ctx, id, payloadHash, "响应状态无效")
+		_ = r.recordSyncFailure(ctx, id, payloadHash, "网关状态响应校验失败")
 		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusBadGateway, "支付同步响应无效")
 	}
-	if status != 2 {
-		if err = r.recordSyncPending(ctx, id, status, payloadHash); err != nil {
-			return Order{}, err
-		}
-		return r.Get(ctx, id)
-	}
-	for _, key := range []string{"trade_id", "amount", "actual_amount", "receive_address", "token", "block_transaction_id"} {
-		if strings.TrimSpace(fields[key]) == "" {
-			_ = r.recordSyncFailure(ctx, id, payloadHash, "成功响应字段缺失")
-			return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusBadGateway, "支付同步响应无效")
-		}
-	}
-	callback := payment.Callback{PID: fields["pid"], TradeID: fields["trade_id"], OrderNo: fields["order_id"], Amount: fields["amount"], ActualAmount: fields["actual_amount"], ReceiveAddress: fields["receive_address"], Token: fields["token"], TransactionID: fields["block_transaction_id"], Status: status, Fields: fields}
-	if err = (payment.SQLRepository{DB: r.DB, Invites: r.Invites, Accounts: r.Accounts}).Process(ctx, callback); err != nil {
-		_ = r.recordSyncFailure(ctx, id, payloadHash, "支付入账校验失败")
-		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusBadGateway, "支付同步入账失败")
+	result, reason, targetStatus, clearActive := syncOutcome(status)
+	if err = r.recordSyncOutcome(ctx, id, status, payloadHash, result, reason, targetStatus, clearActive); err != nil {
+		return Order{}, err
 	}
 	return r.Get(ctx, id)
 }
 
-func responseFields(raw []byte) (map[string]string, error) {
-	var rawFields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &rawFields); err != nil {
-		return nil, err
+func buildSyncURL(template, tradeID string) (string, error) {
+	template = strings.TrimSpace(template)
+	if strings.Count(template, syncTradeIDToken) != 1 || strings.TrimSpace(tradeID) == "" {
+		return "", errors.New("invalid sync URL template")
 	}
-	fields := make(map[string]string, len(rawFields))
-	for key, value := range rawFields {
-		var text string
-		if json.Unmarshal(value, &text) != nil {
-			var number json.Number
-			if json.Unmarshal(value, &number) != nil {
-				return nil, errors.New("invalid sync field")
-			}
-			text = number.String()
-		}
-		fields[key] = text
+	raw := strings.Replace(template, syncTradeIDToken, url.PathEscape(tradeID), 1)
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		return "", errors.New("invalid sync URL")
 	}
-	return fields, nil
+	return raw, nil
 }
+
+func parseGMStatus(raw []byte, expectedTradeID string) (int, error) {
+	var envelope gmPayStatusEnvelope
+	if err := json.Unmarshal(raw, &envelope); err != nil || envelope.StatusCode != http.StatusOK || envelope.Data == nil || envelope.Data.TradeID != expectedTradeID {
+		return 0, errors.New("invalid GM Pay status response")
+	}
+	if envelope.Data.Status < 1 || envelope.Data.Status > 4 {
+		return 0, errors.New("unknown GM Pay order status")
+	}
+	return envelope.Data.Status, nil
+}
+
+func syncOutcome(status int) (result, reason, targetStatus string, clearActive bool) {
+	switch status {
+	case 1:
+		return "sync_pending", "网关等待支付", "pending", false
+	case 2:
+		return "paid_no_callback", "网关已支付但缺少有效签名回调，请在GM Pay重发回调", "callback_exception", false
+	case 3:
+		return "sync_expired", "网关订单已过期", "expired", true
+	case 4:
+		return "sync_select", "网关等待选择支付网络或币种", "gateway_unknown", false
+	default:
+		return "sync_rejected", "未知网关状态", "gateway_unknown", false
+	}
+}
+
+func hashSyncPayload(raw []byte) string {
+	hash := sha256.Sum256(raw)
+	return hex.EncodeToString(hash[:])
+}
+
+func hashSyncFailure(code string) string { return hashSyncPayload([]byte(code)) }
 
 func (r SQLRepository) recordSyncFailure(ctx context.Context, id int64, hash, reason string) error {
-	return r.recordSync(ctx, id, nil, hash, "sync_rejected", reason)
-}
-
-func (r SQLRepository) recordSyncPending(ctx context.Context, id int64, status int, hash string) error {
-	return r.recordSync(ctx, id, &status, hash, "sync_pending", "网关尚未完成支付")
-}
-
-func (r SQLRepository) recordSync(ctx context.Context, id int64, gatewayStatus *int, hash, result, reason string) error {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var orderNo string
-	if err = tx.QueryRowContext(ctx, `SELECT order_no FROM reader_recharge_orders WHERE id=$1 FOR UPDATE`, id).Scan(&orderNo); err != nil {
+	var orderNo, status string
+	if err = tx.QueryRowContext(ctx, `SELECT order_no,status FROM reader_recharge_orders WHERE id=$1 FOR UPDATE`, id).Scan(&orderNo, &status); err != nil {
 		return err
 	}
-	status := "gateway_unknown"
-	if result == "sync_rejected" {
-		status = "callback_exception"
+	if status == "paid" {
+		return tx.Commit()
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_status=COALESCE($1,gateway_status),status=$2,updated_at=now() WHERE id=$3 AND status <> 'paid'`, gatewayStatus, status, id); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO reader_payment_callback_logs(provider,recharge_order_id,merchant_order_no,payload_hash,signature_valid,processing_result,failure_reason,response_status,response_body,request_time) VALUES('epusdt',$1,$2,$3,false,'sync_rejected',$4,502,'sync',now())`, id, orderNo, hash, reason); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r SQLRepository) recordSyncOutcome(ctx context.Context, id int64, gatewayStatus int, hash, result, reason, targetStatus string, clearActive bool) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var orderNo, status string
+	if err = tx.QueryRowContext(ctx, `SELECT order_no,status FROM reader_recharge_orders WHERE id=$1 FOR UPDATE`, id).Scan(&orderNo, &status); err != nil {
+		return err
+	}
+	if status == "paid" {
+		return tx.Commit()
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_status=$1,status=$2,active_reader_id=CASE WHEN $3 THEN NULL ELSE active_reader_id END,updated_at=now() WHERE id=$4`, gatewayStatus, targetStatus, clearActive, id); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO reader_payment_callback_logs(provider,recharge_order_id,merchant_order_no,payload_hash,signature_valid,processing_result,failure_reason,response_status,response_body,request_time) VALUES('epusdt',$1,$2,$3,false,$4,$5,200,'sync',now())`, id, orderNo, hash, result, reason); err != nil {

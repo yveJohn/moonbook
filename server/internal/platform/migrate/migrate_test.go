@@ -119,9 +119,40 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00071_legacy_txt_database_facts.sql",
 		"00072_membership_product_variants.sql",
 		"00073_payment_channel_secure_crud.sql",
+		"00074_payment_channel_base_urls.sql",
+		"00075_disable_incomplete_payment_channels.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestPaymentChannelBaseURLMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00074_payment_channel_base_urls.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{"epusdt_base_url varchar(2048)", "reader_base_url varchar(2048)", "DROP CONSTRAINT reader_payment_channels_enabled_config_check", "NOT VALID", "Moonbook migrations are forward-only"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("payment channel base URL migration missing %q", required)
+		}
+	}
+}
+
+func TestDisableIncompletePaymentChannelsMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00075_disable_incomplete_payment_channels.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{"UPDATE reader_payment_channels", "SET enabled = false", "epusdt_base_url = '' OR reader_base_url = ''", "VALIDATE CONSTRAINT reader_payment_channels_enabled_config_check", "Moonbook migrations are forward-only"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("incomplete payment channel migration missing %q", required)
+		}
+	}
+	if strings.Contains(text, "TRUNCATE") || strings.Contains(text, "DELETE FROM") {
+		t.Fatal("incomplete payment channel migration must not remove business data")
 	}
 }
 

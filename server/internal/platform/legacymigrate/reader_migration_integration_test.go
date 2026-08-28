@@ -110,6 +110,7 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_recharge_orders WHERE merchant_pid_sha256='legacy-merchant-pid'`, nil, 0)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE id=9007199254743801 AND source_ip_sha256=$1 AND payload_snapshot->>'trade_id'='TRADE-FIXTURE'`, []any{sha256Text("203.0.113.9")}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_payment_callback_logs WHERE source_ip_sha256 IN ('203.0.113.9','203.0.113.10')`, nil, 0)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_payment_channels WHERE id=1 AND source_type='legacy' AND enabled=false`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_daily_activity WHERE reader_id=$1 AND source_type='legacy'`, []any{readerIDs[0]}, 2)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_daily_activity WHERE reader_id=$1 AND activity_date='2026-08-14' AND first_active_at='2026-08-14 00:01:02+08'`, []any{readerIDs[0]}, 1)
 	reconcileReport, err := reconcile.Wallets(ctx, target)

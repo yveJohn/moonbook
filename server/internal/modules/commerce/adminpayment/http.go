@@ -34,11 +34,8 @@ type channelRequest struct {
 	Network               string  `json:"network"`
 	MerchantPID           *string `json:"merchantPid"`
 	Secret                *string `json:"secret"`
-	CreateURL             string  `json:"createUrl"`
-	NotifyURL             string  `json:"notifyUrl"`
-	RedirectURL           string  `json:"redirectUrl"`
-	HealthURL             string  `json:"healthUrl"`
-	SyncURL               string  `json:"syncUrl"`
+	EPUSDTBaseURL         string  `json:"epusdtBaseUrl"`
+	ReaderBaseURL         string  `json:"readerBaseUrl"`
 	ConnectTimeoutMS      int     `json:"connectTimeoutMs"`
 	RequestTimeoutMS      int     `json:"requestTimeoutMs"`
 	UnknownReleaseMinutes int     `json:"unknownReleaseMinutes"`
@@ -48,8 +45,7 @@ func (request channelRequest) input() ChannelInput {
 	return ChannelInput{
 		DisplayName: strings.TrimSpace(request.DisplayName), Provider: strings.ToLower(strings.TrimSpace(request.Provider)), Enabled: request.Enabled,
 		Currency: strings.ToLower(strings.TrimSpace(request.Currency)), Token: strings.ToLower(strings.TrimSpace(request.Token)), Network: strings.ToLower(strings.TrimSpace(request.Network)),
-		MerchantPID: request.MerchantPID, Secret: request.Secret, CreateURL: strings.TrimSpace(request.CreateURL), NotifyURL: strings.TrimSpace(request.NotifyURL),
-		RedirectURL: strings.TrimSpace(request.RedirectURL), HealthURL: strings.TrimSpace(request.HealthURL), SyncURL: strings.TrimSpace(request.SyncURL),
+		MerchantPID: request.MerchantPID, Secret: request.Secret, EPUSDTBaseURL: request.EPUSDTBaseURL, ReaderBaseURL: request.ReaderBaseURL,
 		ConnectTimeoutMS: request.ConnectTimeoutMS, RequestTimeoutMS: request.RequestTimeoutMS, UnknownReleaseMinutes: request.UnknownReleaseMinutes,
 	}
 }
@@ -147,11 +143,13 @@ func channelID(c *gin.Context) (int64, bool) {
 }
 
 func render(item Channel) map[string]any {
+	endpoints := item.Endpoints()
 	return map[string]any{
 		"id": strconv.FormatInt(item.ID, 10), "displayName": item.DisplayName, "provider": item.Provider, "enabled": item.Enabled,
 		"currency": item.Currency, "token": item.Token, "network": item.Network, "configured": item.Configured(),
 		"pidConfigured": item.PIDConfigured, "secretConfigured": item.SecretConfigured,
-		"createUrl": item.CreateURL, "notifyUrl": item.NotifyURL, "redirectUrl": item.RedirectURL, "healthUrl": item.HealthURL, "syncUrl": item.SyncURL,
+		"epusdtBaseUrl": item.EPUSDTBaseURL, "readerBaseUrl": item.ReaderBaseURL,
+		"createUrl": endpoints.CreateURL, "notifyUrl": endpoints.NotifyURL, "redirectUrl": endpoints.RedirectURL, "healthUrl": endpoints.HealthURL, "syncUrl": endpoints.SyncURL,
 		"connectTimeoutMs": item.ConnectTimeoutMS, "requestTimeoutMs": item.RequestTimeoutMS, "unknownReleaseMinutes": item.UnknownReleaseMinutes,
 		"archivedAt": item.ArchivedAt, "createdAt": item.CreatedAt, "updatedAt": item.UpdatedAt,
 	}

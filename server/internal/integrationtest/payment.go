@@ -14,6 +14,8 @@ func EnablePaymentChannel(ctx context.Context, db *sql.DB) error {
         enabled=true,
         merchant_pid_ciphertext='integration-test-placeholder',
         secret_ciphertext='integration-test-placeholder',
+        epusdt_base_url='http://127.0.0.1',
+        reader_base_url='http://127.0.0.1',
         create_url='http://127.0.0.1/create',
         notify_url='http://127.0.0.1/notify',
         redirect_url='http://127.0.0.1/redirect',

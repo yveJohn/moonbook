@@ -39,26 +39,26 @@ func TestPaymentChannelEncryptedConfigurationAndHealthCheck(t *testing.T) {
 	input := ChannelInput{
 		DisplayName: "EPUSDT 集成测试", Provider: "epusdt", Enabled: true, Currency: "usd", Token: "usdt", Network: "tron",
 		MerchantPID: strPointer("integration-pid"), Secret: strPointer("integration-secret"),
-		CreateURL: health.URL + "/create", NotifyURL: health.URL + "/notify", RedirectURL: health.URL + "/redirect",
-		HealthURL: health.URL, SyncURL: health.URL + "/sync", ConnectTimeoutMS: 1000, RequestTimeoutMS: 2000, UnknownReleaseMinutes: 12,
+		EPUSDTBaseURL: health.URL, ReaderBaseURL: "https://reader.example",
+		ConnectTimeoutMS: 1000, RequestTimeoutMS: 2000, UnknownReleaseMinutes: 12,
 	}
 
 	var original struct {
-		displayName, pidCipher, secretCipher, createURL, notifyURL, redirectURL, healthURL, syncURL string
-		enabled                                                                                     bool
-		connectMS, requestMS, unknownMinutes                                                        int
+		displayName, pidCipher, secretCipher, epusdtBaseURL, readerBaseURL string
+		enabled                                                            bool
+		connectMS, requestMS, unknownMinutes                               int
 	}
-	err = db.QueryRowContext(ctx, `SELECT display_name,enabled,merchant_pid_ciphertext,secret_ciphertext,create_url,notify_url,redirect_url,health_url,sync_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes FROM reader_payment_channels WHERE id=1`).Scan(
-		&original.displayName, &original.enabled, &original.pidCipher, &original.secretCipher, &original.createURL, &original.notifyURL,
-		&original.redirectURL, &original.healthURL, &original.syncURL, &original.connectMS, &original.requestMS, &original.unknownMinutes,
+	err = db.QueryRowContext(ctx, `SELECT display_name,enabled,merchant_pid_ciphertext,secret_ciphertext,epusdt_base_url,reader_base_url,connect_timeout_ms,request_timeout_ms,unknown_release_minutes FROM reader_payment_channels WHERE id=1`).Scan(
+		&original.displayName, &original.enabled, &original.pidCipher, &original.secretCipher, &original.epusdtBaseURL, &original.readerBaseURL,
+		&original.connectMS, &original.requestMS, &original.unknownMinutes,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), `UPDATE reader_payment_channels SET display_name=$1,enabled=$2,merchant_pid_ciphertext=$3,secret_ciphertext=$4,create_url=$5,notify_url=$6,redirect_url=$7,health_url=$8,sync_url=$9,connect_timeout_ms=$10,request_timeout_ms=$11,unknown_release_minutes=$12,archived_at=NULL WHERE id=1`,
-			original.displayName, original.enabled, original.pidCipher, original.secretCipher, original.createURL, original.notifyURL, original.redirectURL,
-			original.healthURL, original.syncURL, original.connectMS, original.requestMS, original.unknownMinutes)
+		_, _ = db.ExecContext(context.Background(), `UPDATE reader_payment_channels SET display_name=$1,enabled=$2,merchant_pid_ciphertext=$3,secret_ciphertext=$4,epusdt_base_url=$5,reader_base_url=$6,connect_timeout_ms=$7,request_timeout_ms=$8,unknown_release_minutes=$9,archived_at=NULL WHERE id=1`,
+			original.displayName, original.enabled, original.pidCipher, original.secretCipher, original.epusdtBaseURL, original.readerBaseURL,
+			original.connectMS, original.requestMS, original.unknownMinutes)
 	})
 
 	updated, err := repo.Update(ctx, 1, input)
@@ -82,6 +82,9 @@ func TestPaymentChannelEncryptedConfigurationAndHealthCheck(t *testing.T) {
 	credential := runtimeConfig.EPUSDT.Credentials.Current()
 	if credential.PID() != "integration-pid" || credential.Secret() != "integration-secret" || runtimeConfig.EPUSDT.UnknownReleaseWindow != 12*time.Minute {
 		t.Fatal("runtime configuration did not decrypt the saved channel")
+	}
+	if runtimeConfig.EPUSDT.CreateURL.String() != health.URL+createOrderPath || runtimeConfig.EPUSDT.NotifyURL.String() != "https://reader.example"+notifyPath || runtimeConfig.SyncURL != health.URL+syncPath {
+		t.Fatalf("runtime endpoints were not derived: %+v", runtimeConfig)
 	}
 	result, err := NewService(repo).Check(ctx, 1)
 	if err != nil || result.Status != "reachable" || result.ChannelID != 1 {

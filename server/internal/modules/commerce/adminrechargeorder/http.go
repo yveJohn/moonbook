@@ -54,7 +54,11 @@ func (h *Handler) sync(c *gin.Context) {
 		apperror.WriteManagement(c, err)
 		return
 	}
-	managementresponse.OK(c, render(o), "同步完成")
+	message := "同步完成"
+	if o.Status == "callback_exception" && o.GatewayStatus != nil && *o.GatewayStatus == 2 {
+		message = "网关已支付但缺少有效回调，请在GM Pay重发回调"
+	}
+	managementresponse.OK(c, render(o), message)
 }
 
 func renderCallback(v CallbackLog) map[string]any {

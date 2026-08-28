@@ -47,9 +47,9 @@ func TestChannelHTTPResponsesNeverExposeCredentials(t *testing.T) {
 		"displayName":"EPUSDT","provider":"epusdt","enabled":true,
 		"currency":"usd","token":"usdt","network":"tron",
 		"merchantPid":"merchant-sensitive","secret":"secret-sensitive",
-		"createUrl":"https://pay.example/create","notifyUrl":"https://reader.example/notify",
-		"redirectUrl":"https://reader.example/result","healthUrl":"https://pay.example/health",
-		"syncUrl":"https://pay.example/sync","connectTimeoutMs":3000,
+		"epusdtBaseUrl":"https://pay.example","readerBaseUrl":"https://reader.example",
+		"createUrl":"https://attacker.example/create","syncUrl":"https://attacker.example/sync",
+		"connectTimeoutMs":3000,
 		"requestTimeoutMs":10000,"unknownReleaseMinutes":15
 	}`
 	tests := []struct {
@@ -73,13 +73,18 @@ func TestChannelHTTPResponsesNeverExposeCredentials(t *testing.T) {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
 			body := response.Body.String()
-			for _, forbidden := range []string{"merchant-sensitive", "secret-sensitive", `"merchantPid"`, `"secret"`, "ciphertext"} {
+			for _, forbidden := range []string{"merchant-sensitive", "secret-sensitive", `"merchantPid"`, `"secret"`, "ciphertext", "attacker.example"} {
 				if strings.Contains(body, forbidden) {
 					t.Fatalf("response leaked %q: %s", forbidden, body)
 				}
 			}
 			if !strings.Contains(body, `"id":"9223372036854775001"`) || !strings.Contains(body, `"pidConfigured":true`) || !strings.Contains(body, `"secretConfigured":true`) {
 				t.Fatalf("response contract incomplete: %s", body)
+			}
+			for _, required := range []string{`"epusdtBaseUrl":"https://pay.example"`, `"readerBaseUrl":"https://reader.example"`, `"createUrl":"https://pay.example/payments/gmpay/v1/order/create-transaction"`, `"notifyUrl":"https://reader.example/prod-api/reader/payment/epusdt/notify"`, `"syncUrl":"https://pay.example/pay/check-status/{trade_id}"`} {
+				if !strings.Contains(body, required) {
+					t.Fatalf("response missing derived endpoint %s: %s", required, body)
+				}
 			}
 		})
 	}
@@ -89,9 +94,8 @@ func contractChannel() Channel {
 	return Channel{
 		ID: 9223372036854775001, DisplayName: "EPUSDT", Provider: "epusdt", Enabled: true,
 		Currency: "usd", Token: "usdt", Network: "tron", PIDConfigured: true, SecretConfigured: true,
-		CreateURL: "https://pay.example/create", NotifyURL: "https://reader.example/notify",
-		RedirectURL: "https://reader.example/result", HealthURL: "https://pay.example/health",
-		SyncURL: "https://pay.example/sync", ConnectTimeoutMS: 3000, RequestTimeoutMS: 10000,
+		EPUSDTBaseURL: "https://pay.example", ReaderBaseURL: "https://reader.example",
+		ConnectTimeoutMS: 3000, RequestTimeoutMS: 10000,
 		UnknownReleaseMinutes: 15,
 	}
 }

@@ -17,11 +17,8 @@ type Channel struct {
 	Network               string
 	PIDConfigured         bool
 	SecretConfigured      bool
-	CreateURL             string
-	NotifyURL             string
-	RedirectURL           string
-	HealthURL             string
-	SyncURL               string
+	EPUSDTBaseURL         string
+	ReaderBaseURL         string
 	ConnectTimeoutMS      int
 	RequestTimeoutMS      int
 	UnknownReleaseMinutes int
@@ -31,7 +28,13 @@ type Channel struct {
 }
 
 func (c Channel) Configured() bool {
-	return c.PIDConfigured && c.SecretConfigured && c.CreateURL != "" && c.NotifyURL != "" && c.RedirectURL != "" && c.HealthURL != "" && c.SyncURL != ""
+	_, err := deriveEndpoints(c.EPUSDTBaseURL, c.ReaderBaseURL)
+	return c.PIDConfigured && c.SecretConfigured && err == nil
+}
+
+func (c Channel) Endpoints() Endpoints {
+	endpoints, _ := deriveEndpoints(c.EPUSDTBaseURL, c.ReaderBaseURL)
+	return endpoints
 }
 
 type ChannelInput struct {
@@ -43,11 +46,8 @@ type ChannelInput struct {
 	Network               string
 	MerchantPID           *string
 	Secret                *string
-	CreateURL             string
-	NotifyURL             string
-	RedirectURL           string
-	HealthURL             string
-	SyncURL               string
+	EPUSDTBaseURL         string
+	ReaderBaseURL         string
 	ConnectTimeoutMS      int
 	RequestTimeoutMS      int
 	UnknownReleaseMinutes int

@@ -269,15 +269,16 @@ func migrateFinanceRow(ctx context.Context, target *sql.Tx, table string, rows *
 	case "reader_payment_channel":
 		var id int64
 		var provider, currency, token, network string
-		var enabled bool
+		var legacyEnabled bool
 		var updated sql.NullTime
-		if err := rows.Scan(&id, &provider, &enabled, &currency, &token, &network, &updated); err != nil {
+		if err := rows.Scan(&id, &provider, &legacyEnabled, &currency, &token, &network, &updated); err != nil {
 			return 0, nil, err
 		}
 		if strings.TrimSpace(provider) == "" || strings.TrimSpace(currency) == "" || strings.TrimSpace(token) == "" || strings.TrimSpace(network) == "" {
 			return id, migrationRecordError(table, id, "INVALID_PAYMENT_CHANNEL", "legacy payment channel contains an empty required field"), nil
 		}
-		_, err := target.ExecContext(ctx, `INSERT INTO reader_payment_channels(id,provider,enabled,currency,token,network,source_type,source_ref,updated_at) VALUES($1,$2,$3,$4,$5,$6,'legacy',$7,COALESCE($8,now())) ON CONFLICT(id) DO UPDATE SET provider=EXCLUDED.provider,enabled=EXCLUDED.enabled,currency=EXCLUDED.currency,token=EXCLUDED.token,network=EXCLUDED.network,source_type='legacy',source_ref=EXCLUDED.source_ref,updated_at=EXCLUDED.updated_at`, id, provider, enabled, currency, token, network, sourceRef(id), nullableLegacyTime(updated))
+		// Legacy rows do not contain the encrypted credentials or base URLs required by the new runtime.
+		_, err := target.ExecContext(ctx, `INSERT INTO reader_payment_channels(id,provider,enabled,currency,token,network,source_type,source_ref,updated_at) VALUES($1,$2,false,$3,$4,$5,'legacy',$6,COALESCE($7,now())) ON CONFLICT(id) DO UPDATE SET provider=EXCLUDED.provider,enabled=false,currency=EXCLUDED.currency,token=EXCLUDED.token,network=EXCLUDED.network,source_type='legacy',source_ref=EXCLUDED.source_ref,updated_at=EXCLUDED.updated_at`, id, provider, currency, token, network, sourceRef(id), nullableLegacyTime(updated))
 		return id, nil, err
 
 	case "reader_recharge_order":

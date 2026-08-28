@@ -2,9 +2,7 @@ package adminpayment
 
 import (
 	"context"
-	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -19,6 +17,10 @@ func (s *Service) List(ctx context.Context, includeArchived bool) ([]Channel, er
 }
 func (s *Service) Get(ctx context.Context, id int64) (Channel, error) { return s.Repo.Get(ctx, id) }
 func (s *Service) Create(ctx context.Context, input ChannelInput) (Channel, error) {
+	var err error
+	if input, err = normalizeInput(input); err != nil {
+		return Channel{}, err
+	}
 	if err := validateInput(input, true); err != nil {
 		return Channel{}, err
 	}
@@ -27,6 +29,10 @@ func (s *Service) Create(ctx context.Context, input ChannelInput) (Channel, erro
 func (s *Service) Update(ctx context.Context, id int64, input ChannelInput) (Channel, error) {
 	if id <= 0 {
 		return Channel{}, invalid("ID必须是正整数字符串")
+	}
+	var err error
+	if input, err = normalizeInput(input); err != nil {
+		return Channel{}, err
 	}
 	if err := validateInput(input, false); err != nil {
 		return Channel{}, err
@@ -88,14 +94,8 @@ func validateInput(input ChannelInput, create bool) error {
 	if input.MerchantPID != nil && !create && input.Secret == nil {
 		return invalid("修改商户PID时必须同时提交Secret")
 	}
-	for _, item := range []struct{ name, value string }{
-		{name: "创建订单地址", value: input.CreateURL}, {name: "回调地址", value: input.NotifyURL},
-		{name: "跳转地址", value: input.RedirectURL}, {name: "健康检查地址", value: input.HealthURL},
-		{name: "订单同步地址", value: input.SyncURL},
-	} {
-		if err := validateURL(item.value); err != nil {
-			return invalid(item.name + "无效")
-		}
+	if input.EPUSDTBaseURL == "" || input.ReaderBaseURL == "" {
+		return invalid("支付基础地址不能为空")
 	}
 	if input.ConnectTimeoutMS < 100 || input.ConnectTimeoutMS > 30000 || input.RequestTimeoutMS < input.ConnectTimeoutMS || input.RequestTimeoutMS > 120000 {
 		return invalid("支付请求超时配置无效")
@@ -106,15 +106,17 @@ func validateInput(input ChannelInput, create bool) error {
 	return nil
 }
 
-func validateURL(value string) error {
-	if strings.TrimSpace(value) != value || value == "" || len(value) > 2048 {
-		return errors.New("invalid URL")
+func normalizeInput(input ChannelInput) (ChannelInput, error) {
+	var err error
+	input.EPUSDTBaseURL, err = normalizeBaseURL(input.EPUSDTBaseURL)
+	if err != nil {
+		return ChannelInput{}, invalid("EPUSDT基础地址无效")
 	}
-	parsed, err := url.Parse(value)
-	if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || parsed.Opaque != "" {
-		return errors.New("invalid URL")
+	input.ReaderBaseURL, err = normalizeBaseURL(input.ReaderBaseURL)
+	if err != nil {
+		return ChannelInput{}, invalid("读者端基础地址无效")
 	}
-	return nil
+	return input, nil
 }
 
 func invalid(message string) error {

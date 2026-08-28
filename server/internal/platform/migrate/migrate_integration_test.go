@@ -153,6 +153,58 @@ func TestEPUSDTPaymentCreationMigrationScenarios(t *testing.T) {
 	}
 }
 
+func TestPaymentChannelBaseURLMigrationScenarios(t *testing.T) {
+	adminDSN := strings.TrimSpace(os.Getenv("MOONBOOK_MIGRATION_TEST_ADMIN_DSN"))
+	if adminDSN == "" {
+		t.Skip("MOONBOOK_MIGRATION_TEST_ADMIN_DSN 未配置")
+	}
+	adminDB, err := sql.Open("pgx", adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	t.Run("empty database and replay", func(t *testing.T) {
+		db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+		provider, err := NewProvider(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results, err := provider.UpTo(ctx, 75)
+		if err != nil || len(results) != 75 {
+			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
+		}
+		replayed, err := provider.UpTo(ctx, 75)
+		if err != nil || len(replayed) != 0 {
+			t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
+		}
+	})
+
+	t.Run("upgrade disables only incomplete channels", func(t *testing.T) {
+		db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+		provider, err := NewProvider(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if results, err := provider.UpTo(ctx, 73); err != nil || len(results) != 73 {
+			t.Fatalf("migrate to 73: applied=%d err=%v", len(results), err)
+		}
+		if _, err := db.ExecContext(ctx, `UPDATE reader_payment_channels SET enabled=true,merchant_pid_ciphertext='pid',secret_ciphertext='secret',create_url='https://pay.example/create',notify_url='https://reader.example/notify',redirect_url='https://reader.example/recharge',health_url='https://pay.example/',sync_url='https://pay.example/sync' WHERE id=1`); err != nil {
+			t.Fatal(err)
+		}
+		if results, err := provider.UpTo(ctx, 75); err != nil || len(results) != 2 {
+			t.Fatalf("migrate to 75: applied=%d err=%v", len(results), err)
+		}
+		var enabled, validated bool
+		if err := db.QueryRowContext(ctx, `SELECT enabled FROM reader_payment_channels WHERE id=1`).Scan(&enabled); err != nil || enabled {
+			t.Fatalf("incomplete channel enabled=%v err=%v", enabled, err)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT convalidated FROM pg_constraint WHERE conname='reader_payment_channels_enabled_config_check'`).Scan(&validated); err != nil || !validated {
+			t.Fatalf("channel constraint validated=%v err=%v", validated, err)
+		}
+	})
+}
+
 func TestEPUSDTCallbackAttemptAuditMigrationScenarios(t *testing.T) {
 	adminDSN := strings.TrimSpace(os.Getenv("MOONBOOK_MIGRATION_TEST_ADMIN_DSN"))
 	if adminDSN == "" {
