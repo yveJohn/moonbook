@@ -118,9 +118,31 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00070_forum_source_connection_check.sql",
 		"00071_legacy_txt_database_facts.sql",
 		"00072_membership_product_variants.sql",
+		"00073_payment_channel_secure_crud.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestPaymentChannelSecureCRUDMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00073_payment_channel_secure_crud.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"merchant_pid_ciphertext text",
+		"secret_ciphertext text",
+		"reader_payment_channels_active_provider_uidx",
+		"WHERE archived_at IS NULL",
+		"/reader/payment/channels/:id",
+		"'DELETE'",
+		"Moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("payment channel secure CRUD migration missing %q", required)
+		}
 	}
 }
 
