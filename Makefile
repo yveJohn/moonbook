@@ -19,7 +19,8 @@ PLUGIN             ?= email
 
 .PHONY: verify verify-quality verify-management verify-reader verify-integration \
 	verify-migration verify-e2e verify-compose verify-monitoring verify-security \
-	verify-m1 verify-m3 verify-maintenance verify-production-config scan-secrets test-reader-integration
+	verify-m1 verify-m3 verify-maintenance verify-production-config verify-deploy-script \
+	scan-secrets test-reader-integration
 
 verify:
 	MOONBOOK_VERIFY_STAGES="$(STAGES)" ./scripts/verify-all.sh
@@ -62,6 +63,9 @@ verify-maintenance:
 
 verify-production-config:
 	./scripts/verify-production-config.sh "$(ENV_FILE)"
+
+verify-deploy-script:
+	./scripts/test-deploy-production.sh
 
 scan-secrets:
 	./scripts/scan-secrets.sh

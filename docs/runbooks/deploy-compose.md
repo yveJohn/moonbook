@@ -83,6 +83,30 @@ docker compose --env-file .env start
 
 升级不能直接用可覆盖 tag 执行 `up -d`。必须固定发布 commit、应用镜像 digest、配置版本和迁移边界，先完成协调备份，再按“目标镜像迁移、应用层替换、健康/业务/财务冒烟、观察或受控回退”的顺序执行。完整命令和数据库迁移后的回退限制见 `docs/runbooks/upgrade-compose.md`；本地固定提交演练证据见 `docs/verification/m7-compose-upgrade-rehearsal.md`。
 
+### 本地构建远程发布脚本
+
+`scripts/deploy-production.sh` 默认在本地构建当前 Git 提交的 Linux AMD64 Server、管理前端和 Reader 镜像，以短提交号作为不可变标签，打包并校验后上传到 `root@101.32.210.229:/opt/moonbook-app`。生产服务器只导入镜像、运行版本化迁移和替换应用容器，不编译源码。
+
+先检查计划或只生成发布物：
+
+```bash
+scripts/deploy-production.sh --dry-run
+scripts/deploy-production.sh --build-only --output-dir /absolute/path/outside/repository
+```
+
+真实发布必须在生产 `.env` 已配置 `MOONBOOK_APP_MASTER_KEY`、完成升级前门禁且获得本次发布授权后，显式确认完整目标：
+
+```bash
+scripts/deploy-production.sh \
+  --confirm-target root@101.32.210.229:/opt/moonbook-app
+```
+
+脚本不上传或打印生产 `.env`，不会执行 `docker compose down`、删除卷、删除旧镜像或回退数据库。它在远程原子维护不含 Secret 的 `compose.release.yml` 和 `compose.release.previous.yml`；健康失败时只输出上一版本镜像恢复命令，执行恢复前仍需按升级 Runbook 确认迁移兼容性。自动化测试使用本地命令替身，不连接生产：
+
+```bash
+make verify-deploy-script
+```
+
 ## 配置与秘密
 
 - `.env.example` 只含本地开发占位值，不能用于生产。
