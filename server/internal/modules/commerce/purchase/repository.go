@@ -77,10 +77,9 @@ func (r SQLRepository) BuyMembership(ctx context.Context, readerID, productID in
 	}
 	var productName string
 	var price int64
-	var allowBonus bool
 	var duration sql.NullInt64
 	var productType string
-	err = executor.QueryRowContext(ctx, `SELECT product_name,price_coin,duration_days,product_type,allow_bonus_coin FROM commerce_products WHERE id=$1 AND product_type='membership' AND sale_status='on_sale'`, productID).Scan(&productName, &price, &duration, &productType, &allowBonus)
+	err = executor.QueryRowContext(ctx, `SELECT product_name,price_coin,duration_days,product_type FROM commerce_products WHERE id=$1 AND product_type='membership' AND sale_status='on_sale'`, productID).Scan(&productName, &price, &duration, &productType)
 	if err != nil {
 		return Order{}, ErrProductUnavailable
 	}
@@ -91,7 +90,7 @@ func (r SQLRepository) BuyMembership(ctx context.Context, readerID, productID in
 	if err != nil {
 		return Order{}, err
 	}
-	bonus, recharge, err := debitTx(ctx, executor, readerID, price, o.ID, o.OrderNo, "membership_purchase", allowBonus)
+	bonus, recharge, err := debitRechargeOnlyTx(ctx, executor, readerID, price, o.ID, o.OrderNo, "membership_purchase")
 	if err != nil {
 		return Order{}, err
 	}
@@ -125,8 +124,7 @@ func (r SQLRepository) BuyChapter(ctx context.Context, readerID int64, snapshot 
 	var productID sql.NullInt64
 	var productName string
 	var productPrice sql.NullInt64
-	var allowBonus bool
-	if err = executor.QueryRowContext(ctx, `SELECT id,product_name,price_coin,allow_bonus_coin FROM commerce_products WHERE product_type='chapter' AND target_id=$1 AND sale_status='on_sale'`, snapshot.TargetID).Scan(&productID, &productName, &productPrice, &allowBonus); err == nil {
+	if err = executor.QueryRowContext(ctx, `SELECT id,product_name,price_coin FROM commerce_products WHERE product_type='chapter' AND target_id=$1 AND sale_status='on_sale'`, snapshot.TargetID).Scan(&productID, &productName, &productPrice); err == nil {
 		price = productPrice.Int64
 	} else if err != sql.ErrNoRows {
 		return ChapterResult{}, err
@@ -150,7 +148,7 @@ func (r SQLRepository) BuyChapter(ctx context.Context, readerID int64, snapshot 
 	if err != nil {
 		return ChapterResult{}, err
 	}
-	bonus, recharge, err := debitTx(ctx, executor, readerID, price, o.ID, o.OrderNo, "chapter_purchase", allowBonus)
+	bonus, recharge, err := debitMixedTx(ctx, executor, readerID, price, o.ID, o.OrderNo, "chapter_purchase")
 	if err != nil {
 		return ChapterResult{}, err
 	}
@@ -173,8 +171,7 @@ func (r SQLRepository) BuyBook(ctx context.Context, readerID int64, snapshot nov
 	}
 	var pid, price int64
 	var name string
-	var allowBonus bool
-	if err = executor.QueryRowContext(ctx, `SELECT id,product_name,price_coin,allow_bonus_coin FROM commerce_products WHERE product_type='book' AND target_id=$1 AND sale_status='on_sale'`, snapshot.TargetID).Scan(&pid, &name, &price, &allowBonus); err != nil {
+	if err = executor.QueryRowContext(ctx, `SELECT id,product_name,price_coin FROM commerce_products WHERE product_type='book' AND target_id=$1 AND sale_status='on_sale'`, snapshot.TargetID).Scan(&pid, &name, &price); err != nil {
 		return Order{}, ErrProductUnavailable
 	}
 	if expected != price {
@@ -184,7 +181,7 @@ func (r SQLRepository) BuyBook(ctx context.Context, readerID int64, snapshot nov
 	if err != nil {
 		return Order{}, err
 	}
-	bonus, recharge, err := debitTx(ctx, executor, readerID, price, o.ID, o.OrderNo, "book_purchase", allowBonus)
+	bonus, recharge, err := debitMixedTx(ctx, executor, readerID, price, o.ID, o.OrderNo, "book_purchase")
 	if err != nil {
 		return Order{}, err
 	}
@@ -224,7 +221,15 @@ func insertOrderTx(ctx context.Context, tx transaction.DBTX, readerID int64, typ
 	err := tx.QueryRowContext(ctx, `INSERT INTO reader_purchase_orders(order_no,reader_id,order_type,product_id,product_type,target_id,book_id_snapshot,product_name_snapshot,price_coin_snapshot,chapter_word_count_snapshot,pricing_word_unit_snapshot,pricing_coin_unit_snapshot,idempotency_key,status,paid_time) VALUES($1,$2,$3,NULLIF($4::bigint,0),$5,NULLIF($6::bigint,0),NULLIF($7,'')::bigint,$8,$9,NULLIF($10::integer,0),NULLIF($11::integer,0),NULLIF($12::bigint,0),$13,'paid',now()) RETURNING id::text,paid_time,created_at,updated_at`, order, readerID, typ, productID, productType, targetID, bookID, name, price, words, wordUnit, coinUnit, key).Scan(&o.ID, &o.PaidTime, &o.CreateTime, &o.UpdateTime)
 	return o, err
 }
-func debitTx(ctx context.Context, tx transaction.DBTX, readerID, amount int64, orderID string, orderNo, biz string, allowBonus bool) (int64, int64, error) {
+func debitMixedTx(ctx context.Context, tx transaction.DBTX, readerID, amount int64, orderID string, orderNo, biz string) (int64, int64, error) {
+	return debitTx(ctx, tx, readerID, amount, orderID, orderNo, biz, true)
+}
+
+func debitRechargeOnlyTx(ctx context.Context, tx transaction.DBTX, readerID, amount int64, orderID string, orderNo, biz string) (int64, int64, error) {
+	return debitTx(ctx, tx, readerID, amount, orderID, orderNo, biz, false)
+}
+
+func debitTx(ctx context.Context, tx transaction.DBTX, readerID, amount int64, orderID string, orderNo, biz string, useBonus bool) (int64, int64, error) {
 	var bonusBalance, rechargeBalance int64
 	if e := tx.QueryRowContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, readerID).Err(); e != nil {
 		return 0, 0, e
@@ -233,7 +238,7 @@ func debitTx(ctx context.Context, tx transaction.DBTX, readerID, amount int64, o
 		return 0, 0, e
 	}
 	bonus := amount
-	if !allowBonus {
+	if !useBonus {
 		bonus = 0
 	}
 	if bonus > bonusBalance {

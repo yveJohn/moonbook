@@ -31,6 +31,7 @@
 本节前六项为当前结论；其后按时间保留实施证据。历史发现不代表当前仍未完成，发生冲突时以总览、`m7-readiness-audit.md` 和对应报告的“最终复审”结论为准。
 
 - 生产验收发现 Reader 分类 DTO 错误输出 `code/name`，而冻结前端读取 `categoryCode/categoryName`，造成分类数据存在但按钮文字为空。共享分类序列化已按冻结契约修复，主分类、子分类和书籍详情标签的单元测试及真实 PostgreSQL/Redis/MinIO HTTP 集成测试通过；无需重新迁移分类数据。
+- Reader 购买余额误判已关闭：普通计价章节、固定价章节和整书恢复旧系统的金币优先、钻石补足语义，会员固定只使用钻石，不再受商品 `allow_bonus_coin` 错误配置影响；商品迁移重跑会同步抵扣、有效期、排序及来源字段。Commerce 全包测试、定向 `go vet`、真实 PostgreSQL 购买测试以及只读 MySQL 8.4 到 PostgreSQL 17 的迁移重跑测试通过。
 
 - GVA BSL 1.1 Production Use 商业许可证与静态二进制 `NOASSERTION` 许可证处置仍需生产前书面证据；Reader 依赖和三镜像可修复 High/Critical 已清零。
 - 旧库 gzip 已在隔离 MySQL 完整恢复，实际 SQL 为 3,834,607,260 字节、耗时 64 秒；此前依据 ISIZE 推算的 8,129,574,556 字节已被否定。当前容量直接阻断项是 16 个 `novel_txt_import_task` 原文件及受控清单缺失，业务迁移尚未开始，详见 `docs/verification/m6-full-copy-rehearsal.md`。

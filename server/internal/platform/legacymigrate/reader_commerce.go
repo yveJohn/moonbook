@@ -119,7 +119,7 @@ func runCommerceTable(ctx context.Context, source *sql.DB, target *sql.Tx, table
 				}
 			}
 			if scanErr == nil && recordError == nil {
-				_, scanErr = target.ExecContext(ctx, `INSERT INTO commerce_products(id,product_type,target_id,product_name,price_coin,allow_bonus_coin,duration_days,sale_status,sort_order,source_type,source_ref,created_at,updated_at) VALUES($1,$2,NULLIF($3::bigint,0),$4,$5,$6,$7,$8,$9,'legacy',$10,COALESCE($11,now()),COALESCE($12,now())) ON CONFLICT(id) DO UPDATE SET product_name=EXCLUDED.product_name,price_coin=EXCLUDED.price_coin,sale_status=EXCLUDED.sale_status,updated_at=EXCLUDED.updated_at`, id, s1, a, s2, b, flag, n1, s3, c, strconv.FormatInt(id, 10), nullableLegacyTime(t1), nullableLegacyTime(t2))
+				_, scanErr = target.ExecContext(ctx, `INSERT INTO commerce_products(id,product_type,target_id,product_name,price_coin,allow_bonus_coin,duration_days,sale_status,sort_order,source_type,source_ref,created_at,updated_at) VALUES($1,$2,NULLIF($3::bigint,0),$4,$5,$6,$7,$8,$9,'legacy',$10,COALESCE($11,now()),COALESCE($12,now())) ON CONFLICT(id) DO UPDATE SET product_type=EXCLUDED.product_type,target_id=EXCLUDED.target_id,product_name=EXCLUDED.product_name,price_coin=EXCLUDED.price_coin,allow_bonus_coin=EXCLUDED.allow_bonus_coin,duration_days=EXCLUDED.duration_days,sale_status=EXCLUDED.sale_status,sort_order=EXCLUDED.sort_order,source_type=EXCLUDED.source_type,source_ref=EXCLUDED.source_ref,updated_at=EXCLUDED.updated_at`, id, s1, a, s2, b, flag, n1, s3, c, strconv.FormatInt(id, 10), nullableLegacyTime(t1), nullableLegacyTime(t2))
 			}
 		case "reader_membership_grant":
 			var legacyGrantType, grantNo, legacyStatus string

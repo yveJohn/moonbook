@@ -40,7 +40,7 @@ func TestMembershipAndBookPurchaseAreAtomicAndIdempotent(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO novel_books(id,primary_category_id,category_code,category_name,book_name,author_id,author_name,publish_status,source_type) VALUES($1,$2,$3,$3,'集成整书',$4,$3,'published','manual')`, bookID, categoryID, username, authorID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO commerce_products(id,product_type,target_id,product_name,price_coin,allow_bonus_coin,duration_days,sale_status) VALUES($1,'membership',NULL,'集成会员',3,false,30,'on_sale'),($2,'book',$3,'集成整书',7,true,NULL,'on_sale')`, membershipID, bookProductID, bookID); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO commerce_products(id,product_type,target_id,product_name,price_coin,allow_bonus_coin,duration_days,sale_status) VALUES($1,'membership',NULL,'集成会员',3,true,30,'on_sale'),($2,'book',$3,'集成整书',7,false,NULL,'on_sale')`, membershipID, bookProductID, bookID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id,bonus_coin_balance,recharge_coin_balance) VALUES($1,5,5)`, readerID); err != nil {
@@ -67,6 +67,9 @@ func TestMembershipAndBookPurchaseAreAtomicAndIdempotent(t *testing.T) {
 	if m.Status != "paid" || m.PaidTime == nil || m.CreateTime.IsZero() || m.UpdateTime.IsZero() {
 		t.Fatalf("membership=%+v", m)
 	}
+	if m.BonusCoinAmount != "0" || m.RechargeCoinAmount != "3" {
+		t.Fatalf("membership debit=%+v", m)
+	}
 	b, err := service.BuyBook(ctx, readerID, fmtID(bookID), "7")
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +87,53 @@ func TestMembershipAndBookPurchaseAreAtomicAndIdempotent(t *testing.T) {
 	}
 	if balance != 0 {
 		t.Fatalf("balance=%d", balance)
+	}
+}
+
+func TestMembershipPurchaseDoesNotUseBonusBalance(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	base := time.Now().UnixNano()
+	readerID, productID := base, base+1
+	username := "membership-recharge-only-it-" + integrationtest.Prefix()
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash,status) VALUES($1,$2,'x','enabled')`, readerID, username); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO commerce_products(id,product_type,target_id,product_name,price_coin,allow_bonus_coin,duration_days,sale_status) VALUES($1,'membership',NULL,'仅钻石会员',5,true,30,'on_sale')`, productID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id,bonus_coin_balance,recharge_coin_balance) VALUES($1,5,4)`, readerID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		q := context.Background()
+		_, _ = db.ExecContext(q, `DELETE FROM commerce_membership_grants WHERE reader_id=$1`, readerID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_purchase_orders WHERE reader_id=$1`, readerID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_wallet_ledgers WHERE reader_id=$1`, readerID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_wallets WHERE reader_id=$1`, readerID)
+		_, _ = db.ExecContext(q, `DELETE FROM commerce_products WHERE id=$1`, productID)
+		_, _ = db.ExecContext(q, `DELETE FROM reader_accounts WHERE id=$1`, readerID)
+	})
+	service := NewService(SQLRepository{DB: db}, transaction.New(db), readerprovider.NewAccount(db), nil)
+	if _, err := service.BuyMembership(ctx, readerID, fmtID(productID), "membership-insufficient-"+integrationtest.Prefix()); !errors.Is(err, ErrInsufficientBalance) {
+		t.Fatalf("membership purchase err=%v", err)
+	}
+	var bonusBalance, rechargeBalance, orderCount, ledgerCount, grantCount int
+	if err := db.QueryRowContext(ctx, `SELECT bonus_coin_balance,recharge_coin_balance FROM reader_wallets WHERE reader_id=$1`, readerID).Scan(&bonusBalance, &rechargeBalance); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_purchase_orders WHERE reader_id=$1`, readerID).Scan(&orderCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_wallet_ledgers WHERE reader_id=$1`, readerID).Scan(&ledgerCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM commerce_membership_grants WHERE reader_id=$1`, readerID).Scan(&grantCount); err != nil {
+		t.Fatal(err)
+	}
+	if bonusBalance != 5 || rechargeBalance != 4 || orderCount != 0 || ledgerCount != 0 || grantCount != 0 {
+		t.Fatalf("wallet=%d/%d orders=%d ledgers=%d grants=%d", bonusBalance, rechargeBalance, orderCount, ledgerCount, grantCount)
 	}
 }
 
@@ -229,7 +279,7 @@ func TestChapterQuotesAndDependencyFailuresAreAtomic(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO commerce_products(id,product_type,target_id,product_name,price_coin,allow_bonus_coin,sale_status) VALUES($1,'chapter',$2,'固定价章节',9,false,'on_sale'),($3,'book',$4,'草稿整书',5,false,'on_sale')`, fixedProductID, fixedChapterID, draftBookProductID, draftBookID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id,recharge_coin_balance) VALUES($1,100)`, readerID); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id,bonus_coin_balance,recharge_coin_balance) VALUES($1,13,100)`, readerID); err != nil {
 		t.Fatal(err)
 	}
 	var oldWordUnit int
@@ -262,6 +312,9 @@ func TestChapterQuotesAndDependencyFailuresAreAtomic(t *testing.T) {
 	if err != nil || word.PurchaseStatus != "paid" || word.Order == nil || word.Quote.WordCount != 1201 || word.Quote.PriceCoin != "4" {
 		t.Fatalf("word result=%+v err=%v", word, err)
 	}
+	if word.Order.BonusCoinAmount != "4" || word.Order.RechargeCoinAmount != "0" {
+		t.Fatalf("word debit=%+v", word.Order)
+	}
 	free, err := service.BuyChapter(ctx, readerID, fmtID(freeChapterID), "0", "free")
 	if err != nil || free.PurchaseStatus != "free" || free.Order != nil || free.Quote.PriceCoin != "0" {
 		t.Fatalf("free result=%+v err=%v", free, err)
@@ -273,6 +326,9 @@ func TestChapterQuotesAndDependencyFailuresAreAtomic(t *testing.T) {
 	fixed, err := service.BuyChapter(ctx, readerID, fmtID(fixedChapterID), "9", "fixed-paid")
 	if err != nil || fixed.PurchaseStatus != "paid" || fixed.Order == nil || fixed.Order.ProductID != fmtID(fixedProductID) {
 		t.Fatalf("fixed result=%+v err=%v", fixed, err)
+	}
+	if fixed.Order.BonusCoinAmount != "9" || fixed.Order.RechargeCoinAmount != "0" {
+		t.Fatalf("fixed debit=%+v", fixed.Order)
 	}
 	if _, err := service.BuyChapter(ctx, readerID, fmtID(disabledChapterID), "2", "disabled"); !errors.Is(err, ErrProductUnavailable) {
 		t.Fatalf("disabled chapter err=%v", err)

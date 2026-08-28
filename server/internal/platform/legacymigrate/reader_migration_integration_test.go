@@ -40,10 +40,13 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	const chapterID int64 = 9007199254742101
 	readerIDs := []int64{9007199254740993, 9007199254740994, 9007199254740995}
 	migration := fmt.Sprintf("reader-migration-integration-%d", time.Now().UnixNano())
+	rerunMigration := migration + "-product-rerun"
 
 	cleanupReaderMigrationFixture(t, target, migration, readerIDs, bookID, chapterID, categoryID, authorID)
+	cleanupReaderMigrationFixture(t, target, rerunMigration, readerIDs, bookID, chapterID, categoryID, authorID)
 	t.Cleanup(func() {
 		cleanupReaderMigrationFixture(t, target, migration, readerIDs, bookID, chapterID, categoryID, authorID)
+		cleanupReaderMigrationFixture(t, target, rerunMigration, readerIDs, bookID, chapterID, categoryID, authorID)
 		target.Close()
 	})
 	seedReaderMigrationTargets(t, target, categoryID, authorID, bookID, chapterID)
@@ -59,6 +62,19 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	if err := runner.Run(ctx, stages...); err != nil {
 		t.Fatalf("idempotent rerun: %v", err)
 	}
+	if _, err := target.ExecContext(ctx, `UPDATE commerce_products SET allow_bonus_coin=false,sort_order=99,source_type='manual',source_ref='corrupt' WHERE id=9007199254741201`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := target.ExecContext(ctx, `UPDATE commerce_products SET allow_bonus_coin=true,duration_days=7,sort_order=99,source_type='manual',source_ref='corrupt' WHERE id=9007199254741202`); err != nil {
+		t.Fatal(err)
+	}
+	rerun, err := NewRunner(source, target, rerunMigration, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rerun.Run(ctx, ReaderCommerceStage{}); err != nil {
+		t.Fatalf("product migration rerun: %v", err)
+	}
 
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_accounts WHERE id IN ($1,$2)`, []any{readerIDs[0], readerIDs[1]}, 2)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_accounts WHERE id=$1 AND password_algorithm='bcrypt' AND status='enabled'`, []any{readerIDs[0]}, 1)
@@ -71,6 +87,8 @@ func TestReaderMigrationWithMySQLAndPostgres(t *testing.T) {
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM reader_invite_relations WHERE id=9007199254741102 AND invite_code_id=9007199254741101`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_products WHERE id=9007199254741201 AND target_id=$1 AND source_type='legacy'`, []any{bookID}, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_products WHERE id IN (9007199254741202,9007199254741203) AND product_type='membership' AND target_id IS NULL AND source_type='legacy'`, nil, 2)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_products WHERE id=9007199254741201 AND allow_bonus_coin AND sort_order=3 AND source_ref='9007199254741201'`, nil, 1)
+	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_products WHERE id=9007199254741202 AND NOT allow_bonus_coin AND duration_days=30 AND sort_order=1 AND source_ref='9007199254741202'`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_membership_grants WHERE id=9007199254741301 AND grant_type='admin' AND status='active' AND source_ref='MG-FIXTURE-1'`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_entitlements WHERE id=9007199254741401 AND permanent AND source_type='legacy_order' AND source_ref='ORDER-FIXTURE-1'`, nil, 1)
 	assertReaderScalar(t, target, ctx, `SELECT count(*) FROM commerce_entitlements WHERE id=9007199254741402 AND NOT permanent AND source_type='legacy' AND status='disabled'`, nil, 1)
