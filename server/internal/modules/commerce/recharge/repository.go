@@ -160,11 +160,25 @@ func (r SQLRepository) Start(ctx context.Context, prepared PreparedOrder) (resul
 		return StartResult{Order: active}, nil
 	}
 	if found {
-		if active.Status != "pending" {
+		switch active.Status {
+		case "pending":
+			if _, err = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET status='superseded',active_reader_id=NULL,failure_code='ORDER_REPLACED',failure_message='Replaced by a newer payment order',updated_at=now() WHERE id=$1`, active.ID); err != nil {
+				return StartResult{}, err
+			}
+		case "paid", "create_failed", "expired", "superseded":
+			result, updateErr := tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET active_reader_id=NULL,updated_at=now() WHERE id=$1::bigint AND active_reader_id=$2 AND status IN ('paid','create_failed','expired','superseded')`, active.ID, prepared.ReaderID)
+			if updateErr != nil {
+				return StartResult{}, updateErr
+			}
+			updated, rowsErr := result.RowsAffected()
+			if rowsErr != nil {
+				return StartResult{}, rowsErr
+			}
+			if updated != 1 {
+				return StartResult{}, fmt.Errorf("active recharge order %s changed while releasing terminal lock", active.ID)
+			}
+		default:
 			return StartResult{}, fmt.Errorf("unexpected active recharge order status %q", active.Status)
-		}
-		if _, err = tx.ExecContext(ctx, `UPDATE reader_recharge_orders SET status='superseded',active_reader_id=NULL,failure_code='ORDER_REPLACED',failure_message='Replaced by a newer payment order',updated_at=now() WHERE id=$1`, active.ID); err != nil {
-			return StartResult{}, err
 		}
 	}
 

@@ -4,6 +4,7 @@ package adminrechargeorder
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -172,7 +173,7 @@ func TestManualPayIsIdempotentAndProtectsGatewayTradeID(t *testing.T) {
 		t.Fatal(err)
 	}
 	var orderID, disabledOrderID int64
-	if err := db.QueryRowContext(ctx, `INSERT INTO reader_recharge_orders(order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status) VALUES($1,$2,$3,'custom',100,'1.00','epusdt','usd','usdt','tron','gateway_unknown') RETURNING id`, "MANUAL-PAY-FIXTURE-"+suffix, readerID, "manual-pay-fixture-"+suffix).Scan(&orderID); err != nil {
+	if err := db.QueryRowContext(ctx, `INSERT INTO reader_recharge_orders(order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status,active_reader_id) VALUES($1,$2,$3,'custom',100,'1.00','epusdt','usd','usdt','tron','gateway_unknown',$4) RETURNING id`, "MANUAL-PAY-FIXTURE-"+suffix, readerID, "manual-pay-fixture-"+suffix, readerID).Scan(&orderID); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.QueryRowContext(ctx, `INSERT INTO reader_recharge_orders(order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status) VALUES($1,$2,$3,'custom',50,'0.50','epusdt','usd','usdt','tron','gateway_unknown') RETURNING id`, "MANUAL-PAY-DISABLED-"+suffix, readerID, "manual-pay-disabled-"+suffix).Scan(&disabledOrderID); err != nil {
@@ -193,9 +194,22 @@ func TestManualPayIsIdempotentAndProtectsGatewayTradeID(t *testing.T) {
 	if err != nil || first.Status != "paid" || first.ID == "" {
 		t.Fatalf("first=%+v err=%v", first, err)
 	}
+	var activeReaderID sql.NullInt64
+	if err := db.QueryRowContext(ctx, `SELECT active_reader_id FROM reader_recharge_orders WHERE id=$1`, orderID).Scan(&activeReaderID); err != nil {
+		t.Fatal(err)
+	}
+	if activeReaderID.Valid {
+		t.Fatalf("active_reader_id remained after manual pay: %+v", activeReaderID)
+	}
 	second, err := service.ManualPay(ctx, orderID, in)
 	if err != nil || second.Status != "paid" {
 		t.Fatalf("second=%+v err=%v", second, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT active_reader_id FROM reader_recharge_orders WHERE id=$1`, orderID).Scan(&activeReaderID); err != nil {
+		t.Fatal(err)
+	}
+	if activeReaderID.Valid {
+		t.Fatalf("active_reader_id restored after idempotent manual pay: %+v", activeReaderID)
 	}
 	var ledgerCount int
 	var balance int64

@@ -166,13 +166,29 @@ func TestRechargeStartReplacesPendingAndProtectsUnknownOrder(t *testing.T) {
 	if expiredStatus != "expired" || expiredActive.Valid {
 		t.Fatalf("expired status=%s active=%+v", expiredStatus, expiredActive)
 	}
-	failed, err := repository.Fail(ctx, afterExpiry.Order.ID, &epusdt.GatewayError{Code: "GATEWAY_REJECTED", Class: epusdt.FailureDefinite, Summary: "rejected"})
+	legacyTradeID := "paid-lock-trade-" + integrationtest.Prefix()
+	if _, err := db.ExecContext(ctx, `UPDATE reader_recharge_orders SET status='paid',gateway_trade_id=$1,actual_amount='1.00000000',paid_time=now() WHERE id=$2`, legacyTradeID, afterExpiry.Order.ID); err != nil {
+		t.Fatal(err)
+	}
+	healed, err := repository.Start(ctx, prepare("after-paid-lock-"+integrationtest.Prefix()))
+	if err != nil || !healed.Created || healed.Order.ID == afterExpiry.Order.ID {
+		t.Fatalf("healed=%+v err=%v", healed, err)
+	}
+	var paidStatus, paidTradeID, paidActualAmount string
+	var paidActive sql.NullInt64
+	if err := db.QueryRowContext(ctx, `SELECT status,active_reader_id,gateway_trade_id,actual_amount::text FROM reader_recharge_orders WHERE id=$1`, afterExpiry.Order.ID).Scan(&paidStatus, &paidActive, &paidTradeID, &paidActualAmount); err != nil {
+		t.Fatal(err)
+	}
+	if paidStatus != "paid" || paidActive.Valid || paidTradeID != legacyTradeID || paidActualAmount != "1.00000000" {
+		t.Fatalf("paid status=%s active=%+v trade=%q actual=%q", paidStatus, paidActive, paidTradeID, paidActualAmount)
+	}
+	failed, err := repository.Fail(ctx, healed.Order.ID, &epusdt.GatewayError{Code: "GATEWAY_REJECTED", Class: epusdt.FailureDefinite, Summary: "rejected"})
 	if err != nil || failed.Status != "create_failed" {
 		t.Fatalf("failed=%+v err=%v", failed, err)
 	}
 	var active sql.NullInt64
 	var credentialRef, merchantPID string
-	if err := db.QueryRowContext(ctx, `SELECT active_reader_id,credential_ref,merchant_pid_snapshot FROM reader_recharge_orders WHERE id=$1`, afterExpiry.Order.ID).Scan(&active, &credentialRef, &merchantPID); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT active_reader_id,credential_ref,merchant_pid_snapshot FROM reader_recharge_orders WHERE id=$1`, healed.Order.ID).Scan(&active, &credentialRef, &merchantPID); err != nil {
 		t.Fatal(err)
 	}
 	if active.Valid || credentialRef != "primary" || merchantPID != "merchant" {

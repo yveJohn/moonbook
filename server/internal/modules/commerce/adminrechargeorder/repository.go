@@ -127,7 +127,7 @@ func (r SQLRepository) ManualPay(ctx context.Context, id, expectedReaderID int64
 	if err = invitereward.GrantFirstRechargeTx(ctx, executor, r.Invites, readerID); err != nil {
 		return Order{}, err
 	}
-	if _, err = executor.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_trade_id=NULLIF($1,''),actual_amount=$2,status='paid',wallet_ledger_id=$3,paid_time=now(),updated_at=now() WHERE id=$4`, in.GatewayTradeID, in.ActualAmount, ledger.ID, orderID); err != nil {
+	if _, err = executor.ExecContext(ctx, `UPDATE reader_recharge_orders SET gateway_trade_id=NULLIF($1,''),actual_amount=$2,status='paid',wallet_ledger_id=$3,active_reader_id=NULL,paid_time=now(),updated_at=now() WHERE id=$4`, in.GatewayTradeID, in.ActualAmount, ledger.ID, orderID); err != nil {
 		return Order{}, err
 	}
 	hash := sha256.Sum256([]byte(strings.Join([]string{orderNo, in.RequestID, in.GatewayTradeID, in.ActualAmount, in.Remark}, "|")))
