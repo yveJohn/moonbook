@@ -12,12 +12,19 @@ import (
 var ErrUnauthorized = errors.New("payment callback unauthorized")
 
 type Service struct {
-	Repo        Repository
-	Credentials *epusdt.CredentialProvider
+	Repo            Repository
+	Credentials     *epusdt.CredentialProvider
+	LoadCredentials CredentialLoader
 }
+
+type CredentialLoader func(context.Context) (*epusdt.CredentialProvider, error)
 
 func NewService(repo Repository, credentials *epusdt.CredentialProvider) *Service {
 	return &Service{Repo: repo, Credentials: credentials}
+}
+
+func NewDynamicService(repo Repository, loader CredentialLoader) *Service {
+	return &Service{Repo: repo, LoadCredentials: loader}
 }
 
 func (s *Service) Process(ctx context.Context, callback Callback) error {
@@ -54,10 +61,17 @@ func (s *Service) verify(ctx context.Context, callback Callback) (VerificationSn
 		}
 		return VerificationSnapshot{}, newProcessingError(FailureDependency, readerDependencyUnavailable)
 	}
-	if s.Credentials == nil {
+	credentials := s.Credentials
+	if s.LoadCredentials != nil {
+		credentials, err = s.LoadCredentials(ctx)
+		if err != nil {
+			return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailureDependency, readerDependencyUnavailable), false, snapshot.OrderID)
+		}
+	}
+	if credentials == nil {
 		return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
 	}
-	credential, ok := s.Credentials.Verification(snapshot.CredentialRef)
+	credential, ok := credentials.Verification(snapshot.CredentialRef)
 	if !ok {
 		return VerificationSnapshot{}, enrichProcessingError(newProcessingError(FailureUnknownCredential, ErrUnauthorized), false, snapshot.OrderID)
 	}

@@ -73,7 +73,7 @@ func newGatewayIntegrationFixture(t *testing.T) gatewayIntegrationFixture {
 	if err := db.QueryRowContext(ctx, `SELECT enabled FROM reader_payment_channels WHERE provider='epusdt'`).Scan(&channelWasEnabled); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE reader_payment_channels SET enabled=true WHERE provider='epusdt'`); err != nil {
+	if err := integrationtest.EnablePaymentChannel(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

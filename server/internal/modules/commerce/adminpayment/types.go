@@ -1,15 +1,56 @@
 package adminpayment
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
+)
 
 type Channel struct {
-	ID         int64
-	Provider   string
-	Enabled    bool
-	Currency   string
-	Token      string
-	Network    string
-	Configured bool
+	ID                    int64
+	DisplayName           string
+	Provider              string
+	Enabled               bool
+	Currency              string
+	Token                 string
+	Network               string
+	PIDConfigured         bool
+	SecretConfigured      bool
+	CreateURL             string
+	NotifyURL             string
+	RedirectURL           string
+	HealthURL             string
+	SyncURL               string
+	ConnectTimeoutMS      int
+	RequestTimeoutMS      int
+	UnknownReleaseMinutes int
+	ArchivedAt            *time.Time
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func (c Channel) Configured() bool {
+	return c.PIDConfigured && c.SecretConfigured && c.CreateURL != "" && c.NotifyURL != "" && c.RedirectURL != "" && c.HealthURL != "" && c.SyncURL != ""
+}
+
+type ChannelInput struct {
+	DisplayName           string
+	Provider              string
+	Enabled               bool
+	Currency              string
+	Token                 string
+	Network               string
+	MerchantPID           *string
+	Secret                *string
+	CreateURL             string
+	NotifyURL             string
+	RedirectURL           string
+	HealthURL             string
+	SyncURL               string
+	ConnectTimeoutMS      int
+	RequestTimeoutMS      int
+	UnknownReleaseMinutes int
 }
 
 type Connectivity struct {
@@ -20,8 +61,19 @@ type Connectivity struct {
 	CheckedAt string
 }
 
+type RuntimeConfig struct {
+	ChannelID int64
+	EPUSDT    epusdt.Config
+	HealthURL string
+	SyncURL   string
+}
+
 type Repository interface {
-	List(ctx context.Context) ([]Channel, error)
-	SetEnabled(ctx context.Context, id int64, enabled bool) (Channel, error)
-	Check(ctx context.Context, id int64) (Connectivity, error)
+	List(context.Context, bool) ([]Channel, error)
+	Get(context.Context, int64) (Channel, error)
+	Create(context.Context, ChannelInput) (Channel, error)
+	Update(context.Context, int64, ChannelInput) (Channel, error)
+	Archive(context.Context, int64) error
+	Runtime(context.Context) (RuntimeConfig, error)
+	RuntimeForChannel(context.Context, int64) (RuntimeConfig, error)
 }

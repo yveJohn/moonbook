@@ -10,10 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
@@ -41,9 +39,17 @@ func (r SQLRepository) Sync(ctx context.Context, id int64) (Order, error) {
 	if o.Status != "pending" && o.Status != "gateway_unknown" && o.Status != "callback_exception" {
 		return Order{}, apperror.New(apperror.CodeConflict, http.StatusConflict, "当前订单状态不允许主动同步")
 	}
-	pid := strings.TrimSpace(os.Getenv("MOONBOOK_EPUSDT_PID"))
-	secret := os.Getenv("MOONBOOK_EPUSDT_SECRET")
-	syncURL := strings.TrimSpace(os.Getenv("MOONBOOK_EPUSDT_SYNC_URL"))
+	if r.PaymentRuntime == nil {
+		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "支付主动同步未配置")
+	}
+	runtimeConfig, configErr := r.PaymentRuntime(ctx)
+	if configErr != nil || runtimeConfig.EPUSDT.Credentials == nil {
+		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "支付主动同步未配置")
+	}
+	credential := runtimeConfig.EPUSDT.Credentials.Current()
+	pid := credential.PID()
+	secret := credential.Secret()
+	syncURL := strings.TrimSpace(runtimeConfig.SyncURL)
 	parsed, parseErr := url.Parse(syncURL)
 	if pid == "" || secret == "" || parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil {
 		return Order{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "支付主动同步未配置")
@@ -57,7 +63,7 @@ func (r SQLRepository) Sync(ctx context.Context, id int64) (Order, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: runtimeConfig.EPUSDT.RequestTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return Order{}, errSyncUnavailable

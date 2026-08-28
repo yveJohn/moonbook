@@ -20,6 +20,7 @@ var ErrPaymentChannelUnavailable = errors.New("payment channel unavailable")
 type SQLRepository struct {
 	DB                   *sql.DB
 	UnknownReleaseWindow time.Duration
+	LoadWindow           func(context.Context) (time.Duration, error)
 	Now                  func() time.Time
 }
 
@@ -107,7 +108,7 @@ func (r SQLRepository) Prepare(ctx context.Context, req CreateRequest) (Prepared
 		price = q.PriceUSDT
 	}
 	var provider, currency, token, network string
-	if err = r.DB.QueryRowContext(ctx, `SELECT provider,currency,token,network FROM reader_payment_channels WHERE provider='epusdt' AND enabled=true`).Scan(&provider, &currency, &token, &network); err != nil {
+	if err = r.DB.QueryRowContext(ctx, `SELECT provider,currency,token,network FROM reader_payment_channels WHERE provider='epusdt' AND enabled=true AND archived_at IS NULL`).Scan(&provider, &currency, &token, &network); err != nil {
 		return PreparedOrder{}, ErrPaymentChannelUnavailable
 	}
 	if provider != "epusdt" || currency != "usd" || token != "usdt" || network != "tron" {
@@ -128,6 +129,12 @@ func (r SQLRepository) Start(ctx context.Context, prepared PreparedOrder) (resul
 		return StartResult{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if prepared.ChannelID > 0 {
+		var enabled bool
+		if err = tx.QueryRowContext(ctx, `SELECT enabled AND archived_at IS NULL FROM reader_payment_channels WHERE id=$1 FOR SHARE`, prepared.ChannelID).Scan(&enabled); err != nil || !enabled {
+			return StartResult{}, ErrPaymentChannelUnavailable
+		}
+	}
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, prepared.ReaderID); err != nil {
 		return StartResult{}, err
 	}

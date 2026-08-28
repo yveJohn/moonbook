@@ -3,12 +3,11 @@ package initialize
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
-	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminpayment"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/recharge"
 	"go.uber.org/zap"
 )
@@ -36,15 +35,12 @@ var buildRechargeExpiryRunner = func() (rechargeExpiryRunner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open recharge expiry database: %w", err)
 	}
-	window, err := epusdt.LoadUnknownReleaseWindow(os.LookupEnv)
-	if err != nil {
-		return nil, fmt.Errorf("load recharge expiry configuration: %w", err)
-	}
+	store := adminpayment.SQLRepository{DB: db}
 	return &recharge.ExpiryWorker{
-		Repo:                 recharge.SQLRepository{DB: db},
-		BatchSize:            rechargeExpiryBatchSize,
-		UnknownReleaseWindow: window,
-		Interval:             rechargeExpiryInterval,
+		Repo:       recharge.SQLRepository{DB: db},
+		BatchSize:  rechargeExpiryBatchSize,
+		LoadWindow: store.UnknownReleaseWindow,
+		Interval:   rechargeExpiryInterval,
 		OnError: func(err error) {
 			zap.L().Error("充值订单过期扫描失败", zap.Error(err))
 		},

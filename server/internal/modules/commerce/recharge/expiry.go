@@ -20,6 +20,7 @@ type ExpiryWorker struct {
 	Repo                 ExpiryRepository
 	BatchSize            int
 	UnknownReleaseWindow time.Duration
+	LoadWindow           func(context.Context) (time.Duration, error)
 	Interval             time.Duration
 	Now                  func() time.Time
 	OnError              func(error)
@@ -33,7 +34,15 @@ func (w *ExpiryWorker) RunOnce(ctx context.Context) (int64, error) {
 	if w.Now != nil {
 		now = w.Now()
 	}
-	return w.Repo.ExpireBatch(ctx, now, w.UnknownReleaseWindow, w.BatchSize)
+	window := w.UnknownReleaseWindow
+	if w.LoadWindow != nil {
+		var err error
+		window, err = w.LoadWindow(ctx)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return w.Repo.ExpireBatch(ctx, now, window, w.BatchSize)
 }
 
 func (w *ExpiryWorker) Run(ctx context.Context) error {
@@ -62,7 +71,7 @@ func (w *ExpiryWorker) Run(ctx context.Context) error {
 }
 
 func (w *ExpiryWorker) validate() error {
-	if w == nil || w.Repo == nil || w.BatchSize <= 0 || w.UnknownReleaseWindow <= 0 {
+	if w == nil || w.Repo == nil || w.BatchSize <= 0 || (w.UnknownReleaseWindow <= 0 && w.LoadWindow == nil) {
 		return errors.New("invalid recharge expiry worker configuration")
 	}
 	return nil
@@ -88,7 +97,10 @@ func (r SQLRepository) ExpireBatch(ctx context.Context, now time.Time, window ti
 }
 
 func (r SQLRepository) expireReader(ctx context.Context, tx *sql.Tx, readerID int64, now time.Time) (int64, error) {
-	window := r.unknownReleaseWindow()
+	window, err := r.unknownReleaseWindow(ctx)
+	if err != nil {
+		return 0, err
+	}
 	if window <= 0 {
 		return 0, errors.New("recharge unknown release window must be positive")
 	}
@@ -100,11 +112,14 @@ func (r SQLRepository) expireReader(ctx context.Context, tx *sql.Tx, readerID in
 	return result.RowsAffected()
 }
 
-func (r SQLRepository) unknownReleaseWindow() time.Duration {
-	if r.UnknownReleaseWindow == 0 {
-		return epusdt.DefaultUnknownReleaseWindow
+func (r SQLRepository) unknownReleaseWindow(ctx context.Context) (time.Duration, error) {
+	if r.LoadWindow != nil {
+		return r.LoadWindow(ctx)
 	}
-	return r.UnknownReleaseWindow
+	if r.UnknownReleaseWindow == 0 {
+		return epusdt.DefaultUnknownReleaseWindow, nil
+	}
+	return r.UnknownReleaseWindow, nil
 }
 
 func (r SQLRepository) now() time.Time {

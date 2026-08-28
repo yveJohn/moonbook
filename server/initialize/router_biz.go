@@ -54,6 +54,7 @@ import (
 	readerprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/provider"
 	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobmonitor"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/secretcrypto"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
@@ -92,37 +93,39 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	readerInvites := readerprovider.NewInvite(db)
 	purchaseTargets := novelprovider.NewPurchase(db)
 	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
-	paymentConfig, paymentConfigErr := epusdt.LoadConfig(true, os.LookupEnv)
-	callbackCredentials, _ := epusdt.LoadCredentialProvider(os.LookupEnv)
-	unknownReleaseWindow, unknownReleaseErr := epusdt.LoadUnknownReleaseWindow(os.LookupEnv)
-	if paymentConfigErr == nil && unknownReleaseErr != nil {
-		paymentConfigErr = unknownReleaseErr
-	}
-	var paymentGateway recharge.Gateway
-	var paymentSnapshot recharge.GatewaySnapshot
-	if paymentConfigErr == nil {
-		client, clientErr := epusdt.NewClient(paymentConfig)
-		if clientErr != nil {
-			paymentConfigErr = clientErr
-		} else {
-			credential := paymentConfig.Credentials.Current()
-			paymentGateway = client
-			paymentSnapshot = recharge.GatewaySnapshot{CredentialRef: credential.Ref(), MerchantPID: credential.PID()}
+	paymentCipher, _ := secretcrypto.NewFromEnv(os.LookupEnv)
+	paymentStore := adminpayment.SQLRepository{DB: db, Cipher: paymentCipher}
+	loadGateway := func(ctx context.Context) (recharge.Gateway, recharge.GatewaySnapshot, error) {
+		runtimeConfig, loadErr := paymentStore.Runtime(ctx)
+		if loadErr != nil {
+			return nil, recharge.GatewaySnapshot{}, loadErr
 		}
+		client, clientErr := epusdt.NewClient(runtimeConfig.EPUSDT)
+		if clientErr != nil {
+			return nil, recharge.GatewaySnapshot{}, clientErr
+		}
+		credential := runtimeConfig.EPUSDT.Credentials.Current()
+		return client, recharge.GatewaySnapshot{ChannelID: runtimeConfig.ChannelID, CredentialRef: credential.Ref(), MerchantPID: credential.PID()}, nil
 	}
-	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewService(recharge.SQLRepository{DB: db, UnknownReleaseWindow: unknownReleaseWindow}, paymentGateway, paymentSnapshot, paymentConfigErr)), readerService)
+	commercecompat.RegisterRechargeRoutes(publicGroup, commerceprovider.NewRecharge(recharge.NewDynamicService(recharge.SQLRepository{DB: db, LoadWindow: paymentStore.UnknownReleaseWindow}, loadGateway)), readerService)
 	commercecompat.RegisterCheckinRoutes(publicGroup, commerceprovider.NewCheckin(checkin.NewService(checkin.SQLRepository{DB: db})), readerService)
 	commercecompat.RegisterPurchaseRoutes(publicGroup, commerceprovider.NewPurchase(purchase.NewService(purchase.SQLRepository{DB: db}, transactor, readerAccounts, purchaseTargets)), readerService)
 	paymentRepository := payment.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}
-	paymentService := payment.NewService(paymentRepository, callbackCredentials)
+	paymentService := payment.NewDynamicService(paymentRepository, func(ctx context.Context) (*epusdt.CredentialProvider, error) {
+		runtimeConfig, loadErr := paymentStore.Runtime(ctx)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return runtimeConfig.EPUSDT.Credentials, nil
+	})
 	payment.RegisterRoutes(publicGroup, payment.NewHandler(paymentService, paymentRepository, paymentRequestMetadata, observePaymentCallbackPanic, callbackObserver))
 	adminrecharge.RegisterRoutes(privateGroup, adminrecharge.NewService(adminrecharge.SQLRepository{DB: db}))
-	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(adminpayment.SQLRepository{DB: db}))
+	adminpayment.RegisterRoutes(privateGroup, adminpayment.NewService(paymentStore))
 	adminorder.RegisterRoutes(privateGroup, adminorder.NewService(adminorder.SQLRepository{DB: db, Invites: readerInvites}, transactor, readerAccounts))
 	adminmembership.RegisterRoutes(privateGroup, adminmembership.NewService(adminmembership.SQLRepository{DB: db}, transactor, readerAccounts))
 	admininvitereward.RegisterRoutes(privateGroup, admininvitereward.NewService(admininvitereward.SQLRepository{DB: db}))
 	adminproduct.RegisterRoutes(privateGroup, adminproduct.NewService(adminproduct.SQLRepository{DB: db}, purchaseTargets))
-	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts}, transactor, readerAccounts, callbackAuditConfig.StaleAfter))
+	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts, PaymentRuntime: paymentStore.Runtime}, transactor, readerAccounts, callbackAuditConfig.StaleAfter))
 	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}, transactor, readerAccounts))
 	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}, transactor, readerSearch, accountConsistency))
 	adminfeedback.RegisterRoutes(privateGroup, adminfeedback.NewService(adminfeedback.SQLRepository{DB: db}))

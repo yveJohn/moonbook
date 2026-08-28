@@ -40,3 +40,16 @@ func TestSanitizeBodyMasksCookieFields(t *testing.T) {
 		t.Fatalf("non-secret reference was unexpectedly masked: %s", got)
 	}
 }
+
+func TestSanitizeBodyMasksPaymentCredentials(t *testing.T) {
+	body := `{"merchantPid":"merchant-plaintext","pid":"pid-plaintext","secret":"secret-plaintext","pidConfigured":true}`
+	got := SanitizeBody("application/json", body)
+	for _, forbidden := range []string{"merchant-plaintext", "pid-plaintext", "secret-plaintext"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("payment credential was not masked: %s", got)
+		}
+	}
+	if !strings.Contains(got, `"pidConfigured":true`) {
+		t.Fatalf("non-secret status was unexpectedly masked: %s", got)
+	}
+}

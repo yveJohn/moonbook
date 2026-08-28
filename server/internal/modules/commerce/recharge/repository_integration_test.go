@@ -26,7 +26,7 @@ func TestRechargeCatalogQuoteAndOrderStateMachine(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_recharge_products(id,product_name,diamond_amount,price_usdt,sale_status,sort_order) VALUES($1,'集成充值',17,2.00,'on_sale',1)`, productID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE reader_payment_channels SET enabled=true WHERE provider='epusdt'`); err != nil {
+	if err := integrationtest.EnablePaymentChannel(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -92,7 +92,7 @@ func TestRechargeStartReplacesPendingAndProtectsUnknownOrder(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT enabled FROM reader_payment_channels WHERE provider='epusdt'`).Scan(&channelWasEnabled); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE reader_payment_channels SET enabled=true WHERE provider='epusdt'`); err != nil {
+	if err := integrationtest.EnablePaymentChannel(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -193,7 +193,7 @@ func TestRechargeStartWaitsForReaderAdvisoryLock(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT enabled FROM reader_payment_channels WHERE provider='epusdt'`).Scan(&channelWasEnabled); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE reader_payment_channels SET enabled=true WHERE provider='epusdt'`); err != nil {
+	if err := integrationtest.EnablePaymentChannel(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -255,7 +255,7 @@ func TestRechargeStartRereadsSameRequestAfterUniqueConflict(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT enabled FROM reader_payment_channels WHERE provider='epusdt'`).Scan(&channelWasEnabled); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE reader_payment_channels SET enabled=true WHERE provider='epusdt'`); err != nil {
+	if err := integrationtest.EnablePaymentChannel(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

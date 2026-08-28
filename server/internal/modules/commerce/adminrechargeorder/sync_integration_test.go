@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/adminpayment"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/payment"
 	readerprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/provider"
 )
@@ -41,8 +44,6 @@ func TestPaymentSyncSettlesVerifiedGatewayResponseAndIsIdempotent(t *testing.T) 
 		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_accounts WHERE id=$1`, readerID)
 	})
 	secret := "sync-secret"
-	t.Setenv("MOONBOOK_EPUSDT_PID", "sync-pid")
-	t.Setenv("MOONBOOK_EPUSDT_SECRET", secret)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request map[string]string
 		if json.NewDecoder(r.Body).Decode(&request) != nil || request["order_id"] != orderNo {
@@ -54,8 +55,13 @@ func TestPaymentSyncSettlesVerifiedGatewayResponseAndIsIdempotent(t *testing.T) 
 		_ = json.NewEncoder(w).Encode(fields)
 	}))
 	defer server.Close()
-	t.Setenv("MOONBOOK_EPUSDT_SYNC_URL", server.URL)
-	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db)}
+	credentials, err := epusdt.NewCredentialProvider("channel-test", "sync-pid", secret, "[]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint, _ := url.Parse(server.URL)
+	runtimeConfig := adminpayment.RuntimeConfig{SyncURL: server.URL, EPUSDT: epusdt.Config{Enabled: true, Credentials: credentials, CreateURL: endpoint, NotifyURL: endpoint, RedirectURL: endpoint, ConnectTimeout: time.Second, RequestTimeout: 5 * time.Second}}
+	r := SQLRepository{DB: db, Invites: readerprovider.NewInvite(db), Accounts: readerprovider.NewAccount(db), PaymentRuntime: func(context.Context) (adminpayment.RuntimeConfig, error) { return runtimeConfig, nil }}
 	o, err := r.Sync(ctx, orderID)
 	if err != nil || o.Status != "paid" || o.GatewayTradeID != "trade-1" {
 		t.Fatalf("order=%+v err=%v", o, err)

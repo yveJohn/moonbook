@@ -35,6 +35,7 @@ type CreateRequest struct {
 	CustomDiamondAmount, RequestID string
 }
 type PreparedOrder struct {
+	ChannelID           int64
 	ReaderID            int64
 	RequestID           string
 	SourceType          string

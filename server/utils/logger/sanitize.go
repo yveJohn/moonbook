@@ -53,6 +53,7 @@ var sensitiveBodyKeys = map[string]struct{}{
 	"password": {}, "newpassword": {}, "oldpassword": {}, "confirmpassword": {},
 	"passwd": {}, "pwd": {}, "token": {}, "accesstoken": {}, "refreshtoken": {},
 	"secret": {}, "clientsecret": {}, "apikey": {}, "privatekey": {}, "idcard": {},
+	"pid": {}, "merchantpid": {},
 	"cookie": {}, "cookietext": {},
 }
 

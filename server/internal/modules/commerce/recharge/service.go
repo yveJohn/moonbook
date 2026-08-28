@@ -12,6 +12,7 @@ type Gateway interface {
 }
 
 type GatewaySnapshot struct {
+	ChannelID     int64
 	CredentialRef string
 	MerchantPID   string
 }
@@ -21,10 +22,17 @@ type Service struct {
 	Gateway     Gateway
 	Snapshot    GatewaySnapshot
 	ConfigError error
+	LoadGateway GatewayLoader
 }
+
+type GatewayLoader func(context.Context) (Gateway, GatewaySnapshot, error)
 
 func NewService(repo Repository, gateway Gateway, snapshot GatewaySnapshot, configError error) *Service {
 	return &Service{Repo: repo, Gateway: gateway, Snapshot: snapshot, ConfigError: configError}
+}
+
+func NewDynamicService(repo Repository, loader GatewayLoader) *Service {
+	return &Service{Repo: repo, LoadGateway: loader}
 }
 func (s *Service) Catalog(ctx context.Context) (Catalog, error) { return s.Repo.Catalog(ctx) }
 func (s *Service) Quote(ctx context.Context, amount int64) (Quote, error) {
@@ -35,20 +43,25 @@ func (s *Service) CreateOrder(ctx context.Context, req CreateRequest) (Order, er
 	if err != nil {
 		return Order{}, err
 	}
-	if s.ConfigError != nil {
-		return Order{}, s.ConfigError
+	gateway, snapshot, configErr := s.Gateway, s.Snapshot, s.ConfigError
+	if s.LoadGateway != nil {
+		gateway, snapshot, configErr = s.LoadGateway(ctx)
 	}
-	if s.Gateway == nil || s.Snapshot.CredentialRef == "" || s.Snapshot.MerchantPID == "" {
+	if configErr != nil {
+		return Order{}, configErr
+	}
+	if gateway == nil || snapshot.CredentialRef == "" || snapshot.MerchantPID == "" {
 		return Order{}, errors.New("EPUSDT payment configuration is unavailable")
 	}
-	prepared.CredentialRef = s.Snapshot.CredentialRef
-	prepared.MerchantPIDSnapshot = s.Snapshot.MerchantPID
+	prepared.ChannelID = snapshot.ChannelID
+	prepared.CredentialRef = snapshot.CredentialRef
+	prepared.MerchantPIDSnapshot = snapshot.MerchantPID
 	started, err := s.Repo.Start(ctx, prepared)
 	if err != nil || !started.Created {
 		return started.Order, err
 	}
 
-	response, gatewayErr := s.Gateway.Create(ctx, epusdt.CreateRequest{OrderID: started.Order.OrderNo, Amount: started.Order.PriceUSDT})
+	response, gatewayErr := gateway.Create(ctx, epusdt.CreateRequest{OrderID: started.Order.OrderNo, Amount: started.Order.PriceUSDT})
 	if gatewayErr == nil {
 		completed, completeErr := s.Repo.Complete(ctx, started.Order.ID, response)
 		if completeErr != nil {

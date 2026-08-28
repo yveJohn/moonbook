@@ -42,7 +42,7 @@ func TestCallbackCreditsRechargeExactlyOnce(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1)`, readerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE reader_payment_channels SET enabled=true WHERE provider='epusdt'`); err != nil {
+	if err := integrationtest.EnablePaymentChannel(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	orderNo := "PAY" + integrationtest.Prefix()
