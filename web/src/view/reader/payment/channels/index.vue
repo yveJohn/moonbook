@@ -52,11 +52,19 @@
         </div>
 
         <div class="section-title">接口地址</div>
-        <el-form-item label="创建订单地址" prop="createUrl"><el-input v-model="form.createUrl" /></el-form-item>
-        <el-form-item label="回调地址" prop="notifyUrl"><el-input v-model="form.notifyUrl" /></el-form-item>
-        <el-form-item label="跳转地址" prop="redirectUrl"><el-input v-model="form.redirectUrl" /></el-form-item>
-        <el-form-item label="健康检查地址" prop="healthUrl"><el-input v-model="form.healthUrl" /></el-form-item>
-        <el-form-item label="订单同步地址" prop="syncUrl"><el-input v-model="form.syncUrl" /></el-form-item>
+        <div class="form-grid">
+          <el-form-item label="EPUSDT 基础地址" prop="epusdtBaseUrl"><el-input v-model="form.epusdtBaseUrl" placeholder="https://pay.example.com" /></el-form-item>
+          <el-form-item label="读者端基础地址" prop="readerBaseUrl"><el-input v-model="form.readerBaseUrl" placeholder="https://reader.example.com" /></el-form-item>
+        </div>
+        <div class="endpoint-list">
+          <el-form-item v-for="endpoint in endpointPreview" :key="endpoint.key" :label="endpoint.label">
+            <el-input :model-value="endpoint.value" readonly>
+              <template #append>
+                <el-tooltip content="复制" placement="top"><el-button :icon="CopyDocument" :disabled="!endpoint.value" @click="copyEndpoint(endpoint.value)" /></el-tooltip>
+              </template>
+            </el-input>
+          </el-form-item>
+        </div>
 
         <div class="section-title">超时设置</div>
         <div class="form-grid three-columns">
@@ -72,9 +80,9 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import { Connection, CopyDocument, Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
 import { archivePaymentChannel, checkPaymentChannel, createPaymentChannel, listPaymentChannels, updatePaymentChannel } from '@/api/reader/paymentChannels'
 
 defineOptions({ name: 'ReaderPaymentChannels' })
@@ -91,12 +99,17 @@ const formRef = ref()
 
 const defaults = () => ({
   displayName: 'EPUSDT', provider: 'epusdt', enabled: false, currency: 'usd', token: 'usdt', network: 'tron',
-  merchantPid: '', secret: '', createUrl: '', notifyUrl: '', redirectUrl: '', healthUrl: '', syncUrl: '',
+  merchantPid: '', secret: '', epusdtBaseUrl: '', readerBaseUrl: '',
   connectTimeoutMs: '3000', requestTimeoutMs: '10000', unknownReleaseMinutes: '15'
 })
 const form = reactive(defaults())
-const urlRule = (_, value, callback) => {
-  try { const parsed = new URL(value); if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) throw new Error(); callback() } catch { callback(new Error('请输入有效的 HTTP/HTTPS 地址')) }
+const normalizeBaseUrl = (value) => {
+  const parsed = new URL(value.trim())
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) throw new Error()
+  return parsed.origin
+}
+const baseUrlRule = (_, value, callback) => {
+  try { normalizeBaseUrl(value); callback() } catch { callback(new Error('请输入仅包含协议、域名或 IP、端口的 HTTP/HTTPS 地址')) }
 }
 const integerRule = (minimum, maximum) => (_, value, callback) => {
   if (!/^\d+$/.test(value) || Number(value) < minimum || Number(value) > maximum) callback(new Error(`请输入 ${minimum} 至 ${maximum} 的整数`))
@@ -110,12 +123,24 @@ const rules = {
   displayName: [{ required: true, message: '渠道名称不能为空', trigger: 'blur' }],
   merchantPid: [{ validator: credentialRule('商户 PID'), trigger: 'blur' }],
   secret: [{ validator: credentialRule('Secret'), trigger: 'blur' }],
-  createUrl: [{ validator: urlRule, trigger: 'blur' }], notifyUrl: [{ validator: urlRule, trigger: 'blur' }],
-  redirectUrl: [{ validator: urlRule, trigger: 'blur' }], healthUrl: [{ validator: urlRule, trigger: 'blur' }], syncUrl: [{ validator: urlRule, trigger: 'blur' }],
+  epusdtBaseUrl: [{ validator: baseUrlRule, trigger: 'blur' }], readerBaseUrl: [{ validator: baseUrlRule, trigger: 'blur' }],
   connectTimeoutMs: [{ validator: integerRule(100, 30000), trigger: 'blur' }],
   requestTimeoutMs: [{ validator: integerRule(100, 120000), trigger: 'blur' }],
   unknownReleaseMinutes: [{ validator: integerRule(1, 1440), trigger: 'blur' }]
 }
+const endpointPreview = computed(() => {
+  let epusdt = ''
+  let reader = ''
+  try { epusdt = normalizeBaseUrl(form.epusdtBaseUrl) } catch { /* validation displays the error */ }
+  try { reader = normalizeBaseUrl(form.readerBaseUrl) } catch { /* validation displays the error */ }
+  return [
+    { key: 'create', label: '创建订单地址', value: epusdt ? `${epusdt}/payments/gmpay/v1/order/create-transaction` : '' },
+    { key: 'notify', label: '回调地址', value: reader ? `${reader}/prod-api/reader/payment/epusdt/notify` : '' },
+    { key: 'redirect', label: '跳转地址', value: reader ? `${reader}/me/recharge` : '' },
+    { key: 'health', label: '健康检查地址', value: epusdt ? `${epusdt}/` : '' },
+    { key: 'sync', label: '订单同步地址', value: epusdt ? `${epusdt}/pay/check-status/{trade_id}` : '' }
+  ]
+})
 
 const load = async () => {
   loading.value = true
@@ -133,9 +158,13 @@ const openEdit = (row) => {
 const payload = () => ({
   displayName: form.displayName.trim(), provider: form.provider, enabled: form.enabled, currency: form.currency, token: form.token, network: form.network,
   merchantPid: form.merchantPid.trim() || undefined, secret: form.secret || undefined,
-  createUrl: form.createUrl.trim(), notifyUrl: form.notifyUrl.trim(), redirectUrl: form.redirectUrl.trim(), healthUrl: form.healthUrl.trim(), syncUrl: form.syncUrl.trim(),
+  epusdtBaseUrl: form.epusdtBaseUrl.trim(), readerBaseUrl: form.readerBaseUrl.trim(),
   connectTimeoutMs: Number(form.connectTimeoutMs), requestTimeoutMs: Number(form.requestTimeoutMs), unknownReleaseMinutes: Number(form.unknownReleaseMinutes)
 })
+const copyEndpoint = async (value) => {
+  try { await navigator.clipboard.writeText(value); ElMessage.success('地址已复制') }
+  catch { ElMessage.error('复制失败') }
+}
 const save = async () => {
   await formRef.value.validate()
   if (Number(form.requestTimeoutMs) < Number(form.connectTimeoutMs)) return ElMessage.warning('请求超时不能小于连接超时')
@@ -150,7 +179,7 @@ const save = async () => {
 const toggle = async (row) => {
   const data = {
     displayName: row.displayName, provider: row.provider, enabled: row.enabled, currency: row.currency, token: row.token, network: row.network,
-    createUrl: row.createUrl, notifyUrl: row.notifyUrl, redirectUrl: row.redirectUrl, healthUrl: row.healthUrl, syncUrl: row.syncUrl,
+    epusdtBaseUrl: row.epusdtBaseUrl, readerBaseUrl: row.readerBaseUrl,
     connectTimeoutMs: row.connectTimeoutMs, requestTimeoutMs: row.requestTimeoutMs, unknownReleaseMinutes: row.unknownReleaseMinutes
   }
   try { await updatePaymentChannel(row.id, data); ElMessage.success('状态已更新') }
@@ -178,6 +207,9 @@ load()
 .archive-filter { color: var(--el-text-color-secondary); font-size: 14px; }
 code { display: block; margin-top: 4px; color: var(--el-text-color-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .section-title { margin: 6px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--el-border-color-lighter); color: var(--el-text-color-primary); font-size: 14px; font-weight: 600; }
+.endpoint-list { margin-bottom: 18px; }
+.endpoint-list :deep(.el-input-group__append) { padding: 0; }
+.endpoint-list :deep(.el-input-group__append .el-button) { height: 30px; margin: 0; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
 .three-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 :deep(.el-select) { width: 100%; }

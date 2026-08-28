@@ -133,7 +133,9 @@ const resultOptions = [
   { label: '已接收', value: 'received' }, { label: '成功', value: 'success' },
   { label: '幂等', value: 'idempotent' }, { label: '拒绝', value: 'rejected' },
   { label: '失败', value: 'failed' }, { label: '人工成功（历史）', value: 'manual_success' },
-  { label: '同步待支付（历史）', value: 'sync_pending' }, { label: '同步拒绝（历史）', value: 'sync_rejected' }
+  { label: '同步待支付', value: 'sync_pending' }, { label: '同步已过期', value: 'sync_expired' },
+  { label: '等待选择支付方式', value: 'sync_select' }, { label: '已支付但缺少回调', value: 'paid_no_callback' },
+  { label: '同步失败', value: 'sync_rejected' }
 ]
 const failureCodes = [
   'PAYLOAD_TOO_LARGE', 'REQUEST_READ_FAILED', 'INVALID_PAYLOAD', 'UNKNOWN_ORDER', 'UNKNOWN_CREDENTIAL',

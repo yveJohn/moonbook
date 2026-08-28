@@ -21,3 +21,16 @@ test('payment channel credentials are write-only in the management form', () => 
   assert.match(page, /留空保持不变/)
   assert.doesNotMatch(page, /row\.merchantPid(?![A-Za-z])|row\.secret(?![A-Za-z])/)
 })
+
+test('payment endpoint addresses are derived from two editable base URLs', () => {
+  assert.match(page, /v-model="form\.epusdtBaseUrl"/)
+  assert.match(page, /v-model="form\.readerBaseUrl"/)
+  assert.match(page, /payments\/gmpay\/v1\/order\/create-transaction/)
+  assert.match(page, /prod-api\/reader\/payment\/epusdt\/notify/)
+  assert.match(page, /pay\/check-status\/\{trade_id\}/)
+  assert.match(page, /CopyDocument/)
+  for (const field of ['createUrl', 'notifyUrl', 'redirectUrl', 'healthUrl', 'syncUrl']) {
+    assert.doesNotMatch(page, new RegExp(`v-model="form\\.${field}"`))
+    assert.doesNotMatch(page, new RegExp(`${field}: form\\.`))
+  }
+})
