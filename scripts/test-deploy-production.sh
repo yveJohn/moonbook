@@ -191,4 +191,7 @@ assert_contains "$health_failure_log" "remote-stage health"
 assert_contains "$health_failure_log" "remote-stage cleanup"
 
 bash -n "$script"
+if grep -Eq 'local .*temporary="\$destination' "$script"; then
+  fail "remote strict-mode helper references a local variable in its declaration"
+fi
 printf 'production deployment script tests passed.\n'

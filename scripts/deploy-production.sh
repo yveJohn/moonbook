@@ -232,7 +232,8 @@ base_compose=(docker compose --project-directory "$app_dir" --env-file "$env_fil
 target_compose=("${base_compose[@]}" -f "$release_file")
 
 write_override() {
-  local destination="$1" server="$2" web="$3" reader="$4" temporary="$destination.new.$$"
+  local destination="$1" server="$2" web="$3" reader="$4" temporary
+  temporary="$destination.new.$$"
   {
     printf 'services:\n'
     printf '  migrate:\n    image: %s\n' "$server"
