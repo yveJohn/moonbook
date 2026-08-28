@@ -145,7 +145,7 @@ func (h *Handler) callbackGet(c *gin.Context) {
 	managementresponse.OK(c, renderCallback(v), "获取成功")
 }
 func render(o Order) map[string]any {
-	return map[string]any{"id": o.ID, "readerId": o.ReaderID, "readerUsername": o.ReaderUsername, "diamondAmount": o.DiamondAmount, "productId": o.ProductID, "orderNo": o.OrderNo, "sourceType": o.SourceType, "priceUsdt": o.PriceUSDT, "provider": o.Provider, "currency": o.Currency, "token": o.Token, "network": o.Network, "gatewayTradeId": o.GatewayTradeID, "actualAmount": o.ActualAmount, "receiveAddress": o.ReceiveAddress, "paymentUrl": o.PaymentURL, "blockTransactionId": o.BlockTransactionID, "status": o.Status, "gatewayStatus": o.GatewayStatus, "createdAt": o.CreatedAt, "paidAt": o.PaidAt}
+	return map[string]any{"id": o.ID, "readerId": o.ReaderID, "readerUsername": o.ReaderUsername, "diamondAmount": o.DiamondAmount, "productId": o.ProductID, "orderNo": o.OrderNo, "sourceType": o.SourceType, "priceUsdt": o.PriceUSDT, "provider": o.Provider, "currency": o.Currency, "token": o.Token, "network": o.Network, "gatewayTradeId": o.GatewayTradeID, "actualAmount": o.ActualAmount, "receiveAddress": o.ReceiveAddress, "paymentUrl": o.PaymentURL, "blockTransactionId": o.BlockTransactionID, "status": o.Status, "failureCode": o.FailureCode, "failureMessage": o.FailureMessage, "gatewayStatus": o.GatewayStatus, "createdAt": o.CreatedAt, "paidAt": o.PaidAt}
 }
 func (h *Handler) list(c *gin.Context) {
 	p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

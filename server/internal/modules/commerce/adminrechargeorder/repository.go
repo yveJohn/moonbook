@@ -28,10 +28,10 @@ type SQLRepository struct {
 	PaymentRuntime func(context.Context) (adminpayment.RuntimeConfig, error)
 }
 
-const selectOrder = `SELECT o.id::text,o.reader_id::text,o.diamond_amount::text,COALESCE(o.product_id::text,''),p.username,o.order_no,o.source_type,o.price_usdt::text,o.provider,o.currency,o.token,o.network,COALESCE(o.gateway_trade_id,''),COALESCE(o.actual_amount::text,''),COALESCE(o.receive_address,''),COALESCE(o.payment_url,''),COALESCE(o.block_transaction_id,''),o.status,o.gateway_status,o.created_at,o.paid_time FROM reader_recharge_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`
+const selectOrder = `SELECT o.id::text,o.reader_id::text,o.diamond_amount::text,COALESCE(o.product_id::text,''),p.username,o.order_no,o.source_type,o.price_usdt::text,o.provider,o.currency,o.token,o.network,COALESCE(o.gateway_trade_id,''),COALESCE(o.actual_amount::text,''),COALESCE(o.receive_address,''),COALESCE(o.payment_url,''),COALESCE(o.block_transaction_id,''),o.status,COALESCE(o.failure_code,''),COALESCE(o.failure_message,''),o.gateway_status,o.created_at,o.paid_time FROM reader_recharge_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`
 
 func scan(row interface{ Scan(...any) error }, o *Order) error {
-	return row.Scan(&o.ID, &o.ReaderID, &o.DiamondAmount, &o.ProductID, &o.ReaderUsername, &o.OrderNo, &o.SourceType, &o.PriceUSDT, &o.Provider, &o.Currency, &o.Token, &o.Network, &o.GatewayTradeID, &o.ActualAmount, &o.ReceiveAddress, &o.PaymentURL, &o.BlockTransactionID, &o.Status, &o.GatewayStatus, &o.CreatedAt, &o.PaidAt)
+	return row.Scan(&o.ID, &o.ReaderID, &o.DiamondAmount, &o.ProductID, &o.ReaderUsername, &o.OrderNo, &o.SourceType, &o.PriceUSDT, &o.Provider, &o.Currency, &o.Token, &o.Network, &o.GatewayTradeID, &o.ActualAmount, &o.ReceiveAddress, &o.PaymentURL, &o.BlockTransactionID, &o.Status, &o.FailureCode, &o.FailureMessage, &o.GatewayStatus, &o.CreatedAt, &o.PaidAt)
 }
 func (r SQLRepository) List(ctx context.Context, keyword, status string, page, size int) ([]Order, int64, error) {
 	var total int64

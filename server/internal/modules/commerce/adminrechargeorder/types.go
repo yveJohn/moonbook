@@ -9,6 +9,7 @@ type Order struct {
 	ID, ReaderID, DiamondAmount, ProductID                                               string
 	ReaderUsername, OrderNo, SourceType, PriceUSDT, Provider, Currency, Token, Network   string
 	GatewayTradeID, ActualAmount, ReceiveAddress, PaymentURL, BlockTransactionID, Status string
+	FailureCode, FailureMessage                                                          string
 	GatewayStatus                                                                        *int
 	CreatedAt, PaidAt                                                                    *time.Time
 }

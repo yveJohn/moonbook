@@ -37,7 +37,7 @@ func TestAdminRechargeOrderListAndGet(t *testing.T) {
 		t.Fatal(err)
 	}
 	var orderID, secondOrderID int64
-	err := db.QueryRowContext(ctx, `INSERT INTO reader_recharge_orders(order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status,created_at) VALUES($1,$2,'admin-fixture','custom',100,'1.00','epusdt','usd','usdt','tron','pending','2026-01-01 00:00:00+00') RETURNING id`, orderNo, readerID).Scan(&orderID)
+	err := db.QueryRowContext(ctx, `INSERT INTO reader_recharge_orders(order_no,reader_id,request_id,source_type,diamond_amount,price_usdt,provider,currency,token,network,status,failure_code,failure_message,created_at) VALUES($1,$2,'admin-fixture','custom',100,'1.00','epusdt','usd','usdt','tron','pending','RESPONSE_CURRENCY_MISMATCH','EPUSDT create response currency did not match the local order','2026-01-01 00:00:00+00') RETURNING id`, orderNo, readerID).Scan(&orderID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestAdminRechargeOrderListAndGet(t *testing.T) {
 	})
 	r := SQLRepository{DB: db}
 	rows, total, err := r.List(ctx, orderNo, "pending", 1, 20)
-	if err != nil || total != 1 || len(rows) != 1 || rows[0].ID == "" {
+	if err != nil || total != 1 || len(rows) != 1 || rows[0].ID == "" || rows[0].FailureCode != "RESPONSE_CURRENCY_MISMATCH" || rows[0].FailureMessage == "" {
 		t.Fatalf("rows=%+v total=%d err=%v", rows, total, err)
 	}
 	firstPage, total, err := r.List(ctx, username, "pending", 1, 1)
@@ -70,7 +70,7 @@ func TestAdminRechargeOrderListAndGet(t *testing.T) {
 		t.Fatalf("second page=%+v total=%d err=%v", secondPage, total, err)
 	}
 	got, err := r.Get(ctx, orderID)
-	if err != nil || got.OrderNo != orderNo || got.ReaderID == "" {
+	if err != nil || got.OrderNo != orderNo || got.ReaderID == "" || got.FailureCode != "RESPONSE_CURRENCY_MISMATCH" || got.FailureMessage != "EPUSDT create response currency did not match the local order" {
 		t.Fatalf("got=%+v err=%v", got, err)
 	}
 	logs, logTotal, err := r.ListCallbacks(ctx, CallbackFilter{Keyword: orderNo, ProcessingResult: "success", Page: 1, PageSize: 20})
