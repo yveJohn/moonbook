@@ -137,6 +137,10 @@ func (client *Client) Create(ctx context.Context, request CreateRequest) (Create
 	}
 	response, err := client.parseSuccess(envelope.Data, request)
 	if err != nil {
+		var failure *GatewayError
+		if errors.As(err, &failure) {
+			return CreateResponse{}, failure
+		}
 		return CreateResponse{}, gatewayFailure("RESPONSE_MISMATCH", FailureUncertain, "EPUSDT create response did not match the local order")
 	}
 	return response, nil
@@ -189,7 +193,7 @@ func decodeEnvelope(body []byte) (gatewayEnvelope, error) {
 
 func (client *Client) parseSuccess(raw json.RawMessage, request CreateRequest) (CreateResponse, error) {
 	if len(raw) == 0 || string(raw) == "null" {
-		return CreateResponse{}, errors.New("missing response data")
+		return CreateResponse{}, gatewayFailure("INVALID_RESPONSE", FailureUncertain, "EPUSDT create response data was invalid")
 	}
 	var data struct {
 		TradeID        json.RawMessage `json:"trade_id"`
@@ -204,61 +208,65 @@ func (client *Client) parseSuccess(raw json.RawMessage, request CreateRequest) (
 		PaymentURL     json.RawMessage `json:"payment_url"`
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return CreateResponse{}, err
+		return CreateResponse{}, gatewayFailure("INVALID_RESPONSE", FailureUncertain, "EPUSDT create response data was invalid")
 	}
 	tradeID, err := decodeText(data.TradeID)
 	if err != nil || strings.TrimSpace(tradeID) != tradeID || tradeID == "" || utf8.RuneCountInString(tradeID) > 64 {
-		return CreateResponse{}, errors.New("invalid trade ID")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_TRADE_ID_MISMATCH", "trade ID")
 	}
 	orderID, err := decodeText(data.OrderID)
 	if err != nil || orderID != request.OrderID {
-		return CreateResponse{}, errors.New("order ID mismatch")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_ORDER_ID_MISMATCH", "order ID")
 	}
 	amountText, amount, err := decodeDecimal(data.Amount, 18, 8)
 	if err != nil {
-		return CreateResponse{}, err
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_AMOUNT_MISMATCH", "amount")
 	}
 	expectedAmount, _ := new(big.Rat).SetString(request.Amount)
 	if amount.Cmp(expectedAmount) != 0 {
-		return CreateResponse{}, errors.New("amount mismatch")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_AMOUNT_MISMATCH", "amount")
 	}
 	currency, err := decodeText(data.Currency)
-	if err != nil || currency != "usd" {
-		return CreateResponse{}, errors.New("currency mismatch")
+	if err != nil || !strings.EqualFold(currency, "usd") {
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_CURRENCY_MISMATCH", "currency")
 	}
 	actualAmountText, actualAmount, err := decodeDecimal(data.ActualAmount, 16, 8)
 	if err != nil || actualAmount.Sign() <= 0 {
-		return CreateResponse{}, errors.New("invalid actual amount")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_ACTUAL_AMOUNT_MISMATCH", "actual amount")
 	}
 	receiveAddress, err := decodeText(data.ReceiveAddress)
 	if err != nil || strings.TrimSpace(receiveAddress) != receiveAddress || receiveAddress == "" || utf8.RuneCountInString(receiveAddress) > 255 {
-		return CreateResponse{}, errors.New("invalid receive address")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_ADDRESS_MISMATCH", "receive address")
 	}
 	token, err := decodeText(data.Token)
-	if err != nil || token != "usdt" {
-		return CreateResponse{}, errors.New("token mismatch")
+	if err != nil || !strings.EqualFold(token, "usdt") {
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_TOKEN_MISMATCH", "token")
 	}
 	status, err := decodeInteger(data.Status)
 	if err != nil || status != 1 {
-		return CreateResponse{}, errors.New("status mismatch")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_STATUS_MISMATCH", "status")
 	}
 	expirationSeconds, err := decodeInt64(data.ExpirationTime)
 	if err != nil || expirationSeconds <= client.now().Unix() {
-		return CreateResponse{}, errors.New("invalid expiration time")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_EXPIRATION_MISMATCH", "expiration time")
 	}
 	paymentURL, err := decodeText(data.PaymentURL)
 	if err != nil || utf8.RuneCountInString(paymentURL) > 1000 {
-		return CreateResponse{}, errors.New("invalid payment URL")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_PAYMENT_URL_MISMATCH", "payment URL")
 	}
 	parsedPaymentURL, err := url.Parse(paymentURL)
 	if err != nil || !validAbsoluteHTTPURL(parsedPaymentURL, 1000) {
-		return CreateResponse{}, errors.New("invalid payment URL")
+		return CreateResponse{}, responseFieldMismatch("RESPONSE_PAYMENT_URL_MISMATCH", "payment URL")
 	}
 	return CreateResponse{
-		TradeID: tradeID, OrderID: orderID, Amount: amountText, Currency: currency,
-		ActualAmount: actualAmountText, ReceiveAddress: receiveAddress, Token: token,
+		TradeID: tradeID, OrderID: orderID, Amount: amountText, Currency: "usd",
+		ActualAmount: actualAmountText, ReceiveAddress: receiveAddress, Token: "usdt",
 		Status: status, ExpirationTime: time.Unix(expirationSeconds, 0).UTC(), PaymentURL: paymentURL,
 	}, nil
+}
+
+func responseFieldMismatch(code, field string) error {
+	return gatewayFailure(code, FailureUncertain, "EPUSDT create response "+field+" did not match the local order")
 }
 
 func decodeText(raw json.RawMessage) (string, error) {

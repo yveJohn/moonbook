@@ -78,6 +78,9 @@ func TestExpireBatchAppliesStatusSpecificDeadlinesAndBatchLimit(t *testing.T) {
 		"paid":           fixture.insertOrder(t, "paid", "paid", fixture.now.Add(-time.Hour), &past, "trade-paid"),
 		"failed":         fixture.insertOrder(t, "failed", "create_failed", fixture.now.Add(-time.Hour), &past, ""),
 	}
+	if _, err := fixture.db.Exec(`UPDATE reader_recharge_orders SET failure_code='RESPONSE_CURRENCY_MISMATCH',failure_message='EPUSDT create response currency did not match the local order' WHERE id=$1`, ids["unknown-old"]); err != nil {
+		t.Fatal(err)
+	}
 	repository := SQLRepository{DB: fixture.db, UnknownReleaseWindow: 15 * time.Minute, Now: func() time.Time { return fixture.now }}
 
 	first, err := repository.ExpireBatch(context.Background(), fixture.now, 15*time.Minute, 2)
@@ -96,13 +99,19 @@ func TestExpireBatchAppliesStatusSpecificDeadlinesAndBatchLimit(t *testing.T) {
 	for name, id := range ids {
 		var status string
 		var active sql.NullInt64
-		var failure sql.NullString
-		if err := fixture.db.QueryRow(`SELECT status,active_reader_id,failure_code FROM reader_recharge_orders WHERE id=$1`, id).Scan(&status, &active, &failure); err != nil {
+		var failureCode, failureMessage sql.NullString
+		if err := fixture.db.QueryRow(`SELECT status,active_reader_id,failure_code,failure_message FROM reader_recharge_orders WHERE id=$1`, id).Scan(&status, &active, &failureCode, &failureMessage); err != nil {
 			t.Fatal(err)
 		}
 		wantExpired := name == "pending-past" || name == "unknown-old" || name == "creating-old"
-		if wantExpired && (status != "expired" || active.Valid || !failure.Valid || failure.String != "ORDER_EXPIRED") {
-			t.Fatalf("%s status=%s active=%+v failure=%+v", name, status, active, failure)
+		if wantExpired && (status != "expired" || active.Valid) {
+			t.Fatalf("%s status=%s active=%+v", name, status, active)
+		}
+		if name == "unknown-old" && (!failureCode.Valid || failureCode.String != "RESPONSE_CURRENCY_MISMATCH" || !failureMessage.Valid || failureMessage.String != "EPUSDT create response currency did not match the local order") {
+			t.Fatalf("%s failure=%+v/%+v", name, failureCode, failureMessage)
+		}
+		if wantExpired && name != "unknown-old" && (!failureCode.Valid || failureCode.String != "ORDER_EXPIRED" || !failureMessage.Valid || failureMessage.String != "Payment order expired") {
+			t.Fatalf("%s failure=%+v/%+v", name, failureCode, failureMessage)
 		}
 		if !wantExpired {
 			wantStatus := map[string]string{"pending-future": "pending", "unknown-trade": "gateway_unknown", "creating-fresh": "creating", "paid": "paid", "failed": "create_failed"}[name]

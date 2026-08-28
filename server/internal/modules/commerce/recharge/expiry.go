@@ -10,7 +10,9 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/epusdt"
 )
 
-const expiryUpdate = `status='expired',active_reader_id=NULL,failure_code='ORDER_EXPIRED',failure_message='Payment order expired',updated_at=$1`
+const expiryUpdate = `status='expired',active_reader_id=NULL,
+	failure_code=COALESCE(NULLIF(BTRIM(failure_code),''),'ORDER_EXPIRED'),
+	failure_message=COALESCE(NULLIF(BTRIM(failure_message),''),'Payment order expired'),updated_at=$1`
 
 type ExpiryRepository interface {
 	ExpireBatch(context.Context, time.Time, time.Duration, int) (int64, error)

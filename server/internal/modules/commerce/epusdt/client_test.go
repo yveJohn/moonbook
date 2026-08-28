@@ -2,8 +2,8 @@ package epusdt
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -189,6 +189,9 @@ func TestClientCreateClassifiesTransportAndResponseFailures(t *testing.T) {
 			return fixtureHTTPResponse(http.StatusOK, &failingReader{}), nil
 		}), wantCode: "RESPONSE_READ_ERROR", wantClass: FailureUncertain},
 		{name: "invalid json", server: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(writer, "not-json") }), wantCode: "INVALID_RESPONSE", wantClass: FailureUncertain},
+		{name: "invalid data object", server: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(writer, `{"status_code":200,"data":[]}`)
+		}), wantCode: "INVALID_RESPONSE", wantClass: FailureUncertain},
 		{name: "unstructured HTTP error", server: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 			writer.WriteHeader(http.StatusBadGateway)
 			_, _ = io.WriteString(writer, "bad gateway")
@@ -216,26 +219,27 @@ func TestClientCreateClassifiesTransportAndResponseFailures(t *testing.T) {
 }
 func TestClientCreateRejectsMismatchedSuccessFields(t *testing.T) {
 	tests := []struct {
-		name   string
-		change func(map[string]any)
+		name     string
+		wantCode string
+		change   func(map[string]any)
 	}{
-		{name: "trade id", change: func(data map[string]any) { data["trade_id"] = "" }},
-		{name: "trade id whitespace", change: func(data map[string]any) { data["trade_id"] = " trade-1 " }},
-		{name: "trade id length", change: func(data map[string]any) { data["trade_id"] = strings.Repeat("t", 65) }},
-		{name: "order id", change: func(data map[string]any) { data["order_id"] = "RC999" }},
-		{name: "amount", change: func(data map[string]any) { data["amount"] = "1.01" }},
-		{name: "currency", change: func(data map[string]any) { data["currency"] = "cny" }},
-		{name: "actual amount zero", change: func(data map[string]any) { data["actual_amount"] = "0.00000000" }},
-		{name: "actual amount scale", change: func(data map[string]any) { data["actual_amount"] = "1.000000001" }},
-		{name: "actual amount precision", change: func(data map[string]any) { data["actual_amount"] = "12345678901234567.1" }},
-		{name: "address", change: func(data map[string]any) { data["receive_address"] = "" }},
-		{name: "address whitespace", change: func(data map[string]any) { data["receive_address"] = " TAddress " }},
-		{name: "address length", change: func(data map[string]any) { data["receive_address"] = strings.Repeat("T", 256) }},
-		{name: "token", change: func(data map[string]any) { data["token"] = "btc" }},
-		{name: "status", change: func(data map[string]any) { data["status"] = 2 }},
-		{name: "expiration", change: func(data map[string]any) { data["expiration_time"] = clientTestNow.Unix() }},
-		{name: "payment URL", change: func(data map[string]any) { data["payment_url"] = "javascript:alert(1)" }},
-		{name: "payment URL length", change: func(data map[string]any) { data["payment_url"] = "https://pay.example/" + strings.Repeat("x", 1000) }},
+		{name: "trade id", wantCode: "RESPONSE_TRADE_ID_MISMATCH", change: func(data map[string]any) { data["trade_id"] = "" }},
+		{name: "trade id whitespace", wantCode: "RESPONSE_TRADE_ID_MISMATCH", change: func(data map[string]any) { data["trade_id"] = " trade-1 " }},
+		{name: "trade id length", wantCode: "RESPONSE_TRADE_ID_MISMATCH", change: func(data map[string]any) { data["trade_id"] = strings.Repeat("t", 65) }},
+		{name: "order id", wantCode: "RESPONSE_ORDER_ID_MISMATCH", change: func(data map[string]any) { data["order_id"] = "RC999" }},
+		{name: "amount", wantCode: "RESPONSE_AMOUNT_MISMATCH", change: func(data map[string]any) { data["amount"] = "1.01" }},
+		{name: "currency", wantCode: "RESPONSE_CURRENCY_MISMATCH", change: func(data map[string]any) { data["currency"] = "CNY" }},
+		{name: "actual amount zero", wantCode: "RESPONSE_ACTUAL_AMOUNT_MISMATCH", change: func(data map[string]any) { data["actual_amount"] = "0.00000000" }},
+		{name: "actual amount scale", wantCode: "RESPONSE_ACTUAL_AMOUNT_MISMATCH", change: func(data map[string]any) { data["actual_amount"] = "1.000000001" }},
+		{name: "actual amount precision", wantCode: "RESPONSE_ACTUAL_AMOUNT_MISMATCH", change: func(data map[string]any) { data["actual_amount"] = "12345678901234567.1" }},
+		{name: "address", wantCode: "RESPONSE_ADDRESS_MISMATCH", change: func(data map[string]any) { data["receive_address"] = "" }},
+		{name: "address whitespace", wantCode: "RESPONSE_ADDRESS_MISMATCH", change: func(data map[string]any) { data["receive_address"] = " TAddress " }},
+		{name: "address length", wantCode: "RESPONSE_ADDRESS_MISMATCH", change: func(data map[string]any) { data["receive_address"] = strings.Repeat("T", 256) }},
+		{name: "token", wantCode: "RESPONSE_TOKEN_MISMATCH", change: func(data map[string]any) { data["token"] = "USDC" }},
+		{name: "status", wantCode: "RESPONSE_STATUS_MISMATCH", change: func(data map[string]any) { data["status"] = 2 }},
+		{name: "expiration", wantCode: "RESPONSE_EXPIRATION_MISMATCH", change: func(data map[string]any) { data["expiration_time"] = clientTestNow.Unix() }},
+		{name: "payment URL", wantCode: "RESPONSE_PAYMENT_URL_MISMATCH", change: func(data map[string]any) { data["payment_url"] = "javascript:alert(1)" }},
+		{name: "payment URL length", wantCode: "RESPONSE_PAYMENT_URL_MISMATCH", change: func(data map[string]any) { data["payment_url"] = "https://pay.example/" + strings.Repeat("x", 1000) }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -244,8 +248,45 @@ func TestClientCreateRejectsMismatchedSuccessFields(t *testing.T) {
 			}))
 			defer server.Close()
 			_, err := newTestClient(t, server.URL).Create(context.Background(), validCreateRequest())
-			assertGatewayError(t, err, "RESPONSE_MISMATCH", FailureUncertain)
+			assertGatewayError(t, err, test.wantCode, FailureUncertain)
 		})
+	}
+}
+
+func TestClientCreateAcceptsGMpayV2CurrencyAndTokenCase(t *testing.T) {
+	for _, values := range []struct{ currency, token string }{
+		{currency: "USD", token: "USDT"},
+		{currency: "Usd", token: "Usdt"},
+		{currency: "usd", token: "usdt"},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+			writeSuccess(writer, validCreateRequest().OrderID, validCreateRequest().Amount, func(data map[string]any) {
+				data["currency"], data["token"] = values.currency, values.token
+			})
+		}))
+		response, err := newTestClient(t, server.URL).Create(context.Background(), validCreateRequest())
+		server.Close()
+		if err != nil {
+			t.Fatalf("currency=%q token=%q: %v", values.currency, values.token, err)
+		}
+		if response.Currency != "usd" || response.Token != "usdt" {
+			t.Fatalf("response=%+v", response)
+		}
+	}
+}
+
+func TestClientCreateFieldMismatchDoesNotLeakResponseValue(t *testing.T) {
+	const responseValue = "USD-private-response-value"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writeSuccess(writer, validCreateRequest().OrderID, validCreateRequest().Amount, func(data map[string]any) {
+			data["currency"] = responseValue
+		})
+	}))
+	defer server.Close()
+	_, err := newTestClient(t, server.URL).Create(context.Background(), validCreateRequest())
+	assertGatewayError(t, err, "RESPONSE_CURRENCY_MISMATCH", FailureUncertain)
+	if strings.Contains(err.Error(), responseValue) {
+		t.Fatalf("field mismatch leaked response value: %v", err)
 	}
 }
 
@@ -361,11 +402,11 @@ func writeSuccess(writer http.ResponseWriter, orderID, amount string, change fun
 	data := map[string]any{
 		"trade_id":        "trade-1",
 		"order_id":        orderID,
-		"amount":          amount,
-		"currency":        "usd",
-		"actual_amount":   "1.00234567",
+		"amount":          json.Number(amount),
+		"currency":        "USD",
+		"actual_amount":   json.Number("1.00234567"),
 		"receive_address": "TFixtureAddress",
-		"token":           "usdt",
+		"token":           "USDT",
 		"status":          1,
 		"expiration_time": clientTestNow.Add(10 * time.Minute).Unix(),
 		"payment_url":     "https://pay.example/checkout/trade-1",
@@ -374,6 +415,5 @@ func writeSuccess(writer http.ResponseWriter, orderID, amount string, change fun
 		change(data)
 	}
 	writer.Header().Set("Content-Type", "application/json")
-	_, _ = fmt.Fprintf(writer, `{"status_code":200,"data":{"trade_id":%q,"order_id":%q,"amount":%q,"currency":%q,"actual_amount":%q,"receive_address":%q,"token":%q,"status":%v,"expiration_time":%v,"payment_url":%q}}`,
-		data["trade_id"], data["order_id"], data["amount"], data["currency"], data["actual_amount"], data["receive_address"], data["token"], data["status"], data["expiration_time"], data["payment_url"])
+	_ = json.NewEncoder(writer).Encode(map[string]any{"status_code": 200, "data": data})
 }
