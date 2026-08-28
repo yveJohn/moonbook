@@ -69,11 +69,16 @@ describe('RechargeOrderPage', () => {
   });
 
   it('renders the pending payment details without an external payment link', async () => {
-    readerApi.getRechargeOrder.mockResolvedValue(order('pending'));
+    readerApi.getRechargeOrder.mockResolvedValue({
+      ...order('pending'),
+      actualAmount: '2.00000000',
+      priceUsdt: '2.00'
+    });
     const { container } = renderPage();
 
     expect(await screen.findByText('需要支付')).toBeInTheDocument();
-    expect(container.querySelector('.recharge-order-amount strong')).toHaveTextContent('2.58 USDT');
+    expect(container.querySelector('.recharge-order-amount strong')).toHaveTextContent('2.0000 USDT');
+    expect(container.querySelector('.recharge-order-meta div:nth-child(2) dd')).toHaveTextContent('2.0000 USDT');
     expect(screen.getByLabelText('收款地址二维码')).toBeInTheDocument();
     expect(screen.getByText('TAddress')).toBeInTheDocument();
     expect(screen.getByText('18')).toBeInTheDocument();

@@ -18,6 +18,7 @@ import { getRechargeOrder } from '../api/reader';
 import { useReaderAuth } from '../auth/ReaderAuthContext';
 import { AppShell } from '../components/AppShell';
 import type { ReaderRechargeOrder, ReaderRechargeStatus } from '../types/reader';
+import { formatUsdtAmount } from '../utils/formatUsdtAmount';
 
 const terminal = new Set<ReaderRechargeStatus>(['paid', 'superseded', 'expired', 'create_failed']);
 
@@ -174,7 +175,7 @@ export function RechargeOrderPage() {
           <>
             <section className="recharge-order-amount">
               <span>需要支付</span>
-              <strong>{order.actualAmount || order.priceUsdt} <small>USDT</small></strong>
+              <strong>{formatUsdtAmount(order.actualAmount || order.priceUsdt)} <small>USDT</small></strong>
               <em>TRC20</em>
               {remaining > 0 ? <time><Clock3 aria-hidden="true" />{minutes}:{seconds}</time> : null}
             </section>
@@ -201,7 +202,7 @@ export function RechargeOrderPage() {
             {copyStatus === 'error' ? <p className="recharge-error" role="alert">复制失败，请手动复制收款地址</p> : null}
             <dl className="recharge-order-meta">
               <div><span><Gem aria-hidden="true" /></span><dt>到账钻石</dt><dd>{order.diamondAmount}</dd></div>
-              <div><span><Tag aria-hidden="true" /></span><dt>基础定价</dt><dd>{order.priceUsdt} USDT</dd></div>
+              <div><span><Tag aria-hidden="true" /></span><dt>基础定价</dt><dd>{formatUsdtAmount(order.priceUsdt)} USDT</dd></div>
               <div><span><ReceiptText aria-hidden="true" /></span><dt>订单号</dt><dd>{order.orderNo}</dd></div>
             </dl>
             <button className="recharge-order-refresh" type="button" disabled={refreshing} onClick={() => void refresh()}>
