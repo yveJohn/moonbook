@@ -79,28 +79,14 @@ func TestShippedServerConfigsMatchSchema(t *testing.T) {
 	}
 }
 
-func TestEPUSDTEnvironmentContract(t *testing.T) {
+func TestApplicationMasterKeyEnvironmentContract(t *testing.T) {
 	const envExamplePath = "../../.env.example"
 	content, err := os.ReadFile(envExamplePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	values := parseEnvironmentExample(string(content))
-	wantDefaults := map[string]string{
-		"MOONBOOK_EPUSDT_PID":                     "",
-		"MOONBOOK_EPUSDT_SECRET":                  "",
-		"MOONBOOK_EPUSDT_CREDENTIAL_REF":          "primary",
-		"MOONBOOK_EPUSDT_VERIFY_CREDENTIALS_JSON": "[]",
-		"MOONBOOK_EPUSDT_CREATE_URL":              "",
-		"MOONBOOK_EPUSDT_NOTIFY_URL":              "",
-		"MOONBOOK_EPUSDT_REDIRECT_URL":            "",
-		"MOONBOOK_EPUSDT_CONNECT_TIMEOUT_MS":      "3000",
-		"MOONBOOK_EPUSDT_REQUEST_TIMEOUT_MS":      "10000",
-		"MOONBOOK_EPUSDT_UNKNOWN_RELEASE_MINUTES": "15",
-		"MOONBOOK_EPUSDT_CALLBACK_STALE_MINUTES":  "5",
-		"MOONBOOK_EPUSDT_HEALTH_URL":              "",
-		"MOONBOOK_EPUSDT_SYNC_URL":                "",
-	}
+	wantDefaults := map[string]string{"MOONBOOK_APP_MASTER_KEY": "", "MOONBOOK_EPUSDT_CALLBACK_STALE_MINUTES": "5"}
 	for key, want := range wantDefaults {
 		if got, exists := values[key]; !exists || got != want {
 			t.Errorf("%s default=%q exists=%t, want %q", key, got, exists, want)
@@ -127,10 +113,16 @@ func TestEPUSDTEnvironmentContract(t *testing.T) {
 			}
 		}
 	}
-	for _, secretKey := range []string{"MOONBOOK_EPUSDT_PID", "MOONBOOK_EPUSDT_SECRET", "MOONBOOK_EPUSDT_VERIFY_CREDENTIALS_JSON"} {
-		value := fmt.Sprint(compose.Services["migrate"].Environment[secretKey])
-		if !strings.Contains(value, "${"+secretKey) {
-			t.Errorf("compose hard-codes %s instead of environment injection", secretKey)
+	value := fmt.Sprint(compose.Services["migrate"].Environment["MOONBOOK_APP_MASTER_KEY"])
+	if !strings.Contains(value, "${MOONBOOK_APP_MASTER_KEY") {
+		t.Errorf("compose hard-codes MOONBOOK_APP_MASTER_KEY instead of environment injection")
+	}
+	for _, removed := range []string{"MOONBOOK_EPUSDT_PID", "MOONBOOK_EPUSDT_SECRET", "MOONBOOK_EPUSDT_CREATE_URL", "MOONBOOK_EPUSDT_SYNC_URL"} {
+		if _, exists := values[removed]; exists {
+			t.Errorf("deprecated payment environment variable remains in example: %s", removed)
+		}
+		if _, exists := compose.Services["server"].Environment[removed]; exists {
+			t.Errorf("deprecated payment environment variable remains in compose: %s", removed)
 		}
 	}
 }

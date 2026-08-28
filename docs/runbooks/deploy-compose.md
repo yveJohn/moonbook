@@ -21,6 +21,12 @@ docker compose --env-file .env --profile bootstrap run --rm admin-bootstrap
 
 ## 生产配置合同
 
+### 统一应用数据加密主密钥
+
+`MOONBOOK_APP_MASTER_KEY` 是 Moonbook 唯一的应用数据加密主密钥。支付凭据以及后续需要落库的业务秘密必须复用该密钥和 `internal/platform/secretcrypto`，不得新增模块专属主密钥。首次部署前在受控环境生成 32 个随机字节并进行标准 Base64 编码，将结果通过 Secret 注入所有 Server 实例；不得把真实值写入 Git、普通 Compose 文件、命令输出或日志。
+
+数据库备份与该主密钥必须分别受控备份，恢复时二者缺一不可。所有实例必须使用同一个值；密钥丢失后已有密文不可恢复，只能重新配置业务秘密。当前版本不支持在线轮换，生产环境不得直接替换该值。EPUSDT 的 PID、Secret 和端点由管理后台加密写入 PostgreSQL，不再使用 `MOONBOOK_EPUSDT_*` 专属配置变量（回调审计窗口 `MOONBOOK_EPUSDT_CALLBACK_STALE_MINUTES` 除外）。
+
 生产环境必须同时加载 `deploy/compose/compose.production.yaml`，并先运行 `scripts/verify-production-config.sh /secure/path/moonbook.env`。该 override 删除本地应用构建，强制 PostgreSQL、Redis、MinIO、MinIO Client、Server、Web、Reader 和 Nginx 使用 `@sha256:` digest，并为常驻服务设置 CPU、内存、PID 上限及 `json-file` 日志轮转。默认限制只是起点，必须按容量测试调整；容器持续超过内存 90% 或宿主磁盘使用 80% 告警，磁盘 90% 或预计 24 小时内耗尽时停止发布并扩容。
 
 宿主发布端口仍只绑定 `127.0.0.1`，由同机或受控网络内 TLS 终止代理访问。TLS 代理必须启用 TLS 1.2+、证书续期告警和 HSTS，在转发前清除客户端提供的 `X-Real-IP`、`X-Forwarded-For`、`X-Forwarded-Proto`。Compose Gateway 会再次重写这些头；Server 只信任 `MOONBOOK_TRUSTED_PROXIES` 中的明确 IP/CIDR，未设置时不信任转发头，无效值会使 Server 启动失败。生产值必须收窄到实际 Gateway 网络，不得使用 `0.0.0.0/0`。

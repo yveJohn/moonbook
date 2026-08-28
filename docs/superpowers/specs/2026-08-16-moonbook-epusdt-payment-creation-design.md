@@ -1,5 +1,7 @@
 # Moonbook EPUSDT 支付创建闭环设计
 
+> 2026-08-28 更新：本文第 4、5 节的 EPUSDT 专属环境变量凭据方案已由 `2026-08-28-moonbook-payment-channel-crud-design.md` 替代。支付配置现由管理后台写入 PostgreSQL，并使用全项目唯一的 `MOONBOOK_APP_MASTER_KEY` 加密；本文其余支付状态机和协议约束继续有效。
+
 ## 1. 文档状态
 
 - 日期：2026-08-16
