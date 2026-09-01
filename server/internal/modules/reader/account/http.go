@@ -119,6 +119,16 @@ func (h *Handler) inviteDashboard(c *gin.Context) {
 		accountError(c, err)
 		return
 	}
-	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": "邀请你加入月白书城，点击 {{link}} 注册", "registerRewardCoin": strconv.FormatInt(rewards.RegisterRewardCoin, 10), "firstRechargeRewardCoin": strconv.FormatInt(rewards.FirstRechargeRewardCoin, 10), "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(rewards.TotalRewardCoin, 10), "rewards": []any{}}
+	rewardItems := make([]map[string]any, 0, len(rewards.Records))
+	for _, reward := range rewards.Records {
+		rewardItems = append(rewardItems, map[string]any{
+			"id":          strconv.FormatInt(reward.ID, 10),
+			"rewardStage": reward.RewardStage,
+			"rewardCoin":  strconv.FormatInt(reward.RewardCoin, 10),
+			"grantTime":   readerwire.DateTimePointer(reward.GrantedAt),
+			"remark":      reward.Remark,
+		})
+	}
+	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": "邀请你加入月白书城，点击 {{link}} 注册", "registerRewardCoin": strconv.FormatInt(rewards.RegisterRewardCoin, 10), "firstRechargeRewardCoin": strconv.FormatInt(rewards.FirstRechargeRewardCoin, 10), "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(rewards.TotalRewardCoin, 10), "rewards": rewardItems}
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: data})
 }

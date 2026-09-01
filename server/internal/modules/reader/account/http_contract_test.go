@@ -37,7 +37,10 @@ type accountContractRows struct {
 	index   int
 }
 
-type accountContractSummary struct{ fixed time.Time }
+type accountContractSummary struct {
+	fixed   time.Time
+	rewards []commercecontract.InviteRewardRecord
+}
 
 func (stub accountContractSummary) Entitlements(_ context.Context, readerID int64) (commercecontract.EntitlementSummary, error) {
 	return commercecontract.EntitlementSummary{ReaderID: readerID, BookIDs: []int64{accountSafeID}, MembershipActive: true, MembershipPermanent: true}, nil
@@ -48,8 +51,8 @@ func (stub accountContractSummary) MembershipProducts(context.Context) ([]commer
 	return []commercecontract.MembershipProduct{{ID: accountMaxID, Name: "永久会员", PriceCoin: accountSafeID, AllowBonusCoin: true, DurationDays: &days, SaleStatus: "on_sale", SortOrder: 1, CreatedAt: stub.fixed, UpdatedAt: stub.fixed}}, nil
 }
 
-func (accountContractSummary) InviteRewardSummary(context.Context, int64) (commercecontract.InviteRewardSummary, error) {
-	return commercecontract.InviteRewardSummary{RegisterRewardCoin: accountSafeID, FirstRechargeRewardCoin: 100, TotalRewardCoin: accountMaxID}, nil
+func (stub accountContractSummary) InviteRewardSummary(context.Context, int64) (commercecontract.InviteRewardSummary, error) {
+	return commercecontract.InviteRewardSummary{RegisterRewardCoin: accountSafeID, FirstRechargeRewardCoin: 100, TotalRewardCoin: accountMaxID, Records: stub.rewards}, nil
 }
 
 func (accountContractDriver) Open(string) (driver.Conn, error)  { return accountContractConn{}, nil }
@@ -97,7 +100,11 @@ func TestAccountHTTPContractKeepsEntitlementProductAndInviteLongValues(t *testin
 	}
 	defer db.Close()
 	gin.SetMode(gin.TestMode)
-	summary := accountContractSummary{fixed: time.Date(2026, 8, 15, 5, 6, 7, 0, time.UTC)}
+	fixed := time.Date(2026, 8, 15, 5, 6, 7, 0, time.UTC)
+	summary := accountContractSummary{fixed: fixed, rewards: []commercecontract.InviteRewardRecord{
+		{ID: accountMaxID, RewardStage: "register", RewardCoin: accountSafeID, GrantedAt: &fixed, Remark: "邀请注册奖励"},
+		{ID: accountSafeID, RewardStage: "first_recharge", RewardCoin: 100, Remark: "邀请首充奖励"},
+	}}
 	handler := &Handler{db: db, summary: summary, rewards: summary}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -121,7 +128,7 @@ func TestAccountHTTPContractKeepsEntitlementProductAndInviteLongValues(t *testin
 		},
 		{
 			"invite dashboard", http.MethodPost, "/reader/me/invite/code",
-			`{"code":200,"msg":"查询成功","data":{"readerId":"9223372036854775807","inviteCode":"ACCOUNT-CONTRACT","inviteCodeAvailable":true,"shareTextTemplate":"邀请你加入月白书城，点击 {{link}} 注册","registerRewardCoin":"9007199254740993","firstRechargeRewardCoin":"100","invitedCount":"9007199254740993","totalRewardCoin":"9223372036854775807","rewards":[]}}`,
+			`{"code":200,"msg":"查询成功","data":{"readerId":"9223372036854775807","inviteCode":"ACCOUNT-CONTRACT","inviteCodeAvailable":true,"shareTextTemplate":"邀请你加入月白书城，点击 {{link}} 注册","registerRewardCoin":"9007199254740993","firstRechargeRewardCoin":"100","invitedCount":"9007199254740993","totalRewardCoin":"9223372036854775807","rewards":[{"id":"9223372036854775807","rewardStage":"register","rewardCoin":"9007199254740993","grantTime":"2026-08-15 05:06:07","remark":"邀请注册奖励"},{"id":"9007199254740993","rewardStage":"first_recharge","rewardCoin":"100","grantTime":null,"remark":"邀请首充奖励"}]}}`,
 		},
 	}
 	for _, test := range tests {
@@ -142,5 +149,20 @@ func TestAccountHTTPContractKeepsEntitlementProductAndInviteLongValues(t *testin
 				t.Fatalf("response mismatch\nwant: %s\n got: %s", test.want, resp.Body.String())
 			}
 		})
+	}
+
+	handler.rewards = accountContractSummary{}
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/reader/me/invite/code", nil))
+	var payload struct {
+		Data struct {
+			Rewards []any `json:"rewards"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Data.Rewards == nil || len(payload.Data.Rewards) != 0 {
+		t.Fatalf("empty rewards must be []: %s", resp.Body.String())
 	}
 }
