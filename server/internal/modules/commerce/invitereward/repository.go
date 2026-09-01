@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"strconv"
 
+	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 )
 
-const FirstRechargeRewardCoin int64 = 100
+const FirstRechargeRewardCoin = commercecontract.FirstRechargeRewardCoin
 
 func GrantFirstRechargeTx(ctx context.Context, tx transaction.DBTX, invites readercontract.InviteRelationReader, inviteeID int64) error {
 	if invites == nil {

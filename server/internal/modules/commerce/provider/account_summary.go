@@ -79,8 +79,30 @@ func (provider *AccountSummary) InviteRewardSummary(ctx context.Context, readerI
 	if provider == nil || provider.db == nil || readerID <= 0 {
 		return commercecontract.InviteRewardSummary{}, commercecontract.ErrInvalidRequest
 	}
-	var summary commercecontract.InviteRewardSummary
-	if err := provider.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT invitee_reward_coin FROM reader_invite_reward_config WHERE id=1 AND enabled),0),100,COALESCE((SELECT sum(amount) FROM reader_wallet_ledgers WHERE reader_id=$1 AND biz_type IN ('invite_reward','invite_first_recharge_reward') AND coin_type='bonus' AND direction='income'),0)`, readerID).Scan(&summary.RegisterRewardCoin, &summary.FirstRechargeRewardCoin, &summary.TotalRewardCoin); err != nil {
+	summary := commercecontract.InviteRewardSummary{
+		FirstRechargeRewardCoin: commercecontract.FirstRechargeRewardCoin,
+		Records:                 make([]commercecontract.InviteRewardRecord, 0),
+	}
+	if err := provider.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT inviter_reward_coin FROM reader_invite_reward_config WHERE id=1 AND enabled),0),COALESCE((SELECT sum(reward_coin) FROM reader_invite_reward_records WHERE inviter_reader_id=$1 AND status='granted'),0)`, readerID).Scan(&summary.RegisterRewardCoin, &summary.TotalRewardCoin); err != nil {
+		return summary, commercecontract.Wrap(commercecontract.ErrUnavailable, err)
+	}
+	rows, err := provider.db.QueryContext(ctx, `SELECT id,reward_stage,reward_coin,granted_at,remark FROM reader_invite_reward_records WHERE inviter_reader_id=$1 AND status='granted' ORDER BY granted_at DESC NULLS LAST,id DESC LIMIT 20`, readerID)
+	if err != nil {
+		return summary, commercecontract.Wrap(commercecontract.ErrUnavailable, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var record commercecontract.InviteRewardRecord
+		var grantedAt sql.NullTime
+		if err := rows.Scan(&record.ID, &record.RewardStage, &record.RewardCoin, &grantedAt, &record.Remark); err != nil {
+			return summary, commercecontract.Wrap(commercecontract.ErrUnavailable, err)
+		}
+		if grantedAt.Valid {
+			record.GrantedAt = &grantedAt.Time
+		}
+		summary.Records = append(summary.Records, record)
+	}
+	if err := rows.Err(); err != nil {
 		return summary, commercecontract.Wrap(commercecontract.ErrUnavailable, err)
 	}
 	return summary, nil

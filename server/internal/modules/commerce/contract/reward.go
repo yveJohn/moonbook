@@ -1,6 +1,11 @@
 package contract
 
-import "context"
+import (
+	"context"
+	"time"
+)
+
+const FirstRechargeRewardCoin int64 = 100
 
 type RegistrationRewardRequest struct {
 	RelationID int64
@@ -26,6 +31,15 @@ type InviteRewardSummary struct {
 	RegisterRewardCoin      int64
 	FirstRechargeRewardCoin int64
 	TotalRewardCoin         int64
+	Records                 []InviteRewardRecord
+}
+
+type InviteRewardRecord struct {
+	ID          int64
+	RewardStage string
+	RewardCoin  int64
+	GrantedAt   *time.Time
+	Remark      string
 }
 
 type InviteRewardReader interface {
