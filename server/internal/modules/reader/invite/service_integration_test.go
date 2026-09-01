@@ -45,6 +45,7 @@ func TestReaderRegistrationConsumesInviteAndCreatesRelation(t *testing.T) {
 	t.Cleanup(func() {
 		cleanup := context.Background()
 		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_sessions WHERE reader_id IN ($1,$2)`, inviter, invitee)
+		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_invite_reward_records WHERE inviter_reader_id IN ($1,$2) OR invitee_reader_id IN ($1,$2)`, inviter, invitee)
 		_, _ = db.ExecContext(cleanup, `ALTER TABLE reader_wallet_ledgers DISABLE TRIGGER reader_wallet_ledgers_immutable_update`)
 		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_wallet_ledgers WHERE reader_id IN ($1,$2)`, inviter, invitee)
 		_, _ = db.ExecContext(cleanup, `ALTER TABLE reader_wallet_ledgers ENABLE TRIGGER reader_wallet_ledgers_immutable_update`)
@@ -86,6 +87,19 @@ func TestReaderRegistrationConsumesInviteAndCreatesRelation(t *testing.T) {
 	}
 	if err := db.QueryRowContext(ctx, `SELECT bonus_coin_balance FROM reader_wallets WHERE reader_id=$1`, invitee).Scan(&inviteeBalance); err != nil || inviteeBalance != 7 {
 		t.Fatalf("invitee bonus=%d err=%v", inviteeBalance, err)
+	}
+	var rewardID, rewardRelationID, rewardInviterID, rewardInviteeID, rewardCoin int64
+	var rewardStage, rewardStatus, rewardKey string
+	if err := db.QueryRowContext(ctx, `SELECT id,relation_id,inviter_reader_id,invitee_reader_id,reward_stage,reward_coin,status,idempotency_key FROM reader_invite_reward_records WHERE invitee_reader_id=$1 AND reward_stage='register'`, invitee).Scan(&rewardID, &rewardRelationID, &rewardInviterID, &rewardInviteeID, &rewardStage, &rewardCoin, &rewardStatus, &rewardKey); err != nil {
+		t.Fatal(err)
+	}
+	var inviterLedgerCount int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_wallet_ledgers WHERE reader_id=$1 AND biz_type='invite_register_reward' AND biz_id=$2 AND idempotency_key=$3`, inviter, fmt.Sprintf("%d", rewardID), rewardKey).Scan(&inviterLedgerCount); err != nil {
+		t.Fatal(err)
+	}
+	wantRewardKey := fmt.Sprintf("invite_reward:%d:register", invitee)
+	if rewardRelationID <= 0 || rewardInviterID != inviter || rewardInviteeID != invitee || rewardStage != "register" || rewardCoin != 13 || rewardStatus != "granted" || rewardKey != wantRewardKey || inviterLedgerCount != 1 {
+		t.Fatalf("reward=%d/%d/%d/%s/%d/%s/%s inviterLedgerCount=%d", rewardRelationID, rewardInviterID, rewardInviteeID, rewardStage, rewardCoin, rewardStatus, rewardKey, inviterLedgerCount)
 	}
 	var projectionUsername, projectionNickname, projectionStatus string
 	if err := db.QueryRowContext(ctx, `SELECT username,nickname,status FROM commerce_reader_search_projection WHERE reader_id=$1`, invitee).Scan(&projectionUsername, &projectionNickname, &projectionStatus); err != nil || projectionUsername != inviteeName || projectionNickname != "被邀请人" || projectionStatus != "enabled" {
