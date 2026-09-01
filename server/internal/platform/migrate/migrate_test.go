@@ -121,9 +121,34 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00073_payment_channel_secure_crud.sql",
 		"00074_payment_channel_base_urls.sql",
 		"00075_disable_incomplete_payment_channels.sql",
+		"00076_reader_invite_reward_detail_repair.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestReaderInviteRewardDetailRepairMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00076_reader_invite_reward_detail_repair.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"reader_invite_reward_records_invitee_stage_uidx",
+		"registration-ledger:",
+		"invite_reward:",
+		"unreconciled runtime invite registration reward ledger",
+		"Moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("reader invite reward repair migration missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"TRUNCATE", "DELETE FROM reader_wallet", "UPDATE reader_wallet"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("reader invite reward repair migration contains forbidden statement %q", forbidden)
+		}
 	}
 }
 

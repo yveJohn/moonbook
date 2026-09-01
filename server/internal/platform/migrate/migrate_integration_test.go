@@ -205,6 +205,181 @@ func TestPaymentChannelBaseURLMigrationScenarios(t *testing.T) {
 	})
 }
 
+func TestReaderInviteRewardDetailRepairMigrationScenarios(t *testing.T) {
+	adminDSN := strings.TrimSpace(os.Getenv("MOONBOOK_MIGRATION_TEST_ADMIN_DSN"))
+	if adminDSN == "" {
+		t.Skip("MOONBOOK_MIGRATION_TEST_ADMIN_DSN 未配置")
+	}
+	adminDB, err := sql.Open("pgx", adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	t.Run("empty database and replay", func(t *testing.T) {
+		db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+		provider, err := NewProvider(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		results, err := provider.UpTo(ctx, 76)
+		if err != nil || len(results) != 76 {
+			t.Fatalf("empty migration: applied=%d err=%v", len(results), err)
+		}
+		verifyInviteRewardStageIndex(t, ctx, db)
+		replayed, err := provider.UpTo(ctx, 76)
+		if err != nil || len(replayed) != 0 {
+			t.Fatalf("repeat migration: applied=%d err=%v", len(replayed), err)
+		}
+	})
+
+	t.Run("upgrade backfills only deterministic runtime inviter ledger", func(t *testing.T) {
+		db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+		provider, err := NewProvider(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if results, err := provider.UpTo(ctx, 75); err != nil || len(results) != 75 {
+			t.Fatalf("migrate to 75: applied=%d err=%v", len(results), err)
+		}
+		prepareInviteRewardRepairFixture(t, ctx, db, false, false)
+		before := inviteRewardRepairProtectedFacts(t, ctx, db)
+
+		results, err := provider.UpTo(ctx, 76)
+		if err != nil || len(results) != 1 {
+			t.Fatalf("migrate to 76: applied=%d err=%v", len(results), err)
+		}
+		verifyInviteRewardStageIndex(t, ctx, db)
+		var relationID, inviterID, inviteeID, amount int64
+		var status, key, sourceType, sourceRef, remark string
+		if err := db.QueryRowContext(ctx, `SELECT relation_id,inviter_reader_id,invitee_reader_id,reward_coin,status,idempotency_key,source_type,source_ref,remark FROM reader_invite_reward_records WHERE reward_stage='register' AND invitee_reader_id=9100000000002`).Scan(&relationID, &inviterID, &inviteeID, &amount, &status, &key, &sourceType, &sourceRef, &remark); err != nil {
+			t.Fatal(err)
+		}
+		if relationID != 9100000000004 || inviterID != 9100000000001 || inviteeID != 9100000000002 || amount != 30 || status != "granted" || key != "invite_reward:9100000000002:register" || sourceType != "runtime" || sourceRef != "registration-ledger:9100000000005" || remark != "邀请奖励" {
+			t.Fatalf("unexpected repaired reward relation=%d inviter=%d invitee=%d amount=%d status=%q key=%q source=%q/%q remark=%q", relationID, inviterID, inviteeID, amount, status, key, sourceType, sourceRef, remark)
+		}
+		after := inviteRewardRepairProtectedFacts(t, ctx, db)
+		if after.accounts != before.accounts || after.relations != before.relations || after.wallets != before.wallets || after.ledgers != before.ledgers || after.rewards != before.rewards+1 {
+			t.Fatalf("protected facts changed before=%+v after=%+v", before, after)
+		}
+		var unrelated int
+		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_invite_reward_records WHERE source_ref IN ('registration-ledger:9100000000006','registration-ledger:9100000000007')`).Scan(&unrelated); err != nil || unrelated != 0 {
+			t.Fatalf("unrelated ledgers repaired=%d err=%v", unrelated, err)
+		}
+	})
+
+	for _, scenario := range []struct {
+		name         string
+		duplicate    bool
+		inconsistent bool
+		wantError    string
+	}{
+		{name: "duplicate stage facts abort", duplicate: true, wantError: "duplicate invite reward stage facts"},
+		{name: "inconsistent runtime ledger aborts", inconsistent: true, wantError: "unreconciled runtime invite registration reward ledger"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			db, ctx := createMigrationTestDatabase(t, adminDB, adminDSN)
+			provider, err := NewProvider(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if results, err := provider.UpTo(ctx, 75); err != nil || len(results) != 75 {
+				t.Fatalf("migrate to 75: applied=%d err=%v", len(results), err)
+			}
+			prepareInviteRewardRepairFixture(t, ctx, db, scenario.duplicate, scenario.inconsistent)
+			before := inviteRewardRepairProtectedFacts(t, ctx, db)
+			if results, err := provider.UpTo(ctx, 76); err == nil || len(results) != 0 || !strings.Contains(err.Error(), scenario.wantError) {
+				t.Fatalf("failed migration: applied=%d err=%v", len(results), err)
+			}
+			after := inviteRewardRepairProtectedFacts(t, ctx, db)
+			if after != before {
+				t.Fatalf("failed migration changed facts before=%+v after=%+v", before, after)
+			}
+			var current int64
+			if err := db.QueryRowContext(ctx, `SELECT max(version_id) FROM moonbook_schema_version WHERE is_applied`).Scan(&current); err != nil || current != 75 {
+				t.Fatalf("migration version after failure=%d err=%v", current, err)
+			}
+			var indexes int
+			if err := db.QueryRowContext(ctx, `SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND indexname='reader_invite_reward_records_invitee_stage_uidx'`).Scan(&indexes); err != nil || indexes != 0 {
+				t.Fatalf("failed migration index count=%d err=%v", indexes, err)
+			}
+		})
+	}
+}
+
+type inviteRewardRepairCounts struct {
+	accounts  int
+	relations int
+	wallets   int
+	ledgers   int
+	rewards   int
+}
+
+func inviteRewardRepairProtectedFacts(t *testing.T, ctx context.Context, db *sql.DB) inviteRewardRepairCounts {
+	t.Helper()
+	var counts inviteRewardRepairCounts
+	queries := []struct {
+		query string
+		out   *int
+	}{
+		{`SELECT count(*) FROM reader_accounts WHERE id BETWEEN 9100000000001 AND 9100000000010`, &counts.accounts},
+		{`SELECT count(*) FROM reader_invite_relations WHERE id=9100000000004`, &counts.relations},
+		{`SELECT count(*) FROM reader_wallets WHERE reader_id BETWEEN 9100000000001 AND 9100000000010`, &counts.wallets},
+		{`SELECT count(*) FROM reader_wallet_ledgers WHERE id BETWEEN 9100000000005 AND 9100000000010`, &counts.ledgers},
+		{`SELECT count(*) FROM reader_invite_reward_records WHERE invitee_reader_id=9100000000002`, &counts.rewards},
+	}
+	for _, item := range queries {
+		if err := db.QueryRowContext(ctx, item.query).Scan(item.out); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return counts
+}
+
+func prepareInviteRewardRepairFixture(t *testing.T, ctx context.Context, db *sql.DB, duplicate, inconsistent bool) {
+	t.Helper()
+	_, err := db.ExecContext(ctx, `
+INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES
+    (9100000000001,'invite-repair-inviter','邀请人','fixture','enabled'),
+    (9100000000002,'invite-repair-invitee','被邀请人','fixture','enabled');
+INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status) VALUES
+    (9100000000003,'INVITE-REPAIR',9100000000001,'enabled');
+INSERT INTO reader_invite_relations(id,inviter_reader_id,invitee_reader_id,invite_code_id,status) VALUES
+    (9100000000004,9100000000001,9100000000002,9100000000003,'active');
+INSERT INTO reader_wallets(reader_id,bonus_coin_balance,total_bonus_coin_income) VALUES
+    (9100000000001,30,30),(9100000000002,5,5);
+INSERT INTO reader_wallet_ledgers(id,reader_id,ledger_no,biz_type,biz_id,direction,coin_type,amount,balance_before,balance_after,remark,idempotency_key,source_type,created_at) VALUES
+    (9100000000005,9100000000001,'INVITE-REPAIR-INVITER','invite_reward','9100000000004:9100000000002','income','bonus',30,0,30,'邀请奖励','9100000000004:9100000000002:inviter','runtime','2026-08-31T10:00:00Z'),
+    (9100000000006,9100000000002,'INVITE-REPAIR-INVITEE','invite_reward','9100000000004:9100000000002','income','bonus',5,0,5,'注册奖励','9100000000004:9100000000002:invitee','runtime','2026-08-31T10:00:00Z'),
+    (9100000000007,9100000000001,'INVITE-REPAIR-LEGACY','invite_reward','9100000000004:9100000000002','income','bonus',30,0,30,'旧奖励','legacy-invite-repair','legacy','2026-08-30T10:00:00Z');`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		_, err = db.ExecContext(ctx, `INSERT INTO reader_invite_reward_records(id,relation_id,inviter_reader_id,invitee_reader_id,reward_stage,reward_coin,status,idempotency_key,granted_at) VALUES
+            (9100000000008,9100000000004,9100000000001,9100000000002,'register',30,'granted','duplicate-register-a',now()),
+            (9100000000009,9100000000004,9100000000001,9100000000002,'register',30,'granted','duplicate-register-b',now())`)
+	} else if inconsistent {
+		_, err = db.ExecContext(ctx, `INSERT INTO reader_invite_reward_records(id,relation_id,inviter_reader_id,invitee_reader_id,reward_stage,reward_coin,status,idempotency_key,granted_at) VALUES
+            (9100000000008,9100000000004,9100000000001,9100000000002,'register',31,'granted','invite_reward:9100000000002:register',now())`)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func verifyInviteRewardStageIndex(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	var unique bool
+	var definition string
+	if err := db.QueryRowContext(ctx, `SELECT i.indisunique,pg_get_indexdef(i.indexrelid) FROM pg_class c JOIN pg_index i ON i.indexrelid=c.oid WHERE c.relname='reader_invite_reward_records_invitee_stage_uidx'`).Scan(&unique, &definition); err != nil {
+		t.Fatal(err)
+	}
+	if !unique || !strings.Contains(definition, "invitee_reader_id, reward_stage") {
+		t.Fatalf("unexpected invite reward stage index unique=%v definition=%q", unique, definition)
+	}
+}
+
 func TestEPUSDTCallbackAttemptAuditMigrationScenarios(t *testing.T) {
 	adminDSN := strings.TrimSpace(os.Getenv("MOONBOOK_MIGRATION_TEST_ADMIN_DSN"))
 	if adminDSN == "" {
