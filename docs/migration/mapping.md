@@ -20,7 +20,7 @@
 | 钱包与流水 | `reader_wallet`、`reader_wallet_ledger`、`reader_bonus_coin_bucket`、`reader_wallet_adjustment` | `reader_wallets`、`reader_wallet_ledgers`、`reader_bonus_coin_buckets`、`reader_wallet_adjustments` | reader/ledger/bucket/adjustment ID 原值保留并推进 identity 序列；流水 `biz_id` 按十进制字符串保留 | 每个流水余额跃迁、方向、币种、金额和关联；钱包余额/收入/支出由不可变流水重算必须零差异 | M4 `reader-finance` 映射和真实 MySQL→PostgreSQL 核对已实现；完整副本仍待 M6 |
 | 商品与订单 | `reader_product`、`reader_order`、历史购买记录 | `commerce_products`、`reader_purchase_orders` | 商品、订单、目标 ID 原值保留并推进订单序列 | `buy_*` 转目标订单类型；金额快照、扣款拆分、状态、幂等键和来源引用 | 当前商品/订单映射已真实验证；更早历史购买表待 M6 盘点 |
 | 会员和权益 | `reader_entitlement`、`reader_membership_grant` | `commerce_entitlements`、`commerce_membership_grants` | ID、读者和目标 ID 原值保留 | 有效期、永久标志、来源订单；非法类型/状态/目标写错误清单 | M3/M4 映射和真实 MySQL→PostgreSQL 测试已实现 |
-| 签到与邀请 | `reader_checkin_record`、`reader_checkin_reward_rule`、邀请关系/奖励/邀请码 | `reader_checkin_records`、`reader_checkin_reward_rules`、`reader_invite_reward_records` 及现有邀请表 | 原值保留并推进 identity 序列 | 连续天数、唯一日期、奖励分项汇总、关系和读者关联、奖励枚举 | M4 当前表映射和真实 MySQL→PostgreSQL 测试已实现；完整副本仍待 M6 |
+| 签到与邀请 | `reader_checkin_record`、`reader_checkin_reward_rule`、邀请关系/奖励/邀请码 | `reader_checkin_records`、`reader_checkin_reward_rules`、`reader_invite_reward_records` 及现有邀请表 | 原值保留并推进 identity 序列；运行期注册奖励使用规范键 `invite_reward:<inviteeId>:register` | 连续天数、唯一日期、奖励分项汇总、关系和读者关联、奖励枚举；每名受邀读者每阶段唯一 | M4 当前表映射和真实 MySQL→PostgreSQL 测试已实现；`00076` 只补建可由旧 Go 运行期邀请人流水确定证明的注册事实，不补发资金；完整副本仍待 M6 |
 | 充值与支付 | `reader_recharge_product`、`reader_recharge_setting`、`reader_payment_channel`、`reader_recharge_order`、`reader_payment_callback_log`、`reader_payment_credential`、历史 `order_pay` | `reader_recharge_*`、`reader_payment_*` | 当前业务事实 ID 原值保留并推进 identity 序列；渠道/凭据 ID 仅保存为旧数字引用 | 金额、订单/回调状态、关联、回调 JSON；商户 PID 和来源 IP 只保存 SHA-256；支付 Secret 不迁移 | M4 当前 EPUSDT 事实映射已真实验证；`reader_payment_credential` 明文/密文均不迁移，历史 `order_pay` 待 M6 盘点 |
 | 采集 | `novel_crawl_*`、历史 `crawl_*` | PostgreSQL 内容生产域 | 原值保留 | 来源、游标、候选、任务与日志关联 | `novel_crawl_*` 当前表已由来源/候选/导入任务/抓取日志 stage 接入；历史 `crawl_*` 表启用状态、Cookie Secret 转换、自动发现运行状态仍待完整副本盘点 |
 | TXT 导入 | `novel_txt_import_task`、原文件和失败修复记录 | PostgreSQL + MinIO | 原值保留 | 文件哈希、任务状态、章节结果 | `00042` 建立任务事实；上传和失败文件替换都先完成大小/SHA-256 校验，再写任务和 `txt_import` 队列；预览只读已校验对象并限制返回量 |
@@ -45,6 +45,7 @@
 - 钱包汇总保留旧余额与累计值，但验收必须调用 `commerce/reconcile.Wallets` 按不可变流水重新计算；任一币种的余额、收入或支出差异均阻止切换。
 - 旧 `reader_payment_credential.encrypted_secret` 和任何支付密钥不进入 PostgreSQL。充值订单只保留旧渠道 ID、凭据 ID 数字引用和商户 PID 的 SHA-256，回调来源 IP 只保存 SHA-256。
 - `payload_snapshot` 仅迁移旧 DDL 明确标注的已解析非敏感 JSON；迁移前验证 JSON，有效载荷不写日志或错误消息。无效枚举、金额、余额跃迁和关联进入 `migration_errors`，不静默丢弃。
+- 邀请奖励历史以 `reader_invite_reward_records` 为事实源。旧 MySQL 奖励事实继续由 `reader-finance` 原值迁移；`00076` 只识别旧 Go 运行期 `<relationId>:<inviteeId>:inviter` 不可变流水，补建 `register` 事实并核对关系、双方读者和金额，不修改钱包、余额或流水。无法唯一证明或金额不一致时迁移整体失败，禁止推测补齐。
 - 详细命令、合成数据覆盖和本次真实依赖结果见 `docs/migration/m4-reader-finance.md`；约 8 GB 完整副本的逐表、财务和耗时验收仍属于 M6。
 
 ## M2 当前书籍字段规则

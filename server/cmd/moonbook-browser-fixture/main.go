@@ -223,6 +223,9 @@ func cleanup(ctx context.Context, db *sql.DB, blobs objectstore.BlobStore) error
 		return err
 	}
 	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `ALTER TABLE reader_wallet_ledgers DISABLE TRIGGER reader_wallet_ledgers_immutable_update`); err != nil {
+		return fmt.Errorf("disable wallet ledger cleanup trigger: %w", err)
+	}
 	readerPattern := fixtureReaderPrefix + "%"
 	bookArgs := []any{fixtureBookName, fixtureAuthorName}
 	statements := append(readerCleanupStatements(readerPattern),
@@ -241,6 +244,9 @@ func cleanup(ctx context.Context, db *sql.DB, blobs objectstore.BlobStore) error
 		if _, err = tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
 			return err
 		}
+	}
+	if _, err = tx.ExecContext(ctx, `ALTER TABLE reader_wallet_ledgers ENABLE TRIGGER reader_wallet_ledgers_immutable_update`); err != nil {
+		return fmt.Errorf("restore wallet ledger cleanup trigger: %w", err)
 	}
 	if err = tx.Commit(); err != nil {
 		return err

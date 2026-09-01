@@ -31,7 +31,7 @@
 
 ## 专项验收
 
-- 财务：支付状态机、每次回调审计、签到/邀请运营页和 `commerce/reconcile.Full` 已通过本地测试与故障注入；真实支付仍按外部清单执行。
+- 财务：支付状态机、每次回调审计、签到/邀请运营页和 `commerce/reconcile.Full` 已通过本地测试与故障注入；2026-09-01 又补齐 Reader 邀请奖励事实读写闭环和确定性运行期历史补偿，真实支付仍按外部清单执行。
 - 对象与迁移：`all` Stage、checkpoint、迁移错误、源目标行数/主键/关联、MinIO 字节与 SHA-256、Full 财务任一差异都会非零退出。完整副本没有运行这些业务阶段，因此不得用合成故障注入替代全量结果。
 - 性能：空库短时基线零失败，只用于回归；没有覆盖完整数据、鉴权、正文、支付、Worker 或持续负载，不能作为生产容量证明。
 - 安全：三镜像、SBOM 和锁文件在固定口径下无已有修复版本的 High/Critical，秘密与恶意构建依赖门通过。GVA BSL 1.1 Production Use 授权、Server `NOASSERTION` 和第三方许可证履约仍阻断生产。
@@ -47,3 +47,11 @@
 ## 生产动作与服务影响
 
 本轮没有执行生产迁移、真实支付、TLS/DNS、流量切换、`git push` 或其他生产动作。Task 13 只更新文档，不影响运行服务，无需重启。未来实际发布仍须按 Runbook 运行一次性 `migrate`，重建并替换 `server`、`web`、`reader-ui` 和 `gateway`；监控配置变化时重建 monitoring profile。PostgreSQL、Redis 和 MinIO 不因本报告重启或重建。
+
+## 2026-09-01 邀请奖励专项增补
+
+本增补不改变上述固定候选的历史九阶段结论，也不授权生产操作。专项修复新增迁移 `00076`，恢复 `POST /reader/me/invite/code` 的邀请人奖励规则、事实累计和最近 20 条明细，并让新注册奖励在同一 PostgreSQL 事务内写奖励事实与钱包流水。旧 MySQL 奖励事实仍由 `reader-finance` 迁移；`00076` 只补建能够由既有运行期不可变流水确定证明的缺失事实，不修改余额或补发资金。
+
+专项验证通过 quality、migration、真实 PostgreSQL/Redis/MinIO integration、RegistrationReward/Reader Invite race、Reader 45 个文件 542 项测试、树外 SSR/SEO 6 项及生产构建。Reader 总门的冻结树基线已从过期的 `26743db` 推进到仓库中已批准并部署的四位小数修复 `5227a99`；本次未修改 Reader 业务文件。隔离 Playwright 旅程确认邀请人“已邀请 1”“累计金币 13”及“邀请注册奖励 +13金币”弹窗，临时事实和数据库已清理。
+
+发布影响仅涉及 `moonbook-server` 和 PostgreSQL schema：部署时先执行迁移 `00076`，再重建/重启 Server。`moonbook-web`、冻结 Reader UI、Redis、MinIO 和 Gateway 无代码变更，不需要因本修复重启。正式生产迁移仍需单独授权。

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-reader_business_baseline="26743db"
+reader_business_baseline="5227a997716161ecddead56f5eee6a70f2c673aa"
 reader_router_version="7.18.2"
 mode="${1:---all}"
 
