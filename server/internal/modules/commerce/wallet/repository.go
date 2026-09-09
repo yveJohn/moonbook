@@ -18,7 +18,7 @@ type DBTX interface {
 
 func (r SQLRepository) Get(ctx context.Context, readerID int64) (Wallet, error) {
 	var w Wallet
-	err := r.DB.QueryRowContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, readerID).Err()
+	_, err := r.DB.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, readerID)
 	if err != nil {
 		return w, err
 	}

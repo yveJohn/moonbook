@@ -242,6 +242,40 @@ func TestConcurrentBookPurchaseDebitsWalletOnce(t *testing.T) {
 
 func fmtID(v int64) string { return strconv.FormatInt(v, 10) }
 
+func TestDebitInitializationLeavesTransactionUsable(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	db.SetMaxOpenConns(1)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	readerID := time.Now().UnixNano()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash,status) VALUES($1,$2,'x','enabled')`, readerID, "debit-pool-"+integrationtest.Prefix()); err != nil {
+		t.Fatal(err)
+	}
+	for range 10 {
+		if _, _, err := debitMixedTx(ctx, tx, readerID, 1, "unused", "unused", "book"); !errors.Is(err, ErrInsufficientBalance) {
+			t.Fatalf("expected insufficient balance from usable transaction, got %v", err)
+		}
+	}
+	var wallets, balance int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*),sum(bonus_coin_balance+recharge_coin_balance) FROM reader_wallets WHERE reader_id=$1`, readerID).Scan(&wallets, &balance); err != nil {
+		t.Fatal(err)
+	}
+	if wallets != 1 || balance != 0 {
+		t.Fatalf("wallets=%d balance=%d", wallets, balance)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if stats := db.Stats(); stats.InUse != 0 {
+		t.Fatalf("connection retained after rollback: %+v", stats)
+	}
+}
+
 type unavailableNovel struct{}
 
 func (unavailableNovel) LockPurchaseSnapshot(context.Context, string, int64) (novelcontract.PurchaseSnapshot, error) {

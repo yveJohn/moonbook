@@ -231,7 +231,7 @@ func debitRechargeOnlyTx(ctx context.Context, tx transaction.DBTX, readerID, amo
 
 func debitTx(ctx context.Context, tx transaction.DBTX, readerID, amount int64, orderID string, orderNo, biz string, useBonus bool) (int64, int64, error) {
 	var bonusBalance, rechargeBalance int64
-	if e := tx.QueryRowContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, readerID).Err(); e != nil {
+	if _, e := tx.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id) VALUES($1) ON CONFLICT(reader_id) DO NOTHING`, readerID); e != nil {
 		return 0, 0, e
 	}
 	if e := tx.QueryRowContext(ctx, `SELECT bonus_coin_balance,recharge_coin_balance FROM reader_wallets WHERE reader_id=$1 FOR UPDATE`, readerID).Scan(&bonusBalance, &rechargeBalance); e != nil {
