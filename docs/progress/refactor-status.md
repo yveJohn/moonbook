@@ -28,7 +28,8 @@
 
 ## 当前已知问题与关闭证据
 
-- 2026-09-09 钱包连接池耗尽修复：生产后端约在 23:27（UTC+8）开始 readiness 503，50 个连接均停在钱包初始化 INSERT；PostgreSQL 无锁等待且直接查询正常。`wallet.SQLRepository.Get` 将未消费结果的 `QueryRowContext(...).Err()` 改为 `ExecContext()`，购买扣款初始化同步修正；不改变余额、流水、权益、接口或数据库结构。真实 PostgreSQL 单连接池回归在原代码第一次 Get 时超时，修复后 100 次连续与 80 次并发调用通过，调用后连接归还；外键失败后池仍可用。购买回归覆盖新钱包重复初始化、余额不足和事务回滚，既有成功、幂等、并发购买用例继续通过。Reader/Commerce 全量单元与契约测试、真实 PostgreSQL/Redis/MinIO 集成测试、定向 go vet、gofmt 与 Go 应用构建通过。生产发布状态将在验证完成后补记；服务影响仅 Go 后端，部署时需替换后端容器，数据库和前端无需重启。
+- 2026-09-09 钱包连接池耗尽修复：生产后端约在 23:27（UTC+8）开始 readiness 503，50 个连接均停在钱包初始化 INSERT；PostgreSQL 无锁等待且直接查询正常。`wallet.SQLRepository.Get` 将未消费结果的 `QueryRowContext(...).Err()` 改为 `ExecContext()`，购买扣款初始化同步修正；不改变余额、流水、权益、接口或数据库结构。真实 PostgreSQL 单连接池回归在原代码第一次 Get 时超时，修复后 100 次连续与 80 次并发调用通过，调用后连接归还；外键失败后池仍可用。购买回归覆盖新钱包重复初始化、余额不足和事务回滚，既有成功、幂等、并发购买用例继续通过。Reader/Commerce 全量单元与契约测试、真实 PostgreSQL/Redis/MinIO 197 项集成测试（零失败、零跳过）、定向 go vet、gofmt 与 Go 应用构建通过。修复提交为 `0bb1fdbd9ac1`，发布证据见下一项。
+- 钱包修复于 2026-09-09 23:46（UTC+8）部署生产：本地构建 Linux AMD64 镜像 `moonbook/server:0bb1fdbd9ac1`，image ID 为 `sha256:5dd64850b31e4306c25e6238a35623c86c6e264908ffed93ae5f6a00090df87e`，上传归档与远端 SHA-256 校验通过。发布物及旧配置保存在 `/opt/moonbook-app/releases/wallet-fix-0bb1fdbd9ac1/`，原配置为 `compose.release.before.yml`。仅更新 `compose.release.yml` 中 Server/Migrate 镜像引用，并用 `up -d --no-deps --no-build --pull never --wait server` 替换后端；未执行迁移、修数或对象写入。Server 为 healthy，发布后前 14 次 readiness 全部 200，结构化 error/fatal/panic 和请求错误计数为 0；后端数据库连接降至 9 个。管理页面、读者首页、管理/读者公网 readiness 均 HTTP 200，四项依赖均为 ok。Web、Reader、Gateway、PostgreSQL、Redis 容器启动时间未变化，无需额外重启。另发现源站读者证书仅含 `*.ybsc.me`、不覆盖根域名 `ybsc.me`，本次未调整证书；当前 Cloudflare 公网访问验证成功，该独立问题仍需后续处理。
 
 本节前八项为当前结论；其后按时间保留实施证据。历史发现不代表当前仍未完成，发生冲突时以总览、`m7-readiness-audit.md` 和对应报告的“最终复审”结论为准。
 
