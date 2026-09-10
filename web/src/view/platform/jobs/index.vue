@@ -25,8 +25,8 @@
     </div>
     <el-table v-table-display v-loading="loading" :data="rows" border row-key="id">
       <el-table-column label="任务 ID" width="170"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
-      <el-table-column prop="module" label="模块" width="120" />
-      <el-table-column prop="jobType" label="类型" width="170" />
+      <el-table-column prop="module" label="模块" width="120" :formatter="adminEnumColumn" />
+      <el-table-column prop="jobType" label="类型" width="170" :formatter="adminEnumColumn" />
       <el-table-column prop="status" label="状态" width="100"  :formatter="adminStatusColumn" />
       <el-table-column label="尝试" width="100"><template #default="{ row }">{{ row.attemptCount }} / {{ row.maxAttempts }}</template></el-table-column>
       <el-table-column prop="leaseOwner" label="租约 Worker" min-width="160" show-overflow-tooltip />
@@ -40,7 +40,7 @@
     <el-drawer v-model="dialog" title="平台任务详情" size="min(900px, 94vw)">
       <el-descriptions v-if="current" :column="2" border>
         <el-descriptions-item label="任务 ID"><code>{{ current.id }}</code></el-descriptions-item>
-        <el-descriptions-item label="模块 / 类型">{{ current.module }} / {{ current.jobType }}</el-descriptions-item>
+        <el-descriptions-item label="模块 / 类型">{{ adminEnum('module', current.module) }} / {{ adminEnum('jobType', current.jobType) }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ adminStatus(current.status) }}</el-descriptions-item>
         <el-descriptions-item label="尝试">{{ current.attemptCount }} / {{ current.maxAttempts }}</el-descriptions-item>
         <el-descriptions-item label="租约">{{ current.leaseOwner || '-' }} / {{ adminDateTime(current.leaseExpiresAt) }}</el-descriptions-item>
@@ -63,6 +63,7 @@
 </template>
 
 <script setup>
+import { adminEnumColumn, adminEnum } from '@/utils/adminEnums'
 import { adminDateTime, adminStatus, adminStatusColumn, adminTimeColumn } from '@/utils/adminDisplay'
 import { Refresh, RefreshLeft, Search, View } from '@element-plus/icons-vue'
 import { reactive, ref } from 'vue'

@@ -22,11 +22,11 @@
           <el-table-column prop="type" label="类型" width="120">
             <template #default="scope">
               <el-select v-model="scope.row.type" placeholder="类型">
-                <el-option label="string" value="string" />
-                <el-option label="number" value="number" />
-                <el-option label="boolean" value="boolean" />
-                <el-option label="object" value="object" />
-                <el-option label="array" value="array" />
+                <el-option label="字符串" value="string" />
+                <el-option label="数字" value="number" />
+                <el-option label="布尔值" value="boolean" />
+                <el-option label="对象" value="object" />
+                <el-option label="数组" value="array" />
               </el-select>
             </template>
           </el-table-column>
@@ -55,8 +55,8 @@
           <el-table-column prop="type" label="类型" min-width="120">
             <template #default="scope">
               <el-select v-model="scope.row.type" placeholder="类型">
-                <el-option label="text" value="text" />
-                <el-option label="image" value="image" />
+                <el-option label="文本" value="text" />
+                <el-option label="图片" value="image" />
               </el-select>
             </template>
           </el-table-column>

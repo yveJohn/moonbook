@@ -44,7 +44,7 @@
             <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="来源" prop="source" width="130" />
+        <el-table-column label="来源" prop="source" width="130" :formatter="adminEnumColumn" />
         <el-table-column label="更新时间" prop="updatedAt" min-width="180">
           <template #default="scope">{{ formatTime(scope.row.updatedAt) }}</template>
         </el-table-column>
@@ -110,6 +110,7 @@
 </template>
 
 <script setup>
+import { adminEnumColumn } from '@/utils/adminEnums'
 import { adminDateTime } from '@/utils/adminDisplay'
   import { reactive, ref } from 'vue'
   import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'

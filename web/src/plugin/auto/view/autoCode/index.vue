@@ -1057,26 +1057,26 @@
       value: '<'
     },
     {
-      label: 'LIKE',
+      label: '模糊匹配',
       value: 'LIKE'
     },
     {
-      label: 'BETWEEN',
+      label: '区间内',
       value: 'BETWEEN'
     },
     {
-      label: 'NOT BETWEEN',
+      label: '区间外',
       value: 'NOT BETWEEN'
     }
   ])
 
   const typeIndexOptions = ref([
     {
-      label: 'index',
+      label: '普通索引',
       value: 'index'
     },
     {
-      label: 'uniqueIndex',
+      label: '唯一索引',
       value: 'uniqueIndex'
     }
   ])

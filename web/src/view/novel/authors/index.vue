@@ -31,7 +31,7 @@
         <el-table-column label="作品方向" width="110">
           <template #default="scope">{{ directionLabel(scope.row.workDirection) }}</template>
         </el-table-column>
-        <el-table-column label="来源" prop="source" width="150" />
+        <el-table-column label="来源" prop="source" width="150" :formatter="adminEnumColumn" />
         <el-table-column label="历史作者 ID" min-width="170">
           <template #default="scope">{{ scope.row.legacyAuthorId || scope.row.legacyBookAuthorId || '-' }}</template>
         </el-table-column>
@@ -93,6 +93,7 @@
 </template>
 
 <script setup>
+import { adminEnumColumn } from '@/utils/adminEnums'
 import { adminDateTime } from '@/utils/adminDisplay'
   import { reactive, ref } from 'vue'
   import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'

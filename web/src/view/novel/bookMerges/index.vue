@@ -65,7 +65,7 @@
             <el-table-column prop="targetChapterName" label="目标章节" min-width="180" show-overflow-tooltip />
             <el-table-column label="来源书" width="180"><template #default="{ row }"><code><BookReference :id="row.sourceBookId || ''" :name="row.sourceBookName || ''" /></code></template></el-table-column>
             <el-table-column prop="sourceChapterNo" label="源序号" width="80" align="right" />
-            <el-table-column prop="contentSource" label="正文来源" width="100" />
+            <el-table-column prop="contentSource" label="正文来源" width="100" :formatter="adminEnumColumn" />
             <el-table-column prop="wordCount" label="字数" width="90" align="right" />
             <el-table-column label="疑似重复" width="130"><template #default="{ row }"><el-tag v-if="row.duplicateFlag" type="warning">{{ row.duplicateReason }}</el-tag><span v-else>-</span></template></el-table-column>
           </el-table>
@@ -94,6 +94,7 @@
 </template>
 
 <script setup>
+import { adminEnumColumn } from '@/utils/adminEnums'
 import BookReference from '@/components/adminDisplay/BookReference.vue'
 import { adminDateTime, adminStatusColumn } from '@/utils/adminDisplay'
   import { computed, nextTick, reactive, ref } from 'vue'

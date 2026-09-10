@@ -37,7 +37,7 @@
         <el-table-column label="结果 ID" width="180"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
         <el-table-column prop="bookName" label="书籍" min-width="150" ><template #default="{ row }"><BookReference :id="row.bookId || ''" :name="row.bookName || ''" /></template></el-table-column>
         <el-table-column prop="chapterName" label="章节" min-width="190" show-overflow-tooltip />
-        <el-table-column prop="contentType" label="类型" width="110" />
+        <el-table-column prop="contentType" label="类型" width="110" :formatter="adminEnumColumn" />
         <el-table-column prop="cleanedWordCount" label="清洗字数" width="90" />
         <el-table-column prop="status" label="状态" width="130"  :formatter="adminStatusColumn" />
         <el-table-column label="操作" width="120" fixed="right"><template #default="{ row }"><el-tooltip content="审核"><el-button link type="primary" :icon="View" @click="openReview(row.id)" /></el-tooltip><el-tooltip v-if="['failed','discarded','manual_discarded'].includes(row.status)" content="重洗"><el-button link type="warning" :icon="RefreshRight" @click="reclean(row.id)" /></el-tooltip></template></el-table-column>
@@ -110,7 +110,7 @@
     </el-dialog>
 
     <el-dialog v-model="reviewVisible" title="清洗结果审核" width="min(1000px, 96vw)" top="4vh">
-      <el-descriptions v-if="review" :column="2" border><el-descriptions-item label="书籍">{{ review.bookName }}</el-descriptions-item><el-descriptions-item label="章节">{{ review.chapterName }}</el-descriptions-item><el-descriptions-item label="AI 类型">{{ review.contentType }}</el-descriptions-item><el-descriptions-item label="置信度">{{ review.confidence ?? '-' }}</el-descriptions-item></el-descriptions>
+      <el-descriptions v-if="review" :column="2" border><el-descriptions-item label="书籍">{{ review.bookName }}</el-descriptions-item><el-descriptions-item label="章节">{{ review.chapterName }}</el-descriptions-item><el-descriptions-item label="AI 类型">{{ adminEnum('contentType', review.contentType) }}</el-descriptions-item><el-descriptions-item label="置信度">{{ review.confidence ?? '-' }}</el-descriptions-item></el-descriptions>
       <div v-if="review" class="review-grid"><el-form-item label="原文"><el-input :model-value="review.originalText" type="textarea" :rows="18" readonly /></el-form-item><el-form-item label="清洗稿"><el-input v-model="review.cleanedText" type="textarea" :rows="18" /></el-form-item></div>
       <template #footer><el-button type="danger" @click="submitReview('manual_discarded')">丢弃章节</el-button><el-button type="primary" @click="submitReview('success')">采用清洗稿</el-button></template>
     </el-dialog>
@@ -131,6 +131,7 @@
 </template>
 
 <script setup>
+import { adminEnumColumn, adminEnum } from '@/utils/adminEnums'
 import BookReference from '@/components/adminDisplay/BookReference.vue'
 import BookSelect from '@/components/adminDisplay/BookSelect.vue'
 import { adminStatusColumn } from '@/utils/adminDisplay'

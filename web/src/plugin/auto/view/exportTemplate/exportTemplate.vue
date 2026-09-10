@@ -583,23 +583,23 @@ JOINS模式下不支持导入
       value: '<'
     },
     {
-      label: 'LIKE',
+      label: '模糊匹配',
       value: 'LIKE'
     },
     {
-      label: 'BETWEEN',
+      label: '区间内',
       value: 'BETWEEN'
     },
     {
-      label: 'NOT BETWEEN',
+      label: '区间外',
       value: 'NOT BETWEEN'
     },
     {
-      label: 'IN',
+      label: '属于集合',
       value: 'IN'
     },
     {
-      label: 'NOT IN',
+      label: '不属于集合',
       value: 'NOT IN'
     },
   ])

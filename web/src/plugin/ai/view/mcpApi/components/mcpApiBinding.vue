@@ -111,10 +111,10 @@
               <el-table-column label="位置" width="100">
                 <template #default="{ row }">
                   <el-select v-model="row.location" size="small">
-                    <el-option label="query" value="query" />
-                    <el-option label="body" value="body" />
-                    <el-option label="path" value="path" />
-                    <el-option label="header" value="header" />
+                    <el-option label="查询参数" value="query" />
+                    <el-option label="请求体" value="body" />
+                    <el-option label="路径参数" value="path" />
+                    <el-option label="请求头" value="header" />
                   </el-select>
                 </template>
               </el-table-column>

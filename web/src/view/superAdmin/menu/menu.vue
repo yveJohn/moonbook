@@ -415,8 +415,8 @@
                     placeholder="请选择"
                     size="small"
                   >
-                    <el-option key="query" value="query" label="query" />
-                    <el-option key="params" value="params" label="params" />
+                    <el-option key="query" value="query" label="查询参数" />
+                    <el-option key="params" value="params" label="路径参数" />
                   </el-select>
                 </template>
               </el-table-column>

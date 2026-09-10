@@ -10,12 +10,13 @@
     </el-form>
     <el-descriptions v-if="setting" :column="2" border class="meta">
       <el-descriptions-item label="金额精度">{{ setting.amountScale }} 位小数</el-descriptions-item>
-      <el-descriptions-item label="舍入方式">{{ setting.roundingMode }}</el-descriptions-item>
+      <el-descriptions-item label="舍入方式">{{ adminEnum('roundingMode', setting.roundingMode) }}</el-descriptions-item>
       <el-descriptions-item label="配置 ID"><code>{{ setting.id }}</code></el-descriptions-item>
     </el-descriptions>
   </div>
 </template>
 <script setup>
+import { adminEnum } from '@/utils/adminEnums'
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
