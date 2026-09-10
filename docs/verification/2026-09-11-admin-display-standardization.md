@@ -31,3 +31,45 @@ corepack pnpm@10.15.1 run check:supply-chain
 ## 服务影响
 
 仅影响管理前端 `web`。本地已有 Vite 开发服务可热更新，刷新页面即可；部署环境需要重新构建并发布管理前端静态资源，若通过容器提供资源则重建/重启对应管理前端容器。Go 后端、reader-ui、PostgreSQL、Redis、MinIO 无需重启。
+
+## 生产发布记录
+
+用户于本次任务中明确授权部署生产。发布在 **2026-09-11 00:39:39—00:39:46（UTC+8）** 完成。
+
+| 项目 | 结果 |
+| --- | --- |
+| 代码提交 | `67841f1faf56563ac1d7d8cb33c3c9661053ddb5` |
+| 生产目标 | `101.32.210.229:/opt/moonbook-app` |
+| 新 Web 镜像 | `moonbook/web:67841f1faf56`，Linux AMD64 |
+| 镜像 ID | `sha256:5c3678b15369262c4df09eeb63f97761a6e88beb477f5608c9e914d3a8bbf0eb` |
+| 归档 SHA-256 | `89770577ca6b166865bed615b6ff25506614699395188350ee41e93d6e118bec` |
+| HTML SHA-256 | `ace4ae1b89bed18fd5892fa6cc42ce6e5188f64e10407322b0d3f234d2f3410e` |
+| 旧 Web 镜像 | `moonbook/web:0b6b6e003b42`，保留用于回退 |
+| 发布及回退资料 | `/opt/moonbook-app/releases/admin-display-67841f1faf56/` |
+
+构建从固定 Git 提交导出管理源码，附加经白名单核查的前端公开生产变量，未复制后端 Secret。镜像在本地构建和验收；最终镜像的静态资源提取后通过供应链检查（354 个源文件、227 个 JavaScript 产物）、HTTP 和本次功能标记检查。约 32 MB 归档上传后远端 SHA-256 及镜像 ID 均校验一致。
+
+发布仅替换 `compose.release.yml` 的 `web.image`，执行：
+
+```sh
+docker compose --project-directory /opt/moonbook-app \
+  --env-file /opt/moonbook-app/.env \
+  -f /opt/moonbook-app/compose.yml \
+  -f /opt/moonbook-app/compose.release.yml \
+  up -d --no-deps --no-build --pull never --wait --wait-timeout 120 web
+docker exec moonbook-app-gateway-1 nginx -t
+docker exec moonbook-app-gateway-1 nginx -s reload
+```
+
+网关仅平滑重载以刷新 Web 上游地址，容器没有重建。Server、Reader、Gateway、PostgreSQL、Redis 的容器 ID 和启动时间与发布前一致；全部健康，四个应用容器 restart count 为 0。没有运行迁移、修改业务数据、写入 R2 或更改生产 Secret、DNS、证书和宿主反向代理配置。
+
+验证结果：
+
+- 源站管理入口及 HTML 哈希通过；管理/读者健康端点连续 15 次 HTTP 200。
+- 公网管理首页、网关健康、API readiness、读者首页、读者健康、读者 API readiness 共六项 HTTP 200。
+- 公网管理 HTML 及 29 个入口/展示相关资源与本地发布物哈希一致，包含状态中文、作品选择和表格复制实现。
+- Chromium 生产登录页面加载成功，控制台 0 error、0 warning。截图为本地忽略产物 `output/playwright/admin-display-production-login.png`。未使用生产账号写入业务数据；登录后交互以此前隔离组件验收为证据。
+
+发布目录保存 `release.json`、归档和校验文件、`compose.release.before.yml`、`containers.before.json`、`containers.after.json`、`deployment-result.json`、`observation.json`、`public-verification.json` 和本次 `activate.py`。发布脚本在切换或源站验证失败时会自动恢复原 Web 配置和容器；此次未触发回退。手动回退时应先确认没有后续发布，只恢复 Web 镜像到已保存的旧镜像并平滑重载网关，不回退数据库或其他服务。
+
+本次生产更新已完成，无需用户再重启服务；浏览器刷新管理页面即可加载新版本。此后追加的发布记录属于文档变更，不影响服务，无需重启。
