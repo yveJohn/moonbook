@@ -28,7 +28,7 @@
           >删除</el-button
         >
       </div>
-      <el-table
+      <el-table v-table-display
         ref="multipleTable"
         :data="tableData"
         style="width: 100%"

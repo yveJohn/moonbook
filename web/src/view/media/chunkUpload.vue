@@ -6,7 +6,7 @@
         <div class="el-upload__text">拖拽文件到此处,或 <em>点击选择</em>(支持大文件分片/断点续传)</div>
       </el-upload>
 
-      <el-table :data="tasks" style="margin-top:16px">
+      <el-table v-table-display :data="tasks" style="margin-top:16px">
         <el-table-column prop="name" label="文件名" min-width="180" show-overflow-tooltip />
         <el-table-column label="大小" width="110">
           <template #default="{ row }">{{ formatSize(row.size) }}</template>

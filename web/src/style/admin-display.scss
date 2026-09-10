@@ -1,0 +1,8 @@
+.el-table td .cell.admin-copy-cell {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: copy;
+  > * { white-space: nowrap; }
+  &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
+}

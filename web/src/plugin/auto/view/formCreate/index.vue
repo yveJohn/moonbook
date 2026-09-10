@@ -26,7 +26,7 @@
       </div>
     </div>
 
-    <el-table :data="fields" row-key="id" border class="field-table">
+    <el-table v-table-display :data="fields" row-key="id" border class="field-table">
       <el-table-column label="标签" min-width="150">
         <template #default="{ row }"><el-input v-model="row.title" /></template>
       </el-table-column>

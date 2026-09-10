@@ -10,8 +10,8 @@
     </div>
     <div class="gva-table-box">
       <div class="gva-btn-list"><el-button type="primary" :icon="Plus" @click="openCreate">新增书籍</el-button></div>
-      <el-table v-loading="loading" :data="rows" row-key="id">
-        <el-table-column label="书名" prop="bookName" min-width="190" show-overflow-tooltip />
+      <el-table v-table-display v-loading="loading" :data="rows" row-key="id">
+        <el-table-column label="书名" prop="bookName" min-width="190" show-overflow-tooltip ><template #default="{ row }"><BookReference :id="row.id || ''" :name="row.bookName || ''" /></template></el-table-column>
         <el-table-column label="作者" prop="authorName" min-width="130" />
         <el-table-column label="主分类" min-width="120"><template #default="scope">{{ scope.row.primaryCategory?.name || '-' }}</template></el-table-column>
         <el-table-column label="副分类" min-width="180"><template #default="scope"><el-tag v-for="item in scope.row.subCategories" :key="item.id" class="mr-1" type="info">{{ item.name }}</el-tag><span v-if="!scope.row.subCategories?.length">-</span></template></el-table-column>
@@ -61,6 +61,8 @@
 </template>
 
 <script setup>
+import BookReference from '@/components/adminDisplay/BookReference.vue'
+import { adminDateTime } from '@/utils/adminDisplay'
   import { onBeforeUnmount, reactive, ref } from 'vue'
   import { useRouter } from 'vue-router'
   import { Delete, Document, Edit, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
@@ -92,7 +94,7 @@
   const submit=async()=>{const valid=await formRef.value?.validate().catch(()=>false);if(!valid)return;submitting.value=true;try{const payload={...form,workDirection:form.workDirection||null,fixedPriceCoin:form.chargeMode==='fixed_price'?form.fixedPriceCoin:null};const res=editingId.value?await updateNovelBook(editingId.value,payload):await createNovelBook(payload);if(res.code!==0)return;const bookId=res.data.id;if(coverFile.value){const coverRes=await uploadNovelBookCover(bookId,coverFile.value);if(coverRes.code!==0){ElMessage.warning('书籍已保存，封面上传失败，可重新编辑后重试');return}}ElMessage.success(editingId.value?'书籍已更新':'书籍已创建');drawerVisible.value=false;loadData()}finally{submitting.value=false}}
   const removeRow=async(row)=>{await ElMessageBox.confirm(`确定删除书籍“${row.bookName}”吗？`,'删除书籍',{type:'warning'});const res=await deleteNovelBook(row.id);if(res.code===0){ElMessage.success('书籍已删除');loadData()}}
   const openChapters=(bookId)=>router.push({name:'NovelChapters',query:{bookId}})
-  const labelOf=(options,value)=>options.find(i=>i.value===value)?.label||value;const publishType=(value)=>({draft:'info',published:'success',deprecated:'warning'})[value]||'info';const formatTime=(value)=>value?new Date(value).toLocaleString():'-'
+  const labelOf=(options,value)=>options.find(i=>i.value===value)?.label||value;const publishType=(value)=>({draft:'info',published:'success',deprecated:'warning'})[value]||'info';const formatTime=(value)=>value?adminDateTime(value):'-'
   loadData()
   onBeforeUnmount(releaseCoverPreview)
 </script>

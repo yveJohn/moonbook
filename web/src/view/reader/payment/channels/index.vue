@@ -10,7 +10,7 @@
       </div>
     </div>
 
-    <el-table v-loading="loading" :data="rows" border>
+    <el-table v-table-display v-loading="loading" :data="rows" border>
       <el-table-column label="渠道" min-width="180">
         <template #default="{ row }"><strong>{{ row.displayName }}</strong><code>{{ row.id }}</code></template>
       </el-table-column>
@@ -23,7 +23,7 @@
           <el-switch v-else v-model="row.enabled" :disabled="!row.configured" @change="toggle(row)" />
         </template>
       </el-table-column>
-      <el-table-column prop="updatedAt" label="更新时间" min-width="190" />
+      <el-table-column prop="updatedAt" label="更新时间" min-width="185"  :formatter="adminTimeColumn" />
       <el-table-column label="连通性" min-width="170">
         <template #default="{ row }"><el-tag v-if="row.checkStatus" :type="checkType(row.checkStatus)">{{ row.checkMessage }}</el-tag><span v-else>-</span></template>
       </el-table-column>
@@ -80,6 +80,7 @@
 </template>
 
 <script setup>
+import { adminTimeColumn } from '@/utils/adminDisplay'
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, CopyDocument, Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'

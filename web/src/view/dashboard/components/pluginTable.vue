@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-table :data="tableData" stripe style="width: 100%">
+    <el-table v-table-display :data="tableData" stripe style="width: 100%">
       <el-table-column prop="name" label="插件标题" show-overflow-tooltip width="200">
         <template #default="{ row }">
           <a

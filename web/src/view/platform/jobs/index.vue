@@ -23,15 +23,15 @@
         <el-button :icon="RefreshLeft" aria-label="重置筛选" @click="reset" />
       </el-tooltip>
     </div>
-    <el-table v-loading="loading" :data="rows" border row-key="id">
+    <el-table v-table-display v-loading="loading" :data="rows" border row-key="id">
       <el-table-column label="任务 ID" width="170"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
       <el-table-column prop="module" label="模块" width="120" />
       <el-table-column prop="jobType" label="类型" width="170" />
-      <el-table-column prop="status" label="状态" width="100" />
+      <el-table-column prop="status" label="状态" width="100"  :formatter="adminStatusColumn" />
       <el-table-column label="尝试" width="100"><template #default="{ row }">{{ row.attemptCount }} / {{ row.maxAttempts }}</template></el-table-column>
       <el-table-column prop="leaseOwner" label="租约 Worker" min-width="160" show-overflow-tooltip />
       <el-table-column prop="lastErrorCode" label="错误代码" width="150" />
-      <el-table-column prop="updatedAt" label="更新时间" width="190" />
+      <el-table-column prop="updatedAt" label="更新时间" min-width="185"  :formatter="adminTimeColumn" />
       <el-table-column fixed="right" label="详情" width="70" align="center"><template #default="{ row }"><el-tooltip content="查看详情" placement="left"><el-button link :icon="View" aria-label="查看详情" @click="detail(row)" /></el-tooltip></template></el-table-column>
     </el-table>
     <div class="pager">
@@ -41,28 +41,29 @@
       <el-descriptions v-if="current" :column="2" border>
         <el-descriptions-item label="任务 ID"><code>{{ current.id }}</code></el-descriptions-item>
         <el-descriptions-item label="模块 / 类型">{{ current.module }} / {{ current.jobType }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ current.status }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ adminStatus(current.status) }}</el-descriptions-item>
         <el-descriptions-item label="尝试">{{ current.attemptCount }} / {{ current.maxAttempts }}</el-descriptions-item>
-        <el-descriptions-item label="租约">{{ current.leaseOwner || '-' }} / {{ current.leaseExpiresAt || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="租约">{{ current.leaseOwner || '-' }} / {{ adminDateTime(current.leaseExpiresAt) }}</el-descriptions-item>
         <el-descriptions-item label="错误">{{ current.lastErrorCode || '-' }} {{ current.lastErrorMessage || '' }}</el-descriptions-item>
-        <el-descriptions-item label="可用时间">{{ current.availableAt }}</el-descriptions-item>
-        <el-descriptions-item label="完成时间">{{ current.finishedAt || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="可用时间">{{ adminDateTime(current.availableAt) }}</el-descriptions-item>
+        <el-descriptions-item label="完成时间">{{ adminDateTime(current.finishedAt) }}</el-descriptions-item>
       </el-descriptions>
       <el-divider content-position="left">执行尝试</el-divider>
-      <el-table v-if="current" :data="current.attempts" border>
+      <el-table v-table-display v-if="current" :data="current.attempts" border>
         <el-table-column label="Attempt ID" width="170"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
         <el-table-column prop="attemptNumber" label="序号" width="70" />
         <el-table-column prop="workerId" label="Worker" min-width="150" />
-        <el-table-column prop="outcome" label="结果" width="100" />
+        <el-table-column prop="outcome" :formatter="adminStatusColumn" label="结果" width="100" />
         <el-table-column prop="errorCode" label="错误代码" width="140" />
         <el-table-column prop="errorMessage" label="错误信息" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="startedAt" label="开始时间" width="190" />
+        <el-table-column prop="startedAt" label="开始时间" min-width="185"  :formatter="adminTimeColumn" />
       </el-table>
     </el-drawer>
   </div>
 </template>
 
 <script setup>
+import { adminDateTime, adminStatus, adminStatusColumn, adminTimeColumn } from '@/utils/adminDisplay'
 import { Refresh, RefreshLeft, Search, View } from '@element-plus/icons-vue'
 import { reactive, ref } from 'vue'
 import { getPlatformJob, getPlatformJobs } from '@/api/platform'

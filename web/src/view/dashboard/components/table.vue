@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-table :data="tableData" stripe style="width: 100%">
+    <el-table v-table-display :data="tableData" stripe style="width: 100%">
       <el-table-column prop="ranking" label="排名" width="80" align="center" />
       <el-table-column prop="message" label="更新内容" show-overflow-tooltip />
       <el-table-column prop="author" label="提交人" width="140" />

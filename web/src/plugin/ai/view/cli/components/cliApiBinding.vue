@@ -51,7 +51,7 @@
     <div v-show="step === 2">
       <div v-if="selectedApiIds.length > 0">
       <div class="text-base font-medium mb-2">命令定义（可自定义说明与参数）</div>
-      <el-table :data="bindingRows" size="small" border>
+      <el-table v-table-display :data="bindingRows" size="small" border>
         <el-table-column label="API" min-width="220">
           <template #default="{ row }">
             <div class="truncate" :title="row.path">{{ row.description || row.path }}</div>
@@ -98,7 +98,7 @@
         </el-form-item>
         <el-form-item label="参数定义">
           <div class="w-full">
-            <el-table :data="editor.params" size="small" border>
+            <el-table v-table-display :data="editor.params" size="small" border>
               <el-table-column label="flag" width="120">
                 <template #default="{ row }"><el-input v-model="row.flag" size="small" /></template>
               </el-table-column>
@@ -135,7 +135,7 @@
         </el-form-item>
         <el-form-item label="返回参数">
           <div class="w-full">
-            <el-table :data="editor.responseParams" size="small" border>
+            <el-table v-table-display :data="editor.responseParams" size="small" border>
               <el-table-column label="字段路径" min-width="200">
                 <template #default="{ row }"><el-input v-model="row.name" size="small" placeholder="如 user.name" /></template>
               </el-table-column>

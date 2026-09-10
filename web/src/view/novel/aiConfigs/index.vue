@@ -15,7 +15,7 @@
       <el-button :icon="Refresh" aria-label="刷新" @click="load" />
     </div>
 
-    <el-table v-loading="loading" :data="rows" border row-key="id">
+    <el-table v-table-display v-loading="loading" :data="rows" border row-key="id">
       <el-table-column label="配置 ID" min-width="170"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
       <el-table-column prop="configName" label="名称" min-width="150" show-overflow-tooltip />
       <el-table-column prop="baseUrl" label="基础地址" min-width="250" show-overflow-tooltip />

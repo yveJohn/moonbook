@@ -24,7 +24,7 @@
       <div class="gva-btn-list">
         <el-button type="primary" icon="plus" @click="openCreate">新增MCP</el-button>
       </div>
-      <el-table :data="tableData" row-key="ID">
+      <el-table v-table-display :data="tableData" row-key="ID">
         <el-table-column label="名称" prop="name" min-width="140" />
         <el-table-column label="显示名称" prop="displayName" min-width="140" />
         <el-table-column label="版本" prop="version" width="100" />

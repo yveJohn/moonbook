@@ -282,3 +282,10 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - M5 论坛 Cookie Secret 引用改造已完成：迁移 `00069` 先记录来源 ID 的 SHA-256 指纹与处置状态，再清空历史明文并以 CHECK 拒绝回写；管理端只编辑受控环境变量引用，手动/自动发现和导入 Worker 均在请求前解析环境 Secret。真实 PostgreSQL 覆盖 0→69、68→69、重放、明文清理、哈希审计、行数不减少和约束拒绝；本地 HTTP 替身、日志脱敏、32 个前端合同测试、ESLint 与生产构建通过。真实第三方论坛沙箱仍归后续任务，连接检查见后续验收记录，详见 `docs/verification/m5-forum-cookie-secret-reference.md`。
 - M5 论坛来源连接检查与内容 Worker 重载恢复已完成：`POST /novel/crawl/sources/:id/check` 只允许受控 HTTP/HTTPS、公网 DNS 和标准端口，拨号前再次校验地址，关闭代理，限制同 hostname 三次重定向、10 秒总时限和 64 KiB 响应；结果只含稳定 code、HTTP 状态和耗时。六类内容 Worker 由串行生命周期管理器统一替换，旧集合未退出时拒绝启动新集合。迁移 `00070` 的空库 0→70、69→70、权限/序列和重放、回环 HTTP 分类/脱敏、race、Go vet、33 个前端测试、ESLint、生产构建及供应链检查通过；五类持久化任务继续复用真实 PostgreSQL/MinIO 的租约恢复与结果唯一性证据。真实第三方论坛和 AI 沙箱仍是外部验收项，详见 `docs/verification/m5-content-worker-connection-and-recovery.md`。
 - M6 全域迁移与对象核对已完成代码闭环：`all` 命令实际注册 Stage 与审计合同双向比对，checkpoint 缺失/未完成、migration error、源目标行数/最大主键、内容关联、对象与财务任一差异都会使 `moonbook-migration-audit` 非零退出。对象核对从活动引用、清洗、合并和 TXT 事实流式读取，MinIO Stat/Get 校验元数据和实际正文 SHA-256，仅输出分类聚合和最多 100 个哈希指纹。一次性 MySQL 8.4、PostgreSQL 17 和 MinIO 已注入大 ID 源行缺失、断关联、核对 SQL 缺失、缺对象、错大小、错哈希和财务异常并全部稳定检出；临时库、对象前缀和 MySQL 容器已清理。约 8 GB 完整副本演练仍待 Task 7，详见 `docs/verification/m6-global-migration-object-audit.md`。
+
+## 2026-09-11 管理后台展示规范统一
+
+- 已检查管理前端状态、时间和作品引用显示：原始英文业务状态转换为中文，时间统一按本地时区显示 `yyyy-mm-dd hh24:mi:ss`，作品关联与选择统一“名称（ID）”，ID 仍按字符串提交。
+- 59 个组件的 88 处表格接入长文本省略、悬浮全文和点击/键盘复制；交互控件保持原操作。补查作品名称支持并发请求去重与失效引用回退。
+- 验证：43 项管理端测试、ESLint、生产构建和供应链检查；Chromium 隔离数据验证复制、大 ID 选择、异步名称回显，并抽查候选、TXT 导入和章节页面。详见 [展示规范验证记录](../verification/2026-09-11-admin-display-standardization.md)。
+- 服务影响：仅管理前端 `web`；开发环境热更新/刷新即可，部署环境重新构建发布静态资源或重建管理前端容器。后端、读者端与基础设施无需重启。

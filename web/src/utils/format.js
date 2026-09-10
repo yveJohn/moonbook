@@ -1,4 +1,4 @@
-import { formatTimeToStr } from '@/utils/date'
+import { adminDateTime } from './adminDisplay'
 import { getDict } from '@/utils/dictionary'
 import { ref } from 'vue'
 import { getUrl } from './image'
@@ -10,14 +10,7 @@ export const formatBoolean = (bool) => {
     return ''
   }
 }
-export const formatDate = (time) => {
-  if (time !== null && time !== '') {
-    var date = new Date(time)
-    return formatTimeToStr(date, 'yyyy-MM-dd hh:mm:ss')
-  } else {
-    return ''
-  }
-}
+export const formatDate = (time) => adminDateTime(time)
 
 export const filterDict = (value, options) => {
   // 递归查找函数

@@ -22,7 +22,7 @@
       <div class="gva-btn-list">
         <el-button type="primary" icon="plus" @click="openForm()">新增任务</el-button>
       </div>
-      <el-table :data="tableData" style="width: 100%" row-key="ID">
+      <el-table v-table-display :data="tableData" style="width: 100%" row-key="ID">
         <el-table-column align="left" label="ID" prop="ID" width="70" />
         <el-table-column align="left" label="任务名" prop="name" min-width="140" show-overflow-tooltip />
         <el-table-column align="left" label="说明" prop="description" min-width="180" show-overflow-tooltip />
@@ -181,7 +181,7 @@
           </div>
         </div>
       </template>
-      <el-table :data="logData" style="width: 100%">
+      <el-table v-table-display :data="logData" style="width: 100%">
         <el-table-column type="expand">
           <template #default="scope">
             <div class="px-4 py-2">
@@ -200,7 +200,7 @@
         </el-table-column>
         <el-table-column align="left" label="状态" width="90">
           <template #default="scope">
-            <el-tag :type="scope.row.status === 'success' ? 'success' : 'danger'">{{ scope.row.status }}</el-tag>
+            <el-tag :type="scope.row.status === 'success' ? 'success' : 'danger'">{{ adminStatus(scope.row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column align="left" label="开始时间" width="170">
@@ -222,6 +222,7 @@
 </template>
 
 <script setup>
+import { adminStatus } from '@/utils/adminDisplay'
 import {
   createTimedTask,
   updateTimedTask,

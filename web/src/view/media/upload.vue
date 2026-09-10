@@ -87,7 +87,7 @@
           </div>
 
           <div class="flex-1 min-h-0">
-          <el-table height="100%" :data="tableData">
+          <el-table v-table-display height="100%" :data="tableData">
             <el-table-column align="left" label="预览" width="100">
               <template #default="scope">
                 <CustomPic pic-type="file" :pic-src="scope.row.url" preview />

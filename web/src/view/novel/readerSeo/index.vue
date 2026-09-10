@@ -100,6 +100,7 @@
 </template>
 
 <script setup>
+import { adminDateTime } from '@/utils/adminDisplay'
   import { reactive, ref } from 'vue'
   import { CircleCheck, Refresh } from '@element-plus/icons-vue'
   import { ElMessage } from 'element-plus'
@@ -183,7 +184,7 @@
     }
   }
 
-  const formatTime = (value) => value ? new Date(value).toLocaleString() : '-'
+  const formatTime = (value) => value ? adminDateTime(value) : '-'
   const renderPreview = (template) => renderSEOTemplate(template, { siteName: form.siteName })
   loadConfig()
 </script>

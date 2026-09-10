@@ -25,7 +25,7 @@
       <div class="gva-btn-list">
         <el-button type="primary" :icon="Plus" @click="openCreate">新增分类</el-button>
       </div>
-      <el-table v-loading="loading" :data="rows" row-key="id">
+      <el-table v-table-display v-loading="loading" :data="rows" row-key="id">
         <el-table-column label="名称" prop="name" min-width="160" />
         <el-table-column label="编码" prop="code" min-width="180" show-overflow-tooltip />
         <el-table-column label="类型" width="110">
@@ -110,6 +110,7 @@
 </template>
 
 <script setup>
+import { adminDateTime } from '@/utils/adminDisplay'
   import { reactive, ref } from 'vue'
   import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
@@ -216,7 +217,7 @@
     }
   }
   const directionLabel = (value) => ({ 0: '男频', 1: '女频' })[value] || '不限'
-  const formatTime = (value) => (value ? new Date(value).toLocaleString() : '-')
+  const formatTime = (value) => (value ? adminDateTime(value) : '-')
 
   loadData()
 </script>

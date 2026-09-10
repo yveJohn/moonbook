@@ -36,7 +36,7 @@
           >批量删除</el-button
         >
       </div>
-      <el-table
+      <el-table v-table-display
         :data="tableData"
         row-key="ID"
         @selection-change="handleSelectionChange"

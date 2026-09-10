@@ -495,7 +495,7 @@
         </el-button>
       </div>
       <div class="draggable">
-        <el-table :data="form.fields" row-key="fieldName">
+        <el-table v-table-display :data="form.fields" row-key="fieldName">
           <el-table-column
             v-if="!isAdd"
             fixed="left"

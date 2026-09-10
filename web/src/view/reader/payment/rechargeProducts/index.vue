@@ -5,7 +5,7 @@
       <el-button type="primary" :icon="Plus" @click="openCreate">新增档位</el-button>
     </div>
     <div class="toolbar"><el-input v-model="keyword" clearable placeholder="搜索档位名称" @keyup.enter="load" /><el-button :icon="Search" @click="load">查询</el-button></div>
-    <el-table v-loading="loading" :data="rows" border>
+    <el-table v-table-display v-loading="loading" :data="rows" border>
       <el-table-column label="档位 ID" min-width="180"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
       <el-table-column prop="productName" label="名称" min-width="160" />
       <el-table-column label="钻石数量" min-width="130"><template #default="{ row }"><code>{{ row.diamondAmount }}</code></template></el-table-column>

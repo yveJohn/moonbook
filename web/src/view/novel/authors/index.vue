@@ -21,7 +21,7 @@
       <div class="gva-btn-list">
         <el-button type="primary" :icon="Plus" @click="openCreate">新增作者</el-button>
       </div>
-      <el-table v-loading="loading" :data="rows" row-key="id">
+      <el-table v-table-display v-loading="loading" :data="rows" row-key="id">
         <el-table-column label="笔名" prop="penName" min-width="180" />
         <el-table-column label="状态" width="110">
           <template #default="scope">
@@ -93,6 +93,7 @@
 </template>
 
 <script setup>
+import { adminDateTime } from '@/utils/adminDisplay'
   import { reactive, ref } from 'vue'
   import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
@@ -186,7 +187,7 @@
   const statusLabel = (value) => ({ pending: '待审核', active: '正常', blocked: '封禁' })[value] || value
   const statusType = (value) => ({ pending: 'warning', active: 'success', blocked: 'danger' })[value] || 'info'
   const directionLabel = (value) => ({ 0: '男频', 1: '女频' })[value] || '不限'
-  const formatTime = (value) => (value ? new Date(value).toLocaleString() : '-')
+  const formatTime = (value) => (value ? adminDateTime(value) : '-')
 
   loadData()
 </script>

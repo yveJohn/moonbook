@@ -13,7 +13,7 @@
       <el-button :icon="Search" @click="load">查询</el-button>
     </div>
 
-    <el-table v-loading="loading" :data="rows" border>
+    <el-table v-table-display v-loading="loading" :data="rows" border>
       <el-table-column label="邀请码 ID" min-width="180">
         <template #default="{ row }"><code>{{ row.id }}</code></template>
       </el-table-column>
@@ -21,11 +21,11 @@
       <el-table-column label="类型" width="100">
         <template #default="{ row }">{{ row.inviterReaderId ? '读者自动' : '人工' }}</template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="100" />
+      <el-table-column prop="status" label="状态" width="100"  :formatter="adminStatusColumn" />
       <el-table-column label="使用次数" width="130">
         <template #default="{ row }">{{ row.usedCount }} / {{ row.maxUseCount || '不限' }}</template>
       </el-table-column>
-      <el-table-column prop="expiresAt" label="过期时间" min-width="180" />
+      <el-table-column prop="expiresAt" label="过期时间" min-width="185"  :formatter="adminTimeColumn" />
       <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
       <el-table-column label="操作" width="170" fixed="right">
         <template #default="{ row }">
@@ -113,6 +113,7 @@
 </template>
 
 <script setup>
+import { adminStatusColumn, adminTimeColumn } from '@/utils/adminDisplay'
 import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue'

@@ -19,7 +19,11 @@ import { store } from '@/pinia'
 import App from './App.vue'
 import '@/core/error-handel'
 
+import tableDisplay from '@/directive/tableDisplay'
+import '@/style/admin-display.scss'
+
 const app = createApp(App)
+app.directive('table-display', tableDisplay)
 
 app.config.productionTip = false
 

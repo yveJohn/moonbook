@@ -2,7 +2,7 @@
   <div class="gva-form-box checkin-rules-page">
     <div class="page-head"><div><h2>签到奖励规则</h2><p>维护每日签到和连续签到的奖励规则，同一类型只能启用一条对应规则。</p></div><el-button type="primary" :icon="Plus" @click="openCreate">新增规则</el-button></div>
     <div class="toolbar"><el-select v-model="ruleType" clearable placeholder="规则类型" @change="load"><el-option label="每日签到" value="daily" /><el-option label="连续签到" value="continuous" /></el-select><el-button :icon="Search" @click="load">查询</el-button></div>
-    <el-table v-loading="loading" :data="rows" border>
+    <el-table v-table-display v-loading="loading" :data="rows" border>
       <el-table-column label="规则 ID" min-width="180"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
       <el-table-column label="类型" width="130"><template #default="{ row }">{{ row.ruleType === 'daily' ? '每日签到' : `连续 ${row.continuousDays} 天` }}</template></el-table-column>
       <el-table-column label="奖励" min-width="160"><template #default="{ row }">{{ row.rewardMode === 'fixed' ? `${row.fixedCoin} 金币` : `${row.minCoin} - ${row.maxCoin} 金币` }}</template></el-table-column>

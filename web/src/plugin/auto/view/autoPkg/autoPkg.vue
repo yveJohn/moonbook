@@ -10,7 +10,7 @@
           新增
         </el-button>
       </div>
-      <el-table :data="tableData">
+      <el-table v-table-display :data="tableData">
         <el-table-column align="left" label="id" width="120" prop="ID" />
         <el-table-column
           align="left"

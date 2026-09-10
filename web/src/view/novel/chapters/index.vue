@@ -2,7 +2,7 @@
   <div class="p-4">
     <div class="gva-search-box">
       <el-form :inline="true" @submit.prevent="resetAndLoad">
-        <el-form-item label="书籍 ID"><el-input v-model="query.bookId" inputmode="numeric" clearable placeholder="精确 ID" @input="cleanLong(query, 'bookId')" @keyup.enter="resetAndLoad" /></el-form-item>
+        <el-form-item label="书籍"><BookSelect v-model="query.bookId" @change="resetAndLoad" /></el-form-item>
         <el-form-item label="章节名称"><el-input v-model="query.keyword" clearable placeholder="关键词" @keyup.enter="resetAndLoad" /></el-form-item>
         <el-form-item label="章节状态"><el-select v-model="query.chapterStatus" clearable placeholder="全部" style="width: 120px"><el-option v-for="item in statusOptions" :key="item.value" v-bind="item" /></el-select></el-form-item>
         <el-form-item label="清洗状态"><el-select v-model="query.aiCleanStatus" clearable placeholder="全部" style="width: 120px"><el-option v-for="item in cleanOptions" :key="item.value" v-bind="item" /></el-select></el-form-item>
@@ -11,8 +11,8 @@
     </div>
     <div class="gva-table-box">
       <div class="gva-btn-list"><el-button type="primary" :icon="Plus" @click="openCreate">新增章节</el-button></div>
-      <el-table v-loading="loading" :data="rows" row-key="id">
-        <el-table-column label="书籍 ID" prop="bookId" min-width="165" />
+      <el-table v-table-display v-loading="loading" :data="rows" row-key="id">
+        <el-table-column label="书籍" prop="bookId" min-width="165" ><template #default="{ row }"><BookReference :id="row.bookId || ''" :name="row.bookName || ''" /></template></el-table-column>
         <el-table-column label="序号" prop="chapterNo" width="90" align="right" />
         <el-table-column label="章节名称" prop="chapterName" min-width="220" show-overflow-tooltip />
         <el-table-column label="字数" prop="wordCount" width="100" align="right" />
@@ -29,7 +29,7 @@
       <template #header><div class="flex justify-between items-center w-full"><span class="text-base">{{ editingId?'编辑章节':'新增章节' }}</span><div><el-button @click="drawerVisible=false">取消</el-button><el-button type="primary" :loading="submitting" @click="submit">保存</el-button></div></div></template>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-          <el-form-item label="书籍 ID" prop="bookId"><el-input v-model="form.bookId" inputmode="numeric" @input="cleanLong(form, 'bookId')" /></el-form-item>
+          <el-form-item label="书籍" prop="bookId"><BookSelect v-model="form.bookId" /></el-form-item>
           <el-form-item label="章节序号"><el-input-number v-model="form.chapterNo" :min="0" :max="2147483647" class="w-full" /></el-form-item>
           <el-form-item label="章节名称" prop="chapterName"><el-input v-model="form.chapterName" maxlength="255" /></el-form-item>
           <el-form-item label="章节价格" prop="bookPriceCoin"><el-input v-model="form.bookPriceCoin" inputmode="numeric" @input="cleanLong(form, 'bookPriceCoin', true)" /></el-form-item>
@@ -45,6 +45,9 @@
 </template>
 
 <script setup>
+import BookReference from '@/components/adminDisplay/BookReference.vue'
+import BookSelect from '@/components/adminDisplay/BookSelect.vue'
+import { adminDateTime } from '@/utils/adminDisplay'
   import { reactive, ref } from 'vue'
   import { useRoute } from 'vue-router'
   import { Delete, Edit, Plus, Refresh, Search, View } from '@element-plus/icons-vue'
@@ -66,7 +69,7 @@
   const submit=async()=>{const valid=await formRef.value?.validate().catch(()=>false);if(!valid)return;submitting.value=true;try{const payload={...form,chapterNo:form.chapterNo===null?null:form.chapterNo};const res=editingId.value?await updateNovelChapter(editingId.value,payload):await createNovelChapter(payload);if(res.code===0){ElMessage.success(editingId.value?'章节已更新':'章节已创建');drawerVisible.value=false;loadData()}}finally{submitting.value=false}}
   const openContent=async(row)=>{const res=await getNovelChapterContent(row.id);if(res.code!==0)return;contentText.value=res.data.content;contentTitle.value=`${row.chapterName} · v${res.data.version}`;contentVisible.value=true}
   const removeRow=async(row)=>{await ElMessageBox.confirm(`确定删除章节“${row.chapterName}”吗？`,'删除章节',{type:'warning'});const res=await deleteNovelChapter(row.id);if(res.code===0){ElMessage.success('章节已删除');loadData()}}
-  const labelOf=(options,value)=>options.find(item=>item.value===value)?.label||value;const formatTime=(value)=>value?new Date(value).toLocaleString():'-'
+  const labelOf=(options,value)=>options.find(item=>item.value===value)?.label||value;const formatTime=(value)=>value?adminDateTime(value):'-'
   const routeBookId=String(useRoute().query.bookId||'');if(/^[1-9][0-9]*$/.test(routeBookId))query.bookId=routeBookId
   loadData()
 </script>

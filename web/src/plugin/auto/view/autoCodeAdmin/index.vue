@@ -6,7 +6,7 @@
           新增
         </el-button>
       </div>
-      <el-table :data="tableData">
+      <el-table v-table-display :data="tableData">
         <el-table-column type="selection" width="55" />
         <el-table-column align="left" label="id" width="60" prop="ID" />
         <el-table-column align="left" label="日期" width="180">

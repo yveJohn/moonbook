@@ -212,7 +212,7 @@
                 <div class="text-xs text-gray-500 mb-3">
                   适合放可执行逻辑或校验流程，在正文中引用 <span class="font-mono">scripts/文件名</span> 使用（运行需启用 code execution）。
                 </div>
-                <el-table :data="scriptRows" style="width: 100%">
+                <el-table v-table-display :data="scriptRows" style="width: 100%">
                   <el-table-column prop="name" label="文件名">
                     <template #default="scope">
                       <div class="flex items-center gap-2">
@@ -239,7 +239,7 @@
                 <div class="text-xs text-gray-500 mb-3">
                   适合补充背景资料或术语表，在正文中引用 <span class="font-mono">resources/文件名</span> 提示模型按需查阅。
                 </div>
-                <el-table :data="resourceRows" style="width: 100%">
+                <el-table v-table-display :data="resourceRows" style="width: 100%">
                   <el-table-column prop="name" label="文件名">
                     <template #default="scope">
                       <div class="flex items-center gap-2">
@@ -266,7 +266,7 @@
                 <div class="text-xs text-gray-500 mb-3">
                   适合放规范、规则或权威资料，在正文中引用 <span class="font-mono">references/文件名</span> 指定遵循来源。
                 </div>
-                <el-table :data="referenceRows" style="width: 100%">
+                <el-table v-table-display :data="referenceRows" style="width: 100%">
                   <el-table-column prop="name" label="文件名">
                     <template #default="scope">
                       <div class="flex items-center gap-2">
@@ -293,7 +293,7 @@
                 <div class="text-xs text-gray-500 mb-3">
                   适合放输出结构或代码骨架，在正文中引用 <span class="font-mono">templates/文件名</span> 作为格式约束。
                 </div>
-                <el-table :data="templateRows" style="width: 100%">
+                <el-table v-table-display :data="templateRows" style="width: 100%">
                   <el-table-column prop="name" label="文件名">
                     <template #default="scope">
                       <div class="flex items-center gap-2">
@@ -463,7 +463,7 @@
           </el-form-item>
         </el-form>
       </div>
-      <el-table v-loading="onlineLoading" :data="onlineSkillList" stripe>
+      <el-table v-table-display v-loading="onlineLoading" :data="onlineSkillList" stripe>
         <el-table-column label="封面" width="80">
           <template #default="{ row }">
             <el-image

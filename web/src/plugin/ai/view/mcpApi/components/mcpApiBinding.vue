@@ -54,7 +54,7 @@
     <div v-show="step === 2">
       <div v-if="bindingRows.length > 0">
         <div class="text-base font-medium mb-2">已绑定 API（可启用/禁用、删除）</div>
-        <el-table :data="bindingRows" size="small" border>
+        <el-table v-table-display :data="bindingRows" size="small" border>
           <el-table-column label="API名称" min-width="160">
             <template #default="{ row }">{{ row.description || row.path || row.commandName || '—' }}</template>
           </el-table-column>
@@ -104,7 +104,7 @@
         </el-form-item>
         <el-form-item label="参数定义">
           <div class="w-full">
-            <el-table :data="editor.params" size="small" border>
+            <el-table v-table-display :data="editor.params" size="small" border>
               <el-table-column label="字段名" min-width="140">
                 <template #default="{ row }"><el-input v-model="row.field" size="small" /></template>
               </el-table-column>
@@ -138,7 +138,7 @@
         </el-form-item>
         <el-form-item label="返回参数">
           <div class="w-full">
-            <el-table :data="editor.responseParams" size="small" border>
+            <el-table v-table-display :data="editor.responseParams" size="small" border>
               <el-table-column label="字段路径" min-width="200">
                 <template #default="{ row }"><el-input v-model="row.name" size="small" placeholder="如 user.name" /></template>
               </el-table-column>

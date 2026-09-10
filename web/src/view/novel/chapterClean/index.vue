@@ -21,9 +21,9 @@
     </div>
 
     <div class="gva-table-box">
-      <el-table v-if="tab === 'tasks'" v-loading="loading" :data="tasks" row-key="id">
+      <el-table v-table-display v-if="tab === 'tasks'" v-loading="loading" :data="tasks" row-key="id">
         <el-table-column label="任务 ID" width="180"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
-        <el-table-column prop="bookName" label="书籍" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="bookName" label="书籍" min-width="180" show-overflow-tooltip ><template #default="{ row }"><BookReference :id="row.bookId || ''" :name="row.bookName || ''" /></template></el-table-column>
         <el-table-column prop="status" label="状态" width="100"><template #default="{ row }"><el-tag :type="taskType(row.status)">{{ taskLabel(row.status) }}</el-tag></template></el-table-column>
         <el-table-column label="进度" width="150"><template #default="{ row }">{{ row.processedCount }} / {{ row.totalCount }}</template></el-table-column>
         <el-table-column prop="successCount" label="成功" width="75" />
@@ -33,17 +33,17 @@
         <el-table-column label="操作" width="100" fixed="right"><template #default="{ row }"><el-tooltip v-if="row.status === 'running'" content="停止"><el-button link type="danger" :icon="VideoPause" @click="stopClean(row.id)" /></el-tooltip><el-tooltip v-else content="续跑"><el-button link type="primary" :icon="RefreshRight" @click="resumeClean(row.id)" /></el-tooltip></template></el-table-column>
       </el-table>
 
-      <el-table v-else-if="tab === 'results'" v-loading="loading" :data="results" row-key="id">
+      <el-table v-table-display v-else-if="tab === 'results'" v-loading="loading" :data="results" row-key="id">
         <el-table-column label="结果 ID" width="180"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
-        <el-table-column prop="bookName" label="书籍" min-width="150" />
+        <el-table-column prop="bookName" label="书籍" min-width="150" ><template #default="{ row }"><BookReference :id="row.bookId || ''" :name="row.bookName || ''" /></template></el-table-column>
         <el-table-column prop="chapterName" label="章节" min-width="190" show-overflow-tooltip />
         <el-table-column prop="contentType" label="类型" width="110" />
         <el-table-column prop="cleanedWordCount" label="清洗字数" width="90" />
-        <el-table-column prop="status" label="状态" width="130" />
+        <el-table-column prop="status" label="状态" width="130"  :formatter="adminStatusColumn" />
         <el-table-column label="操作" width="120" fixed="right"><template #default="{ row }"><el-tooltip content="审核"><el-button link type="primary" :icon="View" @click="openReview(row.id)" /></el-tooltip><el-tooltip v-if="['failed','discarded','manual_discarded'].includes(row.status)" content="重洗"><el-button link type="warning" :icon="RefreshRight" @click="reclean(row.id)" /></el-tooltip></template></el-table-column>
       </el-table>
 
-      <el-table v-else v-loading="loading" :data="summaryTasks" row-key="id">
+      <el-table v-table-display v-else v-loading="loading" :data="summaryTasks" row-key="id">
         <el-table-column label="任务 ID" width="180"><template #default="{ row }"><code>{{ row.id }}</code></template></el-table-column>
         <el-table-column prop="status" label="状态" width="100"><template #default="{ row }"><el-tag :type="taskType(row.status)">{{ taskLabel(row.status) }}</el-tag></template></el-table-column>
         <el-table-column label="触发方式" width="100"><template #default="{ row }">{{ row.automatic ? '自动' : '人工' }}</template></el-table-column>
@@ -61,7 +61,7 @@
     <el-dialog v-model="startVisible" :title="tab === 'summary' ? '启动章节简介补全' : '启动章节清洗'" width="480px">
       <el-form label-width="90px">
         <template v-if="tab !== 'summary'">
-          <el-form-item label="书籍 ID"><el-input v-model="startForm.bookId" inputmode="numeric" placeholder="请输入完整书籍 ID" /></el-form-item>
+          <el-form-item label="书籍"><BookSelect v-model="startForm.bookId" /></el-form-item>
           <el-form-item label="强制重洗"><el-switch v-model="startForm.forceReclean" /></el-form-item>
         </template>
         <el-form-item label="操作人"><el-input v-model="startForm.operatorName" maxlength="64" /></el-form-item>
@@ -131,6 +131,9 @@
 </template>
 
 <script setup>
+import BookReference from '@/components/adminDisplay/BookReference.vue'
+import BookSelect from '@/components/adminDisplay/BookSelect.vue'
+import { adminStatusColumn } from '@/utils/adminDisplay'
 import { reactive, ref, watch } from 'vue'
 import { Plus, RefreshRight, Setting, VideoPause, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

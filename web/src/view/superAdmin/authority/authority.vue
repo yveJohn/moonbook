@@ -7,7 +7,7 @@
           >新增角色</el-button
         >
       </div>
-      <el-table
+      <el-table v-table-display
         :data="tableData"
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
         row-key="authorityId"
@@ -230,7 +230,7 @@
           </el-form-item>
         </el-form>
       </div>
-      <el-table
+      <el-table v-table-display
         ref="userTableRef"
         v-loading="assignLoading"
         :data="userTableData"

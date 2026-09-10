@@ -54,7 +54,7 @@
         <ExportExcel template-id="api" :limit="9999" />
         <ImportExcel template-id="api" @on-success="getTableData" />
       </div>
-      <el-table
+      <el-table v-table-display
         :data="tableData"
         @sort-change="sortChange"
         @selection-change="handleSelectionChange"
@@ -183,7 +183,7 @@
           自动填充
         </el-button>
       </h4>
-      <el-table
+      <el-table v-table-display
         v-loading="syncing || apiCompletionLoading"
         element-loading-text="小淼正在思考..."
         :data="syncApiData.newApis"
@@ -262,7 +262,7 @@
           >已经不存在于当前项目的路由中，确定同步后会自动从apis表删除</span
         >
       </h4>
-      <el-table :data="syncApiData.deleteApis">
+      <el-table v-table-display :data="syncApiData.deleteApis">
         <el-table-column
           align="left"
           label="API路径"
@@ -301,7 +301,7 @@
           >忽略路由不参与api同步，常见为不需要进行鉴权行为的路由</span
         >
       </h4>
-      <el-table :data="syncApiData.ignoreApis">
+      <el-table v-table-display :data="syncApiData.ignoreApis">
         <el-table-column
           align="left"
           label="API路径"

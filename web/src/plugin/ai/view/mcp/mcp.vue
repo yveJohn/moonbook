@@ -8,7 +8,7 @@
         <el-input type="textarea" v-model="form.description" placeholder="请输入工具描述" />
       </el-form-item>
       <el-form-item label="参数列表">
-        <el-table :data="form.params"  style="width: 100%">
+        <el-table v-table-display :data="form.params"  style="width: 100%">
           <el-table-column prop="name" label="参数名" width="120">
             <template #default="scope">
               <el-input v-model="scope.row.name" placeholder="参数名" />
@@ -51,7 +51,7 @@
         <el-button type="primary" icon="plus" @click="addParam" style="margin-top: 10px;">添加参数</el-button>
       </div>
       <el-form-item label="返回参数">
-        <el-table :data="form.response" style="width: 100%">
+        <el-table v-table-display :data="form.response" style="width: 100%">
           <el-table-column prop="type" label="类型" min-width="120">
             <template #default="scope">
               <el-select v-model="scope.row.type" placeholder="类型">

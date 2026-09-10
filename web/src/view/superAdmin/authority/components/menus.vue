@@ -52,7 +52,7 @@
       </el-scrollbar>
     </div>
     <el-dialog v-model="btnVisible" title="分配按钮" destroy-on-close>
-      <el-table
+      <el-table v-table-display
         ref="btnTableRef"
         :data="btnData"
         row-key="ID"

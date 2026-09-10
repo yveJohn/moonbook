@@ -42,7 +42,7 @@
       </el-tooltip>
     </div>
 
-    <el-table v-loading="loading" :data="rows" border row-key="id">
+    <el-table v-table-display v-loading="loading" :data="rows" border row-key="id">
       <el-table-column label="日志 ID" min-width="178">
         <template #default="{ row }"><code>{{ row.id }}</code></template>
       </el-table-column>
@@ -71,7 +71,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="requestId" label="Request ID" min-width="166" show-overflow-tooltip />
-      <el-table-column prop="requestTime" label="回调时间" min-width="178" />
+      <el-table-column prop="requestTime" label="回调时间" min-width="185"  :formatter="adminTimeColumn" />
       <el-table-column fixed="right" label="详情" width="70" align="center">
         <template #default="{ row }">
           <el-tooltip content="查看详情" placement="left">
@@ -107,9 +107,9 @@
         <el-descriptions-item label="Trace ID"><code>{{ detail.traceId || '-' }}</code></el-descriptions-item>
         <el-descriptions-item label="Payload SHA-256"><code class="hash">{{ detail.payloadHash }}</code></el-descriptions-item>
         <el-descriptions-item label="Payload 字节">{{ detail.payloadBytes }}{{ detail.payloadTruncated ? '（已截断）' : '' }}</el-descriptions-item>
-        <el-descriptions-item label="请求时间">{{ detail.requestTime }}</el-descriptions-item>
-        <el-descriptions-item label="完成时间">{{ detail.completedAt || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ detail.createdAt }}</el-descriptions-item>
+        <el-descriptions-item label="请求时间">{{ adminDateTime(detail.requestTime) }}</el-descriptions-item>
+        <el-descriptions-item label="完成时间">{{ adminDateTime(detail.completedAt) }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ adminDateTime(detail.createdAt) }}</el-descriptions-item>
         <el-descriptions-item label="业务快照">
           <dl class="snapshot">
             <template v-for="item in snapshotItems" :key="item.label">
@@ -123,6 +123,7 @@
 </template>
 
 <script setup>
+import { adminDateTime, adminTimeColumn } from '@/utils/adminDisplay'
 import { computed, reactive, ref } from 'vue'
 import { Refresh, RefreshLeft, Search, View } from '@element-plus/icons-vue'
 import { getPaymentCallbackLog, listPaymentCallbackLogs } from '@/api/reader/paymentCallbackLogs'

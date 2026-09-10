@@ -19,19 +19,19 @@
     </el-upload>
 
     <div class="mt-5">
-      <el-table :data="pluginList" class="w-full">
+      <el-table v-table-display :data="pluginList" class="w-full">
         <el-table-column type="expand">
           <template #default="props">
             <div class="p-5">
               <h3>API 列表</h3>
-              <el-table :data="props.row.apis" border>
+              <el-table v-table-display :data="props.row.apis" border>
                 <el-table-column prop="path" label="路径" />
                 <el-table-column prop="method" label="方法" />
                 <el-table-column prop="description" label="描述" />
                 <el-table-column prop="apiGroup" label="API Group" />
               </el-table>
               <h3>菜单列表</h3>
-              <el-table
+              <el-table v-table-display
                 :data="props.row.menus"
                 row-key="name"
                 :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
@@ -42,7 +42,7 @@
                 <el-table-column prop="path" label="Path" />
               </el-table>
               <h3>字典列表</h3>
-              <el-table :data="props.row.dictionaries" border>
+              <el-table v-table-display :data="props.row.dictionaries" border>
                 <el-table-column prop="name" label="字典名称" />
                 <el-table-column prop="type" label="字典类型" />
                 <el-table-column prop="desc" label="描述" />

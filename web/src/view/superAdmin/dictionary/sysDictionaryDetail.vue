@@ -29,7 +29,7 @@
       </div>
       <!-- 表格视图 -->
       <div class="flex-1 min-h-0">
-      <el-table
+      <el-table v-table-display
         height="100%"
         :data="displayTreeData"
         style="width: 100%"

@@ -83,6 +83,7 @@
 </template>
 
 <script setup>
+import { adminDateTime } from '@/utils/adminDisplay'
 import { getSystemState } from '@/api/system'
 import { computed, onActivated, onDeactivated, onUnmounted, ref } from 'vue'
 
@@ -122,7 +123,7 @@ const reload = async () => {
     pushHistory(h.disk, topDisk.value ? topDisk.value.usedPercent : 0)
     pushHistory(h.goroutine, server.os?.numGoroutine ?? 0)
 
-    lastUpdated.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    lastUpdated.value = adminDateTime(new Date())
     loaded.value = true
   } catch {
     // 请求层已统一提示, 静默保留上次数据

@@ -21,7 +21,7 @@
       <div class="gva-btn-list">
         <el-button type="primary" icon="plus" @click="openDrawer">签发</el-button>
       </div>
-      <el-table
+      <el-table v-table-display
         :data="tableData"
         style="width: 100%"
         tooltip-effect="dark"

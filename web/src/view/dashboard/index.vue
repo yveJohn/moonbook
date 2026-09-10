@@ -5,7 +5,7 @@
         <p class="dashboard-kicker">读者运营</p>
         <h1>运营概览</h1>
         <p class="dashboard-meta">
-          <span v-if="overview">更新于 {{ generatedAt }}</span>
+          <span v-if="overview">更新于 {{ adminDateTime(generatedAt) }}</span>
           <span v-else>汇总用户增长与活跃趋势</span>
         </p>
       </div>
@@ -79,6 +79,7 @@
 </template>
 
 <script setup>
+import { adminDateTime } from '@/utils/adminDisplay'
   import { computed, onMounted, ref } from 'vue'
   import { Calendar, Refresh, TrendCharts, User } from '@element-plus/icons-vue'
   import Chart from '@/components/charts/index.vue'
@@ -92,12 +93,7 @@
   const refreshing = ref(false)
   const error = ref(false)
 
-  const generatedAt = computed(() => {
-    if (!overview.value?.generatedAt) return '--'
-    return new Intl.DateTimeFormat('zh-CN', {
-      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
-    }).format(new Date(overview.value.generatedAt))
-  })
+  const generatedAt = computed(() => overview.value?.generatedAt || '')
 
   const primaryMetrics = computed(() => {
     const growth = overview.value.growth

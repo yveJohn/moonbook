@@ -40,7 +40,7 @@
         </el-form>
       </div>
       <div class="flex-1 min-h-0">
-        <el-table
+        <el-table v-table-display
           ref="tableRef"
           v-loading="loading"
           :data="users"

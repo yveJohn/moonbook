@@ -8,7 +8,7 @@
     <el-tabs v-model="activeTab">
       <el-tab-pane label="建议审核" name="suggestions">
         <div class="toolbar">
-          <el-input v-model="query.bookId" inputmode="numeric" clearable placeholder="作品 ID" @input="query.bookId=digits(query.bookId)" @keyup.enter="resetAndLoad" />
+          <BookSelect v-model="query.bookId" @change="resetAndLoad" />
           <el-input v-model="query.bookName" clearable placeholder="作品名称" @keyup.enter="resetAndLoad" />
           <el-select v-model="query.status" clearable placeholder="状态" @change="resetAndLoad"><el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select>
           <el-select v-model="query.triggerType" clearable placeholder="触发方式" @change="resetAndLoad"><el-option label="手动生成" value="manual" /><el-option label="自动扫描" value="auto_scan" /><el-option label="重新生成" value="regenerate" /></el-select>
@@ -16,10 +16,10 @@
           <el-button :icon="Search" @click="resetAndLoad">查询</el-button>
           <el-button :icon="Refresh" aria-label="刷新" @click="loadSuggestions" />
         </div>
-        <el-table v-loading="loading" :data="rows" border row-key="id" @selection-change="selection=$event">
+        <el-table v-table-display v-loading="loading" :data="rows" border row-key="id" @selection-change="selection=$event">
           <el-table-column type="selection" width="44" :selectable="row => row.status === 'failed'" />
           <el-table-column label="建议 ID" min-width="165"><template #default="{row}"><code>{{ row.id }}</code></template></el-table-column>
-          <el-table-column prop="bookName" label="作品" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="bookName" label="作品" min-width="150" show-overflow-tooltip ><template #default="{ row }"><BookReference :id="row.bookId || ''" :name="row.bookName || ''" /></template></el-table-column>
           <el-table-column label="状态" width="92"><template #default="{row}"><el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag></template></el-table-column>
           <el-table-column label="触发" width="90"><template #default="{row}">{{ triggerLabel(row.triggerType) }}</template></el-table-column>
           <el-table-column label="建议分类" min-width="125"><template #default="{row}">{{ row.suggested?.categoryName || row.suggested?.categoryCode || '-' }}</template></el-table-column>
@@ -45,7 +45,7 @@
     </el-tabs>
 
     <el-dialog v-model="generateVisible" title="生成作品资料建议" width="min(480px,94vw)">
-      <el-form ref="generateRef" :model="generateForm" :rules="generateRules" label-position="top"><el-form-item label="作品 ID" prop="bookId"><el-input v-model="generateForm.bookId" inputmode="numeric" maxlength="20" @input="generateForm.bookId=digits(generateForm.bookId)" /></el-form-item></el-form>
+      <el-form ref="generateRef" :model="generateForm" :rules="generateRules" label-position="top"><el-form-item label="作品" prop="bookId"><BookSelect v-model="generateForm.bookId" /></el-form-item></el-form>
       <template #footer><el-button @click="generateVisible=false">取消</el-button><el-button type="primary" :loading="generating" @click="submitGenerate">提交</el-button></template>
     </el-dialog>
 
@@ -61,6 +61,8 @@
 </template>
 
 <script setup>
+import BookReference from '@/components/adminDisplay/BookReference.vue'
+import BookSelect from '@/components/adminDisplay/BookSelect.vue'
   import { computed, reactive, ref } from 'vue'
   import { Check, Close, MagicStick, Refresh, RefreshRight, Search, View } from '@element-plus/icons-vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
@@ -77,7 +79,6 @@
   const configRef=ref(),generateRef=ref(),reviewRef=ref(),generateVisible=ref(false),detailVisible=ref(false),detail=ref()
   const statusOptions=[['running','生成中'],['pending','待审核'],['approved','已审核'],['applied','已应用'],['rejected','已拒绝'],['failed','失败'],['retried','已重试'],['recovered','已恢复'],['expired','已过期']].map(([value,label])=>({value,label}))
   const configRules={aiConfigId:[{required:true,message:'请选择主 AI 配置',trigger:'change'}],systemPrompt:[{required:true,message:'请输入系统提示词',trigger:'blur'}]};const generateRules={bookId:[{required:true,pattern:/^[1-9]\d*$/,message:'请输入有效作品 ID',trigger:'blur'}]};const reviewRules={bookName:[{required:true,message:'请输入最终书名',trigger:'blur'}],categoryCode:[{required:true,message:'请选择最终主分类',trigger:'change'}],bookDesc:[{required:true,message:'请输入最终简介',trigger:'blur'}]}
-  const digits=value=>String(value||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,20)
   const statusLabel=value=>statusOptions.find(item=>item.value===value)?.label||value
   const statusType=value=>({running:'warning',pending:'primary',approved:'success',applied:'success',rejected:'info',failed:'danger',retried:'warning'})[value]||'info'
   const triggerLabel=value=>({manual:'手动',auto_scan:'自动',regenerate:'重试'})[value]||value

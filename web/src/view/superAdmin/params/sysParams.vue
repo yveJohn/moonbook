@@ -94,7 +94,7 @@
           >删除</el-button
         >
       </div>
-      <el-table
+      <el-table v-table-display
         ref="multipleTable"
         style="width: 100%"
         tooltip-effect="dark"
