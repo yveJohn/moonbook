@@ -37,7 +37,7 @@
 
 | 功能 | 旧页面/Controller | 关键操作 | 里程碑 | 状态 |
 | --- | --- | --- | --- | --- |
-| 读者用户 | `reader/user` / `ReaderUserAdminController` | 查询、详情、启停、重置密码 | M3 | 查询、详情、启停、密码重置已实现；重置统一 bcrypt 并撤销现有会话，真实 PostgreSQL 集成测试覆盖 |
+| 读者用户 | `reader/user` / `ReaderUserAdminController` | 查询、详情、启停、重置密码、发放会员、发放钻石/金币 | M3 | 查询、详情、启停、密码重置已实现；重置统一 bcrypt 并撤销现有会话，真实 PostgreSQL 集成测试覆盖；读者页可按消费商品发放会员，并直接发放钻石或金币 |
 | 书架、历史、偏好、点赞 | 读者 API 与相关表 | 查看读者行为、兼容读者端 | M3 | Reader 自有事实、HTTP 契约及冻结 UI 旅程已完成；旧后台没有独立业务管理页，按批准边界不新增写操作型管理入口，行为通过 Reader 隔离接口和审计证据验收 |
 | 反馈处理 | `reader/feedback` / `ReaderFeedbackAdminController` | 列表、详情、回复 | M3 | 列表、详情、单次回复已实现 |
 | 运营概览 | `/dashboard/overview` / `DashboardOverviewService` | 用户总量、周期新增、日活、去重周期活跃、30 天趋势 | M4 | `00055`、`GET /dashboard/overview` 和 GVA Dashboard 已实现；按 Kuala Lumpur 自然日采集，30 天趋势零填充，真实 PostgreSQL 与双库迁移测试通过 |
@@ -46,7 +46,7 @@
 | 钱包与流水 | `reader/wallet` / `ReaderWalletAdminController` | 余额、流水、调整、签到、邀请奖励 | M4 | 余额、不可变流水、人工调账及“签到记录/邀请奖励”只读页签已实现；请求 ID 幂等、钱包锁、余额保护和桌面/移动 E2E 通过 |
 | 消费商品 | `reader/product` / `ReaderProductController` | 书籍、章节、会员、免广告商品及上下架 | M4 | 管理端分页筛选、CRUD、在售状态、目标存在性校验和历史订单删除保护已实现；真实 PostgreSQL 集成测试通过 |
 | 消费订单 | `reader/order` / `ReaderOrderAdminController` | 查询、人工充值、确认 | M4 | 管理端列表/详情和筛选已实现；模拟充值按“创建 pending 订单、单独确认入账”两阶段执行，请求/确认流水幂等且操作受审计；退款仍需独立财务审批设计 |
-| 会员人工发放 | `reader/user` / `ReaderMembershipGrantController` | 限时或永久会员发放、幂等请求、备注审计 | M4 | `POST /reader/users/:id/membership` 已实现；事务锁定读者账号，会员授予独立叠加且不修改购买订单 |
+| 会员人工发放 | `reader/user` / `ReaderMembershipGrantController` | 按消费商品会员套餐发放、备注审计 | M4 | `POST /reader/users/:id/membership` 已按会员商品发放；请求 ID 由服务端自动生成，事务锁定读者账号，会员授予独立叠加且不修改购买订单 |
 | 充值产品与设置 | `reader/payment/product` / `ReaderRechargeProductAdminController` | 预设档位、自定义兑换范围 | M4 | 充值档位 CRUD、自定义充值开关/汇率/最小最大范围管理已实现；真实 PostgreSQL 集成测试覆盖非法规则 |
 | 支付渠道 | `reader/payment/channel` / `ReaderPaymentChannelAdminController` | 配置、启停、连通性检查、凭据保护 | M4 | 支持 EPUSDT 渠道新建、脱敏查看、编辑、启停、安全归档和连通性检查；PID/Secret 使用统一应用主密钥加密落库并即时生效，真实生产网关仍需切换前受控验收 |
 | 充值订单与回调 | `reader/payment/order` / `ReaderRechargeOrderAdminController` | 创建、详情、回调日志、主动同步、异常状态 | M4 | 列表、筛选、详情、EPUSDT 同步创建、失败分类、活动订单替换、过期释放、历史凭据回调、防重放、人工补单、主动同步和每次回调审计均已验收；Full 财务核对器通过合成边界数据，剩余仅为受控真实最小金额支付外部验收 |

@@ -9,6 +9,7 @@ import (
 
 	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -22,8 +23,35 @@ func NewService(repo Repository, tx Transactor, reader readercontract.AccountLoc
 }
 
 func (s *Service) Grant(ctx context.Context, readerID int64, in Input) (Grant, error) {
-	if readerID <= 0 || strings.TrimSpace(in.RequestID) == "" || len(in.RequestID) > 64 || strings.TrimSpace(in.Remark) == "" || len([]rune(in.Remark)) > 255 {
+	in.RequestID = strings.TrimSpace(in.RequestID)
+	in.ProductID = strings.TrimSpace(in.ProductID)
+	in.Remark = strings.TrimSpace(in.Remark)
+	in.DurationDays = strings.TrimSpace(in.DurationDays)
+	if in.RequestID == "" {
+		in.RequestID = uuid.NewString()
+	}
+	if readerID <= 0 || len(in.RequestID) > 64 || in.Remark == "" || len([]rune(in.Remark)) > 255 {
 		return Grant{}, errors.New("invalid membership grant request")
+	}
+	if in.ProductID != "" {
+		productID, err := strconv.ParseInt(in.ProductID, 10, 64)
+		if err != nil || productID <= 0 {
+			return Grant{}, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "会员商品ID必须是正整数字符串")
+		}
+		if s.Repo == nil {
+			return Grant{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "读者服务暂不可用")
+		}
+		product, err := s.Repo.MembershipProduct(ctx, productID)
+		if err != nil {
+			return Grant{}, err
+		}
+		if product.DurationDays == nil {
+			in.Permanent = true
+			in.DurationDays = ""
+		} else {
+			in.Permanent = false
+			in.DurationDays = strconv.Itoa(*product.DurationDays)
+		}
 	}
 	if in.Permanent {
 		if in.DurationDays != "" {

@@ -21,7 +21,13 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 }
 func (h *Handler) adjust(c *gin.Context) {
 	readerID := c.Param("readerId")
-	var req struct{ Amount, CoinType, Direction, Reason, RequestID string }
+	var req struct {
+		Amount    string `json:"amount"`
+		CoinType  string `json:"coinType"`
+		Direction string `json:"direction"`
+		Reason    string `json:"reason"`
+		RequestID string `json:"requestId"`
+	}
 	if c.ShouldBindJSON(&req) != nil {
 		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "请求参数无效"))
 		return

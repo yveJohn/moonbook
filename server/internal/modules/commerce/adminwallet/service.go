@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+
 	readercontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 )
@@ -48,6 +50,10 @@ func (s *Service) ListLedgers(ctx context.Context, id int64, c string, p, n int)
 	return s.Repo.ListLedgers(ctx, id, c, p, n)
 }
 func (s *Service) Adjust(ctx context.Context, in AdjustmentInput) (Adjustment, error) {
+	in.RequestID = strings.TrimSpace(in.RequestID)
+	if in.RequestID == "" {
+		in.RequestID = uuid.NewString()
+	}
 	readerID, err := strconv.ParseInt(strings.TrimSpace(in.ReaderID), 10, 64)
 	if err != nil || readerID <= 0 {
 		return Adjustment{}, ErrInvalidAdjustment
