@@ -91,6 +91,9 @@ type walletContract struct {
 func (*walletContract) Wallet(context.Context, int64) (commercecontract.Wallet, error) {
 	return commercecontract.Wallet{ReaderID: contractMaxID, RechargeCoinBalance: contractMaxID, BonusCoinBalance: contractSafeID, TotalRechargeCoinIncome: contractMaxID - 1, TotalBonusCoinIncome: contractSafeID + 1, TotalRechargeCoinExpense: contractMaxID - 2, TotalBonusCoinExpense: contractSafeID + 2}, nil
 }
+func (*walletContract) Wallets(context.Context, []int64) ([]commercecontract.Wallet, error) {
+	return nil, nil
+}
 
 func (stub *walletContract) WalletLedgers(_ context.Context, readerID int64, coinType string, page, size int) ([]commercecontract.WalletLedger, int64, error) {
 	stub.coinType, stub.page, stub.size = coinType, page, size

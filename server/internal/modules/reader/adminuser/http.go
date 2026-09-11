@@ -41,7 +41,14 @@ func (h *Handler) password(c *gin.Context) {
 	managementresponse.OK(c, nil, "密码已重置")
 }
 func render(u User) map[string]any {
-	return map[string]any{"id": u.ID, "username": u.Username, "nickname": u.Nickname, "status": u.Status, "passwordAlgorithm": u.PasswordAlgorithm, "lastLoginAt": u.LastLoginAt, "createdAt": u.CreatedAt, "updatedAt": u.UpdatedAt}
+	recharge, bonus := u.RechargeBalance, u.BonusBalance
+	if recharge == "" {
+		recharge = "0"
+	}
+	if bonus == "" {
+		bonus = "0"
+	}
+	return map[string]any{"id": u.ID, "username": u.Username, "nickname": u.Nickname, "status": u.Status, "passwordAlgorithm": u.PasswordAlgorithm, "lastLoginAt": u.LastLoginAt, "createdAt": u.CreatedAt, "updatedAt": u.UpdatedAt, "rechargeBalance": recharge, "bonusBalance": bonus}
 }
 func (h *Handler) list(c *gin.Context) {
 	p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

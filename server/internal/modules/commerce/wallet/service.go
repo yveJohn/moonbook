@@ -18,6 +18,13 @@ func (s *Service) Get(ctx context.Context, readerID int64) (Wallet, error) {
 	return s.Repo.Get(ctx, readerID)
 }
 
+func (s *Service) ListByReaderIDs(ctx context.Context, readerIDs []int64) ([]Wallet, error) {
+	if s == nil || s.Repo == nil {
+		return nil, ErrRepositoryUnavailable
+	}
+	return s.Repo.ListByReaderIDs(ctx, readerIDs)
+}
+
 func (s *Service) List(ctx context.Context, readerID int64, coinType string, page, size int) ([]Ledger, int64, error) {
 	if s == nil || s.Repo == nil {
 		return nil, 0, ErrRepositoryUnavailable

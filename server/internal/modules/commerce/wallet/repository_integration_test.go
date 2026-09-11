@@ -69,3 +69,30 @@ func TestGetReleasesSingleConnection(t *testing.T) {
 		t.Fatalf("pool unusable after failed initialization: %v", err)
 	}
 }
+
+func TestListByReaderIDsReturnsExistingBalances(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	readerID := time.Now().UnixNano()
+	missingID := readerID + 1
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,password_hash,status) VALUES($1,$2,'x','enabled')`, readerID, "wallet-list-"+integrationtest.Prefix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id,recharge_coin_balance,bonus_coin_balance) VALUES($1,88,15)`, readerID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		for _, query := range []string{`DELETE FROM reader_wallets WHERE reader_id=$1`, `DELETE FROM reader_accounts WHERE id=$1`} {
+			if _, err := db.ExecContext(cleanup, query, readerID); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	rows, err := (SQLRepository{DB: db}).ListByReaderIDs(ctx, []int64{readerID, missingID})
+	if err != nil || len(rows) != 1 || rows[0].ReaderID != readerID || rows[0].RechargeCoinBalance != 88 || rows[0].BonusCoinBalance != 15 {
+		t.Fatalf("rows=%+v err=%v", rows, err)
+	}
+}

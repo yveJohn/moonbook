@@ -45,6 +45,9 @@ type walletRepositoryStub struct{}
 func (walletRepositoryStub) Get(context.Context, int64) (wallet.Wallet, error) {
 	return wallet.Wallet{ReaderID: 7, RechargeCoinBalance: 8}, nil
 }
+func (walletRepositoryStub) ListByReaderIDs(context.Context, []int64) ([]wallet.Wallet, error) {
+	return []wallet.Wallet{{ReaderID: 7, RechargeCoinBalance: 8, BonusCoinBalance: 3}}, nil
+}
 func (walletRepositoryStub) List(context.Context, int64, string, int, int) ([]wallet.Ledger, int64, error) {
 	return []wallet.Ledger{{ID: 9, ReaderID: 7, Amount: 3, CreatedAt: time.Unix(1, 0)}}, 1, nil
 }
@@ -57,6 +60,10 @@ func TestWalletProviderConvertsBalancesAndLedgers(t *testing.T) {
 	balance, err := provider.Wallet(context.Background(), 7)
 	if err != nil || balance.ReaderID != 7 || balance.RechargeCoinBalance != 8 {
 		t.Fatalf("wallet=%+v err=%v", balance, err)
+	}
+	listed, err := provider.Wallets(context.Background(), []int64{7})
+	if err != nil || len(listed) != 1 || listed[0].ReaderID != 7 || listed[0].BonusCoinBalance != 3 {
+		t.Fatalf("wallets=%+v err=%v", listed, err)
 	}
 	rows, total, err := provider.WalletLedgers(context.Background(), 7, "recharge", 1, 20)
 	if err != nil || total != 1 || len(rows) != 1 || rows[0].ID != 9 || rows[0].Amount != 3 {

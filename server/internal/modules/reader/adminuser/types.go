@@ -5,6 +5,7 @@ import "context"
 type User struct {
 	ID, Username, Nickname, Status, PasswordAlgorithm string
 	LastLoginAt, CreatedAt, UpdatedAt                 string
+	RechargeBalance, BonusBalance                     string
 }
 type Repository interface {
 	List(context.Context, string, string, int, int) ([]User, int64, error)

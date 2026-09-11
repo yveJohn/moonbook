@@ -29,6 +29,26 @@ func (provider *Wallet) Wallet(ctx context.Context, readerID int64) (contract.Wa
 	}, nil
 }
 
+func (provider *Wallet) Wallets(ctx context.Context, readerIDs []int64) ([]contract.Wallet, error) {
+	if provider == nil || provider.service == nil {
+		return nil, contract.ErrUnavailable
+	}
+	rows, err := provider.service.ListByReaderIDs(ctx, readerIDs)
+	if err != nil {
+		return nil, contract.Wrap(contract.ErrUnavailable, err)
+	}
+	out := make([]contract.Wallet, 0, len(rows))
+	for _, value := range rows {
+		out = append(out, contract.Wallet{
+			ReaderID: value.ReaderID, RechargeCoinBalance: value.RechargeCoinBalance,
+			BonusCoinBalance: value.BonusCoinBalance, TotalRechargeCoinIncome: value.TotalRechargeCoinIncome,
+			TotalBonusCoinIncome: value.TotalBonusCoinIncome, TotalRechargeCoinExpense: value.TotalRechargeCoinExpense,
+			TotalBonusCoinExpense: value.TotalBonusCoinExpense,
+		})
+	}
+	return out, nil
+}
+
 func (provider *Wallet) WalletLedgers(ctx context.Context, readerID int64, coinType string, page, size int) ([]contract.WalletLedger, int64, error) {
 	if provider == nil || provider.service == nil {
 		return nil, 0, contract.ErrUnavailable

@@ -19,10 +19,11 @@ func (serviceTransactor) Within(ctx context.Context, fn func(context.Context) er
 type serviceRepository struct {
 	statusContexts []context.Context
 	passwordCalls  int
+	users          []User
 }
 
-func (*serviceRepository) List(context.Context, string, string, int, int) ([]User, int64, error) {
-	return nil, 0, nil
+func (repository *serviceRepository) List(context.Context, string, string, int, int) ([]User, int64, error) {
+	return repository.users, int64(len(repository.users)), nil
 }
 func (*serviceRepository) Get(context.Context, int64) (User, error) { return User{}, nil }
 func (repository *serviceRepository) SetStatus(ctx context.Context, id int64, status string) (User, error) {
@@ -53,7 +54,7 @@ func (*serviceProjectionWriter) DeleteReaderSearchProjection(context.Context, in
 func TestSetStatusSynchronizesProjectionInTransactionContext(t *testing.T) {
 	repository := &serviceRepository{}
 	projections := &serviceProjectionWriter{}
-	service := NewService(repository, serviceTransactor{}, projections, nil)
+	service := NewService(repository, serviceTransactor{}, projections, nil, nil)
 
 	user, err := service.SetStatus(context.Background(), 21, "disabled")
 	if err != nil {
@@ -71,7 +72,7 @@ func TestSetStatusSynchronizesProjectionInTransactionContext(t *testing.T) {
 func TestSetStatusReturnsProjectionFailure(t *testing.T) {
 	want := errors.New("projection unavailable")
 	projections := &serviceProjectionWriter{err: want}
-	service := NewService(&serviceRepository{}, serviceTransactor{}, projections, nil)
+	service := NewService(&serviceRepository{}, serviceTransactor{}, projections, nil, nil)
 
 	if _, err := service.SetStatus(context.Background(), 21, "disabled"); !errors.Is(err, want) {
 		t.Fatalf("error=%v", err)
@@ -81,12 +82,54 @@ func TestSetStatusReturnsProjectionFailure(t *testing.T) {
 func TestResetPasswordDoesNotSynchronizeProjection(t *testing.T) {
 	repository := &serviceRepository{}
 	projections := &serviceProjectionWriter{}
-	service := NewService(repository, serviceTransactor{}, projections, nil)
+	service := NewService(repository, serviceTransactor{}, projections, nil, nil)
 
 	if err := service.ResetPassword(context.Background(), 21, "new-pass", "new-pass"); err != nil {
 		t.Fatal(err)
 	}
 	if repository.passwordCalls != 1 || len(projections.items) != 0 {
 		t.Fatalf("passwordCalls=%d projections=%+v", repository.passwordCalls, projections.items)
+	}
+}
+
+type serviceWallets struct {
+	items []commercecontract.Wallet
+	err   error
+	ids   []int64
+}
+
+func (*serviceWallets) Wallet(context.Context, int64) (commercecontract.Wallet, error) {
+	return commercecontract.Wallet{}, nil
+}
+func (wallets *serviceWallets) Wallets(_ context.Context, ids []int64) ([]commercecontract.Wallet, error) {
+	wallets.ids = append([]int64(nil), ids...)
+	return wallets.items, wallets.err
+}
+func (*serviceWallets) WalletLedgers(context.Context, int64, string, int, int) ([]commercecontract.WalletLedger, int64, error) {
+	return nil, 0, nil
+}
+
+func TestListAttachesWalletBalances(t *testing.T) {
+	repository := &serviceRepository{users: []User{{ID: "21", Username: "reader-21"}, {ID: "22", Username: "reader-22"}}}
+	wallets := &serviceWallets{items: []commercecontract.Wallet{{ReaderID: 21, RechargeCoinBalance: 88, BonusCoinBalance: 15}}}
+	service := NewService(repository, serviceTransactor{}, &serviceProjectionWriter{}, nil, wallets)
+
+	users, total, err := service.List(context.Background(), "", "", 1, 20)
+	if err != nil || total != 2 || len(users) != 2 {
+		t.Fatalf("users=%+v total=%d err=%v", users, total, err)
+	}
+	if users[0].RechargeBalance != "88" || users[0].BonusBalance != "15" {
+		t.Fatalf("user0=%+v", users[0])
+	}
+	if users[1].RechargeBalance != "0" || users[1].BonusBalance != "0" {
+		t.Fatalf("user1=%+v", users[1])
+	}
+}
+
+func TestListReturnsWalletLookupFailure(t *testing.T) {
+	want := errors.New("wallet unavailable")
+	service := NewService(&serviceRepository{users: []User{{ID: "21"}}}, serviceTransactor{}, &serviceProjectionWriter{}, nil, &serviceWallets{err: want})
+	if _, _, err := service.List(context.Background(), "", "", 1, 20); !errors.Is(err, want) {
+		t.Fatalf("error=%v", err)
 	}
 }

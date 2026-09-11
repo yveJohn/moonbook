@@ -27,6 +27,7 @@ type Mutation struct {
 
 type Repository interface {
 	Get(context.Context, int64) (Wallet, error)
+	ListByReaderIDs(context.Context, []int64) ([]Wallet, error)
 	List(context.Context, int64, string, int, int) ([]Ledger, int64, error)
 	Mutate(context.Context, Mutation) (Ledger, error)
 }

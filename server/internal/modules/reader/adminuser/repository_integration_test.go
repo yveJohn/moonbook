@@ -9,6 +9,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/integrationtest"
 	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	commerceprovider "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/provider"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/wallet"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"golang.org/x/crypto/bcrypt"
 	"testing"
@@ -26,20 +27,27 @@ func TestAdminUserListGetAndDisableRevokesSessions(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES($1,'admin-user-fixture','测试读者','fixture','enabled')`, id); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_wallets(reader_id,recharge_coin_balance,bonus_coin_balance) VALUES($1,88,15)`, id); err != nil {
+		t.Fatal(err)
+	}
 	var session int64
 	if err := db.QueryRowContext(ctx, `INSERT INTO reader_sessions(reader_id,token_digest,expires_at) VALUES($1,repeat('a',64),now()+interval '1 hour') RETURNING id`, id).Scan(&session); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_sessions WHERE reader_id=$1`, id)
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_wallets WHERE reader_id=$1`, id)
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM commerce_reader_search_projection WHERE reader_id=$1`, id)
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_accounts WHERE id=$1`, id)
 	})
 	r := SQLRepository{DB: db}
-	service := NewService(r, transaction.New(db), commerceprovider.NewReaderSearch(db), nil)
-	users, total, err := r.List(ctx, "admin-user-fixture", "enabled", 1, 20)
+	service := NewService(r, transaction.New(db), commerceprovider.NewReaderSearch(db), nil, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})))
+	users, total, err := service.List(ctx, "admin-user-fixture", "enabled", 1, 20)
 	if err != nil || total != 1 || len(users) != 1 || users[0].ID == "" {
 		t.Fatalf("users=%+v total=%d err=%v", users, total, err)
+	}
+	if users[0].RechargeBalance != "88" || users[0].BonusBalance != "15" {
+		t.Fatalf("balances recharge=%q bonus=%q", users[0].RechargeBalance, users[0].BonusBalance)
 	}
 	if _, err = service.SetStatus(ctx, id, "disabled"); err != nil {
 		t.Fatal(err)
@@ -64,6 +72,30 @@ func (writer failingStatusProjection) DeleteReaderSearchProjection(context.Conte
 	return writer.err
 }
 
+func TestAdminUserListReturnsZeroBalancesWithoutWallet(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var id int64
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(max(id),2607300000000)+1 FROM reader_accounts`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	username := fmt.Sprintf("admin-user-nowallet-%d", id)
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES($1,$2,'无钱包','fixture','enabled')`, id, username); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_accounts WHERE id=$1`, id)
+	})
+	users, total, err := NewService(SQLRepository{DB: db}, transaction.New(db), commerceprovider.NewReaderSearch(db), nil, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db}))).List(ctx, username, "enabled", 1, 20)
+	if err != nil || total != 1 || len(users) != 1 {
+		t.Fatalf("users=%+v total=%d err=%v", users, total, err)
+	}
+	if users[0].RechargeBalance != "0" || users[0].BonusBalance != "0" {
+		t.Fatalf("balances recharge=%q bonus=%q", users[0].RechargeBalance, users[0].BonusBalance)
+	}
+}
+
 func TestAdminUserStatusRollsBackWhenProjectionFails(t *testing.T) {
 	db, _ := integrationtest.RequireDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -85,7 +117,7 @@ func TestAdminUserStatusRollsBackWhenProjectionFails(t *testing.T) {
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM commerce_reader_search_projection WHERE reader_id=$1`, id)
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_accounts WHERE id=$1`, id)
 	})
-	service := NewService(SQLRepository{DB: db}, transaction.New(db), failingStatusProjection{err: fmt.Errorf("forced projection failure")}, nil)
+	service := NewService(SQLRepository{DB: db}, transaction.New(db), failingStatusProjection{err: fmt.Errorf("forced projection failure")}, nil, nil)
 	if _, err := service.SetStatus(ctx, id, "disabled"); err == nil {
 		t.Fatal("expected projection failure")
 	}

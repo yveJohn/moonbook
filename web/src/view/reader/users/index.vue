@@ -22,6 +22,12 @@
       </el-table-column>
       <el-table-column prop="username" label="账号" min-width="160" />
       <el-table-column prop="nickname" label="昵称" min-width="140" />
+      <el-table-column label="钻石" min-width="110">
+        <template #default="{ row }">{{ row.rechargeBalance || '0' }}</template>
+      </el-table-column>
+      <el-table-column label="金币" min-width="110">
+        <template #default="{ row }">{{ row.bonusBalance || '0' }}</template>
+      </el-table-column>
       <el-table-column prop="status" label="状态" width="110" :formatter="adminStatusColumn" />
       <el-table-column prop="lastLoginAt" label="最近登录" min-width="185" :formatter="adminTimeColumn" />
       <el-table-column label="操作" width="360">
@@ -228,6 +234,7 @@ const saveCoin = async () => {
     })
     ElMessage.success('发放成功')
     coinDialog.value = false
+    await load()
   } finally {
     coinSaving.value = false
   }

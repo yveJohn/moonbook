@@ -26,6 +26,26 @@ func (r SQLRepository) Get(ctx context.Context, readerID int64) (Wallet, error) 
 	return w, err
 }
 
+func (r SQLRepository) ListByReaderIDs(ctx context.Context, readerIDs []int64) ([]Wallet, error) {
+	if len(readerIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := r.DB.QueryContext(ctx, `SELECT reader_id,recharge_coin_balance,bonus_coin_balance,total_recharge_coin_income,total_bonus_coin_income,total_recharge_coin_expense,total_bonus_coin_expense FROM reader_wallets WHERE reader_id = ANY($1)`, readerIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]Wallet, 0, len(readerIDs))
+	for rows.Next() {
+		var w Wallet
+		if err := rows.Scan(&w.ReaderID, &w.RechargeCoinBalance, &w.BonusCoinBalance, &w.TotalRechargeCoinIncome, &w.TotalBonusCoinIncome, &w.TotalRechargeCoinExpense, &w.TotalBonusCoinExpense); err != nil {
+			return nil, err
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
+}
+
 func (r SQLRepository) List(ctx context.Context, readerID int64, coinType string, page, size int) ([]Ledger, int64, error) {
 	var total int64
 	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM reader_wallet_ledgers WHERE reader_id=$1 AND ($2='' OR coin_type=$2)`, readerID, coinType).Scan(&total); err != nil {

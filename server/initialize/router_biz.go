@@ -92,7 +92,8 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	readerAccounts := readerprovider.NewAccount(db)
 	readerInvites := readerprovider.NewInvite(db)
 	purchaseTargets := novelprovider.NewPurchase(db)
-	commercecompat.RegisterWalletRoutes(publicGroup, commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db})), readerService)
+	walletReader := commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db}))
+	commercecompat.RegisterWalletRoutes(publicGroup, walletReader, readerService)
 	paymentCipher, _ := secretcrypto.NewFromEnv(os.LookupEnv)
 	paymentStore := adminpayment.SQLRepository{DB: db, Cipher: paymentCipher}
 	loadGateway := func(ctx context.Context) (recharge.Gateway, recharge.GatewaySnapshot, error) {
@@ -127,7 +128,7 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	adminproduct.RegisterRoutes(privateGroup, adminproduct.NewService(adminproduct.SQLRepository{DB: db}, purchaseTargets))
 	adminrechargeorder.RegisterRoutes(privateGroup, adminrechargeorder.NewService(adminrechargeorder.SQLRepository{DB: db, Invites: readerInvites, Accounts: readerAccounts, PaymentRuntime: paymentStore.Runtime}, transactor, readerAccounts, callbackAuditConfig.StaleAfter))
 	adminwallet.RegisterRoutes(privateGroup, adminwallet.NewService(adminwallet.SQLRepository{DB: db}, transactor, readerAccounts))
-	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}, transactor, readerSearch, accountConsistency))
+	adminuser.RegisterRoutes(privateGroup, adminuser.NewService(adminuser.SQLRepository{DB: db}, transactor, readerSearch, accountConsistency, walletReader))
 	adminfeedback.RegisterRoutes(privateGroup, adminfeedback.NewService(adminfeedback.SQLRepository{DB: db}))
 	admininvite.RegisterRoutes(privateGroup, admininvite.NewService(admininvite.SQLRepository{DB: db}))
 	admincheckin.RegisterRoutes(privateGroup, admincheckin.NewService(admincheckin.SQLRepository{DB: db}))

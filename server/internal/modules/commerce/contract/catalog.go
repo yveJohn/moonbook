@@ -82,6 +82,7 @@ type WalletLedger struct {
 
 type WalletReader interface {
 	Wallet(context.Context, int64) (Wallet, error)
+	Wallets(context.Context, []int64) ([]Wallet, error)
 	WalletLedgers(context.Context, int64, string, int, int) ([]WalletLedger, int64, error)
 }
 
