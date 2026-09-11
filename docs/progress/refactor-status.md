@@ -28,7 +28,7 @@
 
 ## 当前已知问题与关闭证据
 
-- 2026-09-11 读者邀请文案改由参数管理控制：键名 `reader.invite.shareText`，后台「参数管理」可改；读者邀请看板读取 `sys_params`，空白/缺失/读取失败回退默认文案，不覆盖已有参数值。
+- 2026-09-11 读者邀请文案改由参数管理控制：键名 `reader.invite.shareText`，后台「参数管理」可改；读者邀请看板读取 `sys_params`，空白/缺失/读取失败回退默认文案，不覆盖已有参数值。实现提交 `243df5d566f3` 已于 2026-09-11 13:31（UTC+8）发布生产，详见文末与 `docs/verification/2026-09-11-invite-share-text-production.md`。
 
 - 2026-09-09 钱包连接池耗尽修复：生产后端约在 23:27（UTC+8）开始 readiness 503，50 个连接均停在钱包初始化 INSERT；PostgreSQL 无锁等待且直接查询正常。`wallet.SQLRepository.Get` 将未消费结果的 `QueryRowContext(...).Err()` 改为 `ExecContext()`，购买扣款初始化同步修正；不改变余额、流水、权益、接口或数据库结构。真实 PostgreSQL 单连接池回归在原代码第一次 Get 时超时，修复后 100 次连续与 80 次并发调用通过，调用后连接归还；外键失败后池仍可用。购买回归覆盖新钱包重复初始化、余额不足和事务回滚，既有成功、幂等、并发购买用例继续通过。Reader/Commerce 全量单元与契约测试、真实 PostgreSQL/Redis/MinIO 197 项集成测试（零失败、零跳过）、定向 go vet、gofmt 与 Go 应用构建通过。修复提交为 `0bb1fdbd9ac1`，发布证据见下一项。
 - 钱包修复于 2026-09-09 23:46（UTC+8）部署生产：本地构建 Linux AMD64 镜像 `moonbook/server:0bb1fdbd9ac1`，image ID 为 `sha256:5dd64850b31e4306c25e6238a35623c86c6e264908ffed93ae5f6a00090df87e`，上传归档与远端 SHA-256 校验通过。发布物及旧配置保存在 `/opt/moonbook-app/releases/wallet-fix-0bb1fdbd9ac1/`，原配置为 `compose.release.before.yml`。仅更新 `compose.release.yml` 中 Server/Migrate 镜像引用，并用 `up -d --no-deps --no-build --pull never --wait server` 替换后端；未执行迁移、修数或对象写入。Server 为 healthy，发布后前 14 次 readiness 全部 200，结构化 error/fatal/panic 和请求错误计数为 0；后端数据库连接降至 9 个。管理页面、读者首页、管理/读者公网 readiness 均 HTTP 200，四项依赖均为 ok。Web、Reader、Gateway、PostgreSQL、Redis 容器启动时间未变化，无需额外重启。另发现源站读者证书仅含 `*.ybsc.me`、不覆盖根域名 `ybsc.me`，本次未调整证书；当前 Cloudflare 公网访问验证成功，该独立问题仍需后续处理。
@@ -314,3 +314,10 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 新增按字段区分的展示映射，兼容历史订单与流水枚举，保留未知值及原始接口数据；不改变 Long ID。
 - 验证：45 个前端测试、ESLint、生产构建、供应链检查通过。详细范围与保留项见 `docs/verification/2026-09-11-admin-enum-localization.md`。
 - 服务影响：仅 Web；已随提交 `4e7954befb5c` 于 2026-09-11 12:23（UTC+8）发布生产，无需额外重启。
+
+## 2026-09-11 邀请文案改由参数管理控制
+
+- 读者邀请分享文案不再硬编码，改由 GVA「参数管理」维护 `reader.invite.shareText`；`{{link}}` 仍替换为当前域名邀请注册链接。空值、缺失或读取失败回退默认文案 `邀请你加入月白书城，点击 {{link}} 注册`，迁移 `00078` 仅在键不存在时插入，不覆盖已有参数。
+- 实现提交 `243df5d566f3`。
+- 服务影响：后端 `server` 需迁移并重建；管理前端/读者端无业务改动，但发布脚本仍会替换对应镜像。生产已完成更新，无需额外重启。
+- 上述改动于 2026-09-11 13:31（UTC+8）由 `scripts/deploy-production.sh` 发布生产：固定提交 `243df5d566f3`，镜像 `moonbook/server:243df5d566f3`（`sha256:b82bbd73a3a3…`）、`moonbook/web:243df5d566f3`（`sha256:58498456d947…`）、`moonbook/reader-ui:243df5d566f3`（与既有 reader-ui 层缓存命中，ID `1764382789b3`）。脚本已执行版本化 migrate，`moonbook_schema_version` 当前为 78，`sys_params.reader.invite.shareText` 已存在。随后重建 Server、Web、Reader、Gateway，四容器 healthy、restart=0。源站 gateway-health / API ready / reader health 均为 HTTP 200，公网管理首页、网关健康、API readiness、读者首页与读者健康均为 HTTP 200；发布后 Server 精确 error/fatal/panic 计数为 0。旧镜像保留：`server:4e7954befb5c`、`web:4e7954befb5c`、`reader-ui:4e7954befb5c`。生产更新已完成，无需额外重启；本条发布记录为文档变更，不影响服务，无需重启。
