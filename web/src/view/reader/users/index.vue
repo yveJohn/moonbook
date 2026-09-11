@@ -30,12 +30,13 @@
       </el-table-column>
       <el-table-column prop="status" label="状态" width="110" :formatter="adminStatusColumn" />
       <el-table-column prop="lastLoginAt" label="最近登录" min-width="185" :formatter="adminTimeColumn" />
-      <el-table-column label="操作" width="360">
+      <el-table-column label="操作" width="430">
         <template #default="{ row }">
           <el-switch :model-value="row.status === 'enabled'" :disabled="row.status === 'deleted'" @change="toggle(row)" />
           <el-button link type="primary" :disabled="row.status === 'deleted'" @click="openPassword(row)">重置密码</el-button>
           <el-button link type="success" :disabled="row.status === 'deleted'" @click="openMembership(row)">发放会员</el-button>
           <el-button link type="warning" :disabled="row.status === 'deleted'" @click="openCoin(row)">发放钻石/金币</el-button>
+          <el-button link type="primary" @click="openLogs(row)">日志</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -87,6 +88,26 @@
         <el-button type="primary" :loading="coinSaving" @click="saveCoin">发放</el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="logDialog" :title="logTitle" width="760px">
+      <el-table v-loading="logLoading" :data="logRows" border>
+        <el-table-column label="时间" min-width="180" :formatter="adminTimeColumn" prop="createdAt" />
+        <el-table-column label="操作人" min-width="140">
+          <template #default="{ row }">{{ row.operatorName || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" min-width="120">
+          <template #default="{ row }">{{ row.action || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="状态码" width="90">
+          <template #default="{ row }">{{ row.status || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="摘要" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.summary || row.errorMessage || '-' }}</template>
+        </el-table-column>
+      </el-table>
+      <div class="pager">
+        <el-pagination v-model:current-page="logPage" v-model:page-size="logPageSize" :total="logTotal" :page-sizes="[10,20,50]" layout="total, sizes, prev, pager, next" @size-change="loadLogs" @current-change="loadLogs" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 <script setup>
@@ -94,7 +115,7 @@ import { adminStatusColumn, adminTimeColumn } from '@/utils/adminDisplay'
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
-import { listReaderUsers, resetReaderUserPassword, setReaderUserStatus, grantReaderMembership } from '@/api/reader/users'
+import { listReaderUsers, resetReaderUserPassword, setReaderUserStatus, grantReaderMembership, listReaderUserOperations } from '@/api/reader/users'
 import { listProducts } from '@/api/reader/products'
 import { adjustReaderWallet } from '@/api/reader/walletAdmin'
 defineOptions({ name: 'ReaderUsers' })
@@ -138,6 +159,14 @@ const coinRules = {
   amount: [{ required: true, pattern: /^[1-9]\d*$/, message: '请输入正整数', trigger: 'blur' }],
   reason: [{ required: true, max: 255, message: '请输入备注', trigger: 'blur' }]
 }
+const logDialog = ref(false)
+const logLoading = ref(false)
+const logTitle = ref('操作日志')
+const logUserId = ref('')
+const logRows = ref([])
+const logTotal = ref(0)
+const logPage = ref(1)
+const logPageSize = ref(20)
 const membershipDurationLabel = (item) => {
   if (!item) return ''
   return item.durationDays ? `${item.durationDays} 天` : '永久'
@@ -237,6 +266,24 @@ const saveCoin = async () => {
     await load()
   } finally {
     coinSaving.value = false
+  }
+}
+const openLogs = (row) => {
+  logUserId.value = row.id
+  logTitle.value = `操作日志（${row.username}）`
+  logPage.value = 1
+  logDialog.value = true
+  loadLogs()
+}
+const loadLogs = async () => {
+  if (!logUserId.value) return
+  logLoading.value = true
+  try {
+    const res = await listReaderUserOperations(logUserId.value, { page: logPage.value, pageSize: logPageSize.value })
+    logRows.value = res.data?.list || []
+    logTotal.value = res.data?.total || 0
+  } finally {
+    logLoading.value = false
   }
 }
 load()

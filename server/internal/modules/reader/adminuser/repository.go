@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"golang.org/x/crypto/bcrypt"
@@ -95,4 +96,44 @@ func (r SQLRepository) SetStatus(ctx context.Context, id int64, status string) (
 		return User{}, err
 	}
 	return u, nil
+}
+
+func (r SQLRepository) ListOperations(ctx context.Context, id int64, p, n int) ([]Operation, int64, error) {
+	if id <= 0 {
+		return nil, 0, errors.New("invalid reader id")
+	}
+	readerID := strconv.FormatInt(id, 10)
+	where := ` WHERE r.deleted_at IS NULL AND (r.path LIKE '%/reader/users/' || $1 || '/%' OR r.path LIKE '%/reader/wallets/' || $1 || '/%')`
+	var total int64
+	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM sys_operation_records r`+where, readerID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.DB.QueryContext(ctx, `
+SELECT r.id::text,
+       COALESCE(r.created_at::text, ''),
+       COALESCE(r.method, ''),
+       COALESCE(r.path, ''),
+       COALESCE(r.status, 0),
+       COALESCE(r.body, ''),
+       COALESCE(r.error_message, ''),
+       COALESCE(r.user_id::text, ''),
+       COALESCE(u.username, ''),
+       COALESCE(u.nick_name, '')
+FROM sys_operation_records r
+LEFT JOIN sys_users u ON u.id = r.user_id AND u.deleted_at IS NULL`+where+`
+ORDER BY r.created_at DESC, r.id DESC
+LIMIT $2 OFFSET $3`, readerID, n, (p-1)*n)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]Operation, 0)
+	for rows.Next() {
+		var op Operation
+		if err := rows.Scan(&op.ID, &op.CreatedAt, &op.Method, &op.Path, &op.Status, &op.Body, &op.ErrorMessage, &op.OperatorID, &op.OperatorUsername, &op.OperatorNickname); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, op)
+	}
+	return items, total, rows.Err()
 }

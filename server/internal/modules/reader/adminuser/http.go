@@ -17,6 +17,7 @@ func RegisterRoutes(private *gin.RouterGroup, service *Service) {
 	write := private.Group("reader").Use(middleware.OperationRecord())
 	read.GET("users", h.list)
 	read.GET("users/:id", h.get)
+	read.GET("users/:id/operations", h.operations)
 	write.PUT("users/:id/status", h.status)
 	write.PUT("users/:id/password", h.password)
 }
@@ -96,4 +97,38 @@ func (h *Handler) status(c *gin.Context) {
 		return
 	}
 	managementresponse.OK(c, render(u), "更新成功")
+}
+
+func (h *Handler) operations(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		apperror.WriteManagement(c, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "ID必须是正整数字符串"))
+		return
+	}
+	p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	n, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	rows, total, err := h.service.ListOperations(c, id, p, n)
+	if err != nil {
+		apperror.WriteManagement(c, err)
+		return
+	}
+	items := make([]any, 0, len(rows))
+	for _, v := range rows {
+		items = append(items, renderOperation(v))
+	}
+	managementresponse.OK(c, managementresponse.Page{List: items, Total: total, Page: p, PageSize: n}, "获取成功")
+}
+func renderOperation(v Operation) map[string]any {
+	return map[string]any{
+		"id":           v.ID,
+		"createdAt":    v.CreatedAt,
+		"operatorId":   v.OperatorID,
+		"operatorName": v.OperatorName,
+		"action":       v.Action,
+		"method":       v.Method,
+		"path":         v.Path,
+		"status":       v.Status,
+		"summary":      v.Summary,
+		"errorMessage": v.ErrorMessage,
+	}
 }

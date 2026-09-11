@@ -3,6 +3,9 @@ package adminuser
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
@@ -20,12 +23,20 @@ type serviceRepository struct {
 	statusContexts []context.Context
 	passwordCalls  int
 	users          []User
+	operations     []Operation
+	operationsErr  error
+	getErr         error
 }
 
 func (repository *serviceRepository) List(context.Context, string, string, int, int) ([]User, int64, error) {
 	return repository.users, int64(len(repository.users)), nil
 }
-func (*serviceRepository) Get(context.Context, int64) (User, error) { return User{}, nil }
+func (repository *serviceRepository) Get(_ context.Context, id int64) (User, error) {
+	if repository.getErr != nil {
+		return User{}, repository.getErr
+	}
+	return User{ID: strconv.FormatInt(id, 10)}, nil
+}
 func (repository *serviceRepository) SetStatus(ctx context.Context, id int64, status string) (User, error) {
 	repository.statusContexts = append(repository.statusContexts, ctx)
 	return User{ID: "21", Username: "reader-21", Nickname: "Moon", Status: status}, nil
@@ -33,6 +44,9 @@ func (repository *serviceRepository) SetStatus(ctx context.Context, id int64, st
 func (repository *serviceRepository) ResetPassword(context.Context, int64, string, string) error {
 	repository.passwordCalls++
 	return nil
+}
+func (repository *serviceRepository) ListOperations(context.Context, int64, int, int) ([]Operation, int64, error) {
+	return repository.operations, int64(len(repository.operations)), repository.operationsErr
 }
 
 type serviceProjectionWriter struct {
@@ -130,6 +144,44 @@ func TestListReturnsWalletLookupFailure(t *testing.T) {
 	want := errors.New("wallet unavailable")
 	service := NewService(&serviceRepository{users: []User{{ID: "21"}}}, serviceTransactor{}, &serviceProjectionWriter{}, nil, &serviceWallets{err: want})
 	if _, _, err := service.List(context.Background(), "", "", 1, 20); !errors.Is(err, want) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestListOperationsRedactsPasswordAndMapsActions(t *testing.T) {
+	repository := &serviceRepository{operations: []Operation{
+		{ID: "1", Method: "PUT", Path: "/reader/users/21/password", Status: 200, Body: `{"password":"secret-pass","confirmPassword":"secret-pass"}`, OperatorUsername: "admin", OperatorNickname: "超管"},
+		{ID: "2", Method: "PUT", Path: "/reader/users/21/status", Status: 200, Body: `{"status":"disabled"}`},
+		{ID: "3", Method: "POST", Path: "/reader/users/21/membership", Status: 200, Body: `{"productId":"99","remark":"补偿会员"}`},
+		{ID: "4", Method: "POST", Path: "/reader/wallets/21/adjust", Status: 200, Body: `{"coinType":"recharge","direction":"income","amount":"12","reason":"补偿钻石"}`},
+	}}
+	service := NewService(repository, serviceTransactor{}, &serviceProjectionWriter{}, nil, nil)
+	rows, total, err := service.ListOperations(context.Background(), 21, 1, 20)
+	if err != nil || total != 4 || len(rows) != 4 {
+		t.Fatalf("rows=%+v total=%d err=%v", rows, total, err)
+	}
+	if rows[0].Action != "重置密码" || rows[0].Summary != "" || rows[0].Body != "" || rows[0].OperatorName != "admin（超管）" {
+		t.Fatalf("password row=%+v", rows[0])
+	}
+	if rows[1].Action != "启停账号" || rows[1].Summary != "停用" {
+		t.Fatalf("status row=%+v", rows[1])
+	}
+	if rows[2].Action != "发放会员" || rows[2].Summary != "补偿会员" {
+		t.Fatalf("membership row=%+v", rows[2])
+	}
+	if rows[3].Action != "发放钻石" || rows[3].Summary != "钻石12 / 补偿钻石" || rows[3].Body != "" {
+		t.Fatalf("wallet row=%+v", rows[3])
+	}
+	encoded := fmt.Sprintf("%+v", rows)
+	if strings.Contains(encoded, "secret-pass") {
+		t.Fatalf("password leaked: %s", encoded)
+	}
+}
+
+func TestListOperationsReturnsMissingReader(t *testing.T) {
+	want := errors.New("reader missing")
+	service := NewService(&serviceRepository{getErr: want}, serviceTransactor{}, &serviceProjectionWriter{}, nil, nil)
+	if _, _, err := service.ListOperations(context.Background(), 21, 1, 20); !errors.Is(err, want) {
 		t.Fatalf("error=%v", err)
 	}
 }
