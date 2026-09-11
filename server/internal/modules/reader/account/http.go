@@ -1,15 +1,22 @@
 package account
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strconv"
+	"strings"
 
 	commercecontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/commerce/contract"
 	readerauth "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
 	readerinvite "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	readerwire "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/wire"
 	"github.com/gin-gonic/gin"
+)
+
+const (
+	inviteShareTextKey     = "reader.invite.shareText"
+	defaultInviteShareText = "邀请你加入月白书城，点击 {{link}} 注册"
 )
 
 type response struct {
@@ -129,6 +136,19 @@ func (h *Handler) inviteDashboard(c *gin.Context) {
 			"remark":      reward.Remark,
 		})
 	}
-	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": "邀请你加入月白书城，点击 {{link}} 注册", "registerRewardCoin": strconv.FormatInt(rewards.RegisterRewardCoin, 10), "firstRechargeRewardCoin": strconv.FormatInt(rewards.FirstRechargeRewardCoin, 10), "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(rewards.TotalRewardCoin, 10), "rewards": rewardItems}
+	data := map[string]any{"readerId": strconv.FormatInt(rid, 10), "inviteCode": code, "inviteCodeAvailable": true, "shareTextTemplate": h.inviteShareText(c), "registerRewardCoin": strconv.FormatInt(rewards.RegisterRewardCoin, 10), "firstRechargeRewardCoin": strconv.FormatInt(rewards.FirstRechargeRewardCoin, 10), "invitedCount": strconv.FormatInt(invited, 10), "totalRewardCoin": strconv.FormatInt(rewards.TotalRewardCoin, 10), "rewards": rewardItems}
 	c.JSON(http.StatusOK, response{Code: 200, Msg: "查询成功", Data: data})
+}
+
+func (h *Handler) inviteShareText(ctx context.Context) string {
+	var value string
+	err := h.db.QueryRowContext(ctx, `SELECT value FROM sys_params WHERE key=$1 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1`, inviteShareTextKey).Scan(&value)
+	if err != nil {
+		return defaultInviteShareText
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return defaultInviteShareText
+	}
+	return value
 }

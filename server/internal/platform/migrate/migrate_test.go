@@ -123,9 +123,34 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00075_disable_incomplete_payment_channels.sql",
 		"00076_reader_invite_reward_detail_repair.sql",
 		"00077_reader_user_operations_admin.sql",
+		"00078_reader_invite_share_text.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestReaderInviteShareTextMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00078_reader_invite_share_text.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"reader.invite.shareText",
+		"读者邀请分享文案",
+		"{{link}}",
+		"WHERE NOT EXISTS",
+		"Moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("reader invite share text migration missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"TRUNCATE", "DELETE FROM sys_params", "UPDATE sys_params"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("reader invite share text migration contains forbidden statement %q", forbidden)
+		}
 	}
 }
 

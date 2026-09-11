@@ -71,6 +71,8 @@ func (accountContractConn) QueryContext(_ context.Context, query string, _ []dri
 		return contractRows([]string{"code"}, []driver.Value{"ACCOUNT-CONTRACT"}), nil
 	case strings.Contains(query, "SELECT count(*) FROM reader_invite_relations"):
 		return contractRows([]string{"count"}, []driver.Value{accountSafeID}), nil
+	case strings.Contains(query, "FROM sys_params"):
+		return contractRows([]string{"value"}, []driver.Value{defaultInviteShareText}), nil
 	default:
 		return nil, fmt.Errorf("unexpected Reader account query: %s", query)
 	}
