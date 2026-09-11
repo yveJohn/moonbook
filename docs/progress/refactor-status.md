@@ -292,16 +292,23 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 
 - 上述展示改造于 2026-09-11 00:39（UTC+8）发布生产：`moonbook/web:67841f1faf56`，镜像 ID `sha256:5c3678b15369262c4df09eeb63f97761a6e88beb477f5608c9e914d3a8bbf0eb`；归档与线上 HTML/29 个资源的 SHA-256 验证一致。只重建 Web，Gateway 平滑重载，后端、Reader、数据库和缓存容器/启动时间不变；源站 15 次连续健康检查和六项公网页面/健康检查通过，生产登录页浏览器 0 error/0 warning。发布包、前后容器快照、旧配置和验收结果保存在 `/opt/moonbook-app/releases/admin-display-67841f1faf56/`，未执行数据库迁移或业务写入。生产更新已完成，无需额外重启；发布记录本身不影响服务，无需重启。
 
+## 2026-09-11 读者邀请码改为 8 位随机字母数字
+
+- 新生成的读者自动邀请码和管理端自动邀请码改为 8 位大写字母或数字；已有邀请码保持不变，注册仍按原码校验。
+- 实现提交 `a124ca4`。
+- 服务影响：仅后端 `server` 生成逻辑；已随本次生产发布重建。
+
 ## 2026-09-11 读者用户发放会员与货币
 
 - 读者用户页发放会员改为选择消费商品中的会员套餐，有效期跟随商品配置；请求 ID 不再要求管理员填写，由服务端自动生成。
 - 同一页面可直接发放钻石或金币，复用钱包调账收入接口，备注必填。
 - 验证：`adminmembership` 真实 PostgreSQL 集成覆盖按商品发放、自动请求 ID 与原幂等叠加路径。
 - 服务影响：后端 `server` 与管理前端 `web`；开发环境需重启/刷新这两个服务，部署环境需更新对应容器。PostgreSQL/Redis/MinIO 与读者端无需重启。
+- 上述邀请码、读者发放和管理端枚举中文改动于 2026-09-11 12:23（UTC+8）由 `scripts/deploy-production.sh` 发布生产：固定提交 `4e7954befb5c`，镜像 `moonbook/server:4e7954befb5c`（`sha256:65822c7a85a7…`）、`moonbook/web:4e7954befb5c`（`sha256:fbe31b2e14b3…`）、`moonbook/reader-ui:4e7954befb5c`（与既有 reader-ui 层缓存命中，ID `1764382789b3`）。本次提交无新增迁移文件；脚本已执行版本化 migrate 后重建 Server、Web、Reader、Gateway，四容器 healthy、restart=0。源站 gateway-health / API ready / reader health 均为 HTTP 200，公网管理首页、网关健康、API readiness、读者首页与读者健康均为 HTTP 200；发布后 Server 精确 error/fatal/panic 计数为 0。旧镜像保留：`server:0bb1fdbd9ac1`、`web:67841f1faf56`、`reader-ui:0b6b6e003b42`。生产更新已完成，无需额外重启；本条发布记录为文档变更，不影响服务，无需重启。
 
 ## 2026-09-11 管理后台枚举中文显示补全
 
 - 完成全量 Vue 表格枚举列与相关详情复查，17 个页面/组件补齐阶段、方向、业务、类型、来源、模块、模式及参数选项的中文显示。
 - 新增按字段区分的展示映射，兼容历史订单与流水枚举，保留未知值及原始接口数据；不改变 Long ID。
 - 验证：45 个前端测试、ESLint、生产构建、供应链检查通过。详细范围与保留项见 `docs/verification/2026-09-11-admin-enum-localization.md`。
-- 服务影响：仅 Web；部署需更新 Web 服务，其他服务无需重启。本轮代码尚未部署生产。
+- 服务影响：仅 Web；已随提交 `4e7954befb5c` 于 2026-09-11 12:23（UTC+8）发布生产，无需额外重启。
