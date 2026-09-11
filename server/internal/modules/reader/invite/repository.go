@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/auth"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -100,14 +101,21 @@ func (r SQLRepository) CreateAutomaticInviteCode(ctx context.Context, readerID i
 	if err != nil {
 		return err
 	}
-	code, err := generatedCode()
-	if err != nil {
+	for attempt := 0; attempt < inviteCodeAttempts; attempt++ {
+		code, genErr := generatedCode()
+		if genErr != nil {
+			return genErr
+		}
+		_, err = executor.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count,used_count) VALUES((SELECT COALESCE(MAX(id),0)+1 FROM reader_invite_codes),$1,$2,'enabled',NULL,0) ON CONFLICT (inviter_reader_id) WHERE inviter_reader_id IS NOT NULL DO NOTHING`, code, readerID)
+		if err == nil {
+			return nil
+		}
+		if isUniqueViolation(err) {
+			continue
+		}
 		return err
 	}
-	if _, err = executor.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count,used_count) VALUES((SELECT COALESCE(MAX(id),0)+1 FROM reader_invite_codes),$1,$2,'enabled',NULL,0) ON CONFLICT (inviter_reader_id) WHERE inviter_reader_id IS NOT NULL DO NOTHING`, code, readerID); err != nil {
-		return err
-	}
-	return nil
+	return apperror.New(apperror.CodeUnavailable, 503, "邀请码生成失败")
 }
 
 func (r SQLRepository) CreateInviteRelation(ctx context.Context, inviterID, inviteeID, inviteCodeID int64) (int64, error) {

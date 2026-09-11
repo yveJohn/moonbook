@@ -2,9 +2,7 @@ package invite
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"strings"
 
@@ -93,27 +91,37 @@ func (s *Service) Register(ctx context.Context, req auth.RegisterRequest) (auth.
 	return account, token, nil
 }
 
-func generatedCode() (string, error) {
-	b := make([]byte, 12)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return "MB-" + strings.ToUpper(hex.EncodeToString(b)), nil
-}
-
 // GenerateCodeForReader creates the reader's one-per-account invite code in an
 // existing transaction. The caller must hold the inviter row lock.
+// Existing codes are returned unchanged.
 func GenerateCodeForReader(ctx context.Context, tx *sql.Tx, readerID int64) (string, error) {
-	code, err := generatedCode()
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('reader-invite-id',0))`); err != nil {
 		return "", err
 	}
-	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('reader-invite-id',0))`); err != nil {
+	var existing string
+	err := tx.QueryRowContext(ctx, `SELECT code FROM reader_invite_codes WHERE inviter_reader_id=$1`, readerID).Scan(&existing)
+	if err == nil {
+		return existing, nil
+	}
+	if err != sql.ErrNoRows {
 		return "", err
 	}
-	var out string
-	err = tx.QueryRowContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count,used_count) VALUES((SELECT COALESCE(MAX(id),0)+1 FROM reader_invite_codes),$1,$2,'enabled',NULL,0) ON CONFLICT (inviter_reader_id) DO UPDATE SET updated_at=reader_invite_codes.updated_at RETURNING code`, code, readerID).Scan(&out)
-	return out, err
+	for attempt := 0; attempt < inviteCodeAttempts; attempt++ {
+		code, genErr := generatedCode()
+		if genErr != nil {
+			return "", genErr
+		}
+		var out string
+		err = tx.QueryRowContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count,used_count) VALUES((SELECT COALESCE(MAX(id),0)+1 FROM reader_invite_codes),$1,$2,'enabled',NULL,0) ON CONFLICT (inviter_reader_id) WHERE inviter_reader_id IS NOT NULL DO UPDATE SET updated_at=reader_invite_codes.updated_at RETURNING code`, code, readerID).Scan(&out)
+		if err == nil {
+			return out, nil
+		}
+		if isUniqueViolation(err) {
+			continue
+		}
+		return "", err
+	}
+	return "", apperror.New(apperror.CodeUnavailable, 503, "邀请码生成失败")
 }
 
 func isRetryableInviteError(err error) bool { return errors.Is(err, ErrInviteInvalid) }

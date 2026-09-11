@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -78,8 +79,12 @@ func TestReaderRegistrationConsumesInviteAndCreatesRelation(t *testing.T) {
 		t.Fatalf("relation=%d/%d err=%v", relationInviter, relationInvitee, err)
 	}
 	var autoCount int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM reader_invite_codes WHERE inviter_reader_id=$1`, invitee).Scan(&autoCount); err != nil || autoCount != 1 {
+	var autoCode string
+	if err := db.QueryRowContext(ctx, `SELECT count(*), min(code) FROM reader_invite_codes WHERE inviter_reader_id=$1`, invitee).Scan(&autoCount, &autoCode); err != nil || autoCount != 1 {
 		t.Fatalf("automatic invite count=%d err=%v", autoCount, err)
+	}
+	if !regexp.MustCompile(`^[0-9A-Z]{8}$`).MatchString(autoCode) {
+		t.Fatalf("automatic invite code=%q", autoCode)
 	}
 	var inviterBalance, inviteeBalance int64
 	if err := db.QueryRowContext(ctx, `SELECT bonus_coin_balance FROM reader_wallets WHERE reader_id=$1`, inviter).Scan(&inviterBalance); err != nil || inviterBalance != 13 {
@@ -299,5 +304,45 @@ func TestReaderRegistrationRollsBackWhenProjectionFails(t *testing.T) {
 	}
 	if accountCount != 0 || usedCount != 0 {
 		t.Fatalf("rollback accountCount=%d usedCount=%d", accountCount, usedCount)
+	}
+}
+
+func TestGenerateCodeForReaderKeepsExistingCode(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	base := time.Now().UnixNano()
+	readerID := base
+	existing := fmt.Sprintf("MB-KEEP-%d", base)
+	username := integrationtest.Prefix() + "-keep-code"
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_accounts(id,username,nickname,password_hash,status) VALUES($1,$2,'保留邀请码','fixture','enabled')`, readerID, username); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO reader_invite_codes(id,code,inviter_reader_id,status,max_use_count,used_count) VALUES($1,$2,$3,'enabled',NULL,0)`, base+1, existing, readerID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup := context.Background()
+		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_invite_codes WHERE inviter_reader_id=$1`, readerID)
+		_, _ = db.ExecContext(cleanup, `DELETE FROM reader_accounts WHERE id=$1`, readerID)
+	})
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	got, err := GenerateCodeForReader(ctx, tx, readerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if got != existing {
+		t.Fatalf("got=%q existing=%q", got, existing)
+	}
+	var stored string
+	if err := db.QueryRowContext(ctx, `SELECT code FROM reader_invite_codes WHERE inviter_reader_id=$1`, readerID).Scan(&stored); err != nil || stored != existing {
+		t.Fatalf("stored=%q err=%v", stored, err)
 	}
 }

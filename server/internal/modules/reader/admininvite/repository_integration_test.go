@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"testing"
 	"time"
 
@@ -97,4 +98,21 @@ func parseID(s string) int64 {
 		v = v*10 + int64(c-'0')
 	}
 	return v
+}
+
+func TestAdminInviteCreateGeneratesEightCharCode(t *testing.T) {
+	db, _ := integrationtest.RequireDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	r := SQLRepository{DB: db}
+	v, err := r.Create(ctx, CreateInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM reader_invite_codes WHERE id=$1`, v.ID)
+	})
+	if !regexp.MustCompile(`^[0-9A-Z]{8}$`).MatchString(v.Code) {
+		t.Fatalf("code=%q", v.Code)
+	}
 }

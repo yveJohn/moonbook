@@ -2,15 +2,14 @@ package admininvite
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/invite"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -44,15 +43,8 @@ func (r SQLRepository) List(ctx context.Context, k string, p, n int) ([]InviteCo
 	return items, total, rows.Err()
 }
 func (r SQLRepository) Create(ctx context.Context, in CreateInput) (InviteCode, error) {
-	code := strings.TrimSpace(in.Code)
-	if code == "" {
-		b := make([]byte, 6)
-		if _, err := rand.Read(b); err != nil {
-			return InviteCode{}, err
-		}
-		code = "MB" + strings.ToUpper(hex.EncodeToString(b))
-	}
-	if len([]rune(code)) > 64 {
+	manualCode := strings.TrimSpace(in.Code)
+	if len([]rune(manualCode)) > 64 {
 		return InviteCode{}, apperror.New(apperror.CodeInvalidArgument, http.StatusBadRequest, "邀请码不能超过64个字符")
 	}
 	status := strings.TrimSpace(in.Status)
@@ -82,12 +74,26 @@ func (r SQLRepository) Create(ctx context.Context, in CreateInput) (InviteCode, 
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('reader-invite-id',0))`); err != nil {
 		return InviteCode{}, err
 	}
-	var v InviteCode
-	err = scan(tx.QueryRowContext(ctx, `INSERT INTO reader_invite_codes(id,code,status,max_use_count,expires_at,remark) VALUES((SELECT COALESCE(max(id),0)+1 FROM reader_invite_codes),$1,$2,$3,$4,$5) RETURNING `+`id::text,'',code,status,COALESCE(max_use_count::text,''),used_count::text,COALESCE(expires_at::text,''),remark,created_at::text`, code, status, max, exp, remark), &v)
-	if err != nil {
+	for attempt := 0; attempt < 8; attempt++ {
+		code := manualCode
+		if code == "" {
+			generated, genErr := invite.GenerateRandomCode()
+			if genErr != nil {
+				return InviteCode{}, genErr
+			}
+			code = generated
+		}
+		var v InviteCode
+		err = scan(tx.QueryRowContext(ctx, `INSERT INTO reader_invite_codes(id,code,status,max_use_count,expires_at,remark) VALUES((SELECT COALESCE(max(id),0)+1 FROM reader_invite_codes),$1,$2,$3,$4,$5) RETURNING `+`id::text,'',code,status,COALESCE(max_use_count::text,''),used_count::text,COALESCE(expires_at::text,''),remark,created_at::text`, code, status, max, exp, remark), &v)
+		if err == nil {
+			return v, tx.Commit()
+		}
+		if manualCode == "" && isUniqueViolation(err) {
+			continue
+		}
 		return InviteCode{}, mapWriteError(err)
 	}
-	return v, tx.Commit()
+	return InviteCode{}, apperror.New(apperror.CodeUnavailable, http.StatusServiceUnavailable, "邀请码生成失败")
 }
 func (r SQLRepository) Update(ctx context.Context, id int64, in UpdateInput) (InviteCode, error) {
 	if id <= 0 {
@@ -180,11 +186,15 @@ func (r SQLRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func mapWriteError(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if isUniqueViolation(err) {
 		return apperror.Wrap(err, apperror.CodeConflict, http.StatusConflict, "邀请码已存在")
 	}
 	return err
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func optionalPositiveInt(value string) (*int64, error) {
