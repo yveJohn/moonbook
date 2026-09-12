@@ -21,7 +21,7 @@ type SQLRepository struct {
 	Invites readercontract.InviteRelationReader
 }
 
-const orderSelect = `SELECT o.id::text,o.reader_id::text,p.username,o.order_no,o.order_type,COALESCE(o.product_id::text,''),o.product_type,COALESCE(o.target_id::text,''),COALESCE(o.book_id_snapshot::text,''),o.product_name_snapshot,o.price_coin_snapshot::text,COALESCE(o.chapter_word_count_snapshot::text,''),COALESCE(o.pricing_word_unit_snapshot::text,''),COALESCE(o.pricing_coin_unit_snapshot::text,''),o.recharge_coin_amount::text,o.bonus_coin_amount::text,o.status,o.idempotency_key,COALESCE(o.remark,''),o.paid_time,o.created_at,o.updated_at FROM reader_purchase_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`
+const orderSelect = `SELECT o.id::text,o.reader_id::text,p.username,o.order_no,o.order_type,COALESCE(o.product_id::text,''),o.product_type,COALESCE(o.target_id::text,''),COALESCE(o.book_id_snapshot::text,''),CASE WHEN o.product_type='chapter' THEN COALESCE(b.book_name || ' - ' || c.chapter_name,o.product_name_snapshot) ELSE o.product_name_snapshot END,o.price_coin_snapshot::text,COALESCE(o.chapter_word_count_snapshot::text,''),COALESCE(o.pricing_word_unit_snapshot::text,''),COALESCE(o.pricing_coin_unit_snapshot::text,''),o.recharge_coin_amount::text,o.bonus_coin_amount::text,o.status,o.idempotency_key,COALESCE(o.remark,''),o.paid_time,o.created_at,o.updated_at FROM reader_purchase_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id LEFT JOIN novel_chapters c ON o.product_type='chapter' AND c.id=o.target_id LEFT JOIN novel_books b ON b.id=c.book_id`
 
 func scan(row interface{ Scan(...any) error }, o *Order) error {
 	return row.Scan(&o.ID, &o.ReaderID, &o.ReaderUsername, &o.OrderNo, &o.OrderType, &o.ProductID, &o.ProductType, &o.TargetID, &o.BookIDSnapshot, &o.ProductName, &o.PriceCoin, &o.ChapterWordCount, &o.PricingWordUnit, &o.PricingCoinUnit, &o.RechargeCoinAmount, &o.BonusCoinAmount, &o.Status, &o.IdempotencyKey, &o.Remark, &o.PaidAt, &o.CreatedAt, &o.UpdatedAt)
@@ -30,7 +30,7 @@ func scan(row interface{ Scan(...any) error }, o *Order) error {
 func (r SQLRepository) List(ctx context.Context, keyword, orderType, status string, page, size int) ([]Order, int64, error) {
 	where := ` WHERE ($1='' OR o.order_no ILIKE '%'||$1||'%' OR p.username ILIKE '%'||$1||'%') AND ($2='' OR o.order_type=$2) AND ($3='' OR o.status=$3)`
 	var total int64
-	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM reader_purchase_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id`+where, keyword, orderType, status).Scan(&total); err != nil {
+	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM reader_purchase_orders o JOIN commerce_reader_search_projection p ON p.reader_id=o.reader_id LEFT JOIN novel_chapters c ON o.product_type='chapter' AND c.id=o.target_id LEFT JOIN novel_books b ON b.id=c.book_id`+where, keyword, orderType, status).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := r.DB.QueryContext(ctx, orderSelect+where+` ORDER BY o.created_at DESC,o.id DESC LIMIT $4 OFFSET $5`, keyword, orderType, status, size, (page-1)*size)
