@@ -51,6 +51,10 @@ func (r SQLRepository) Record(ctx context.Context, readerID int64, day, at time.
 	_, err := r.DB.ExecContext(ctx, `
 		INSERT INTO reader_daily_activity(activity_date,reader_id,first_active_at)
 		VALUES($1,$2,$3) ON CONFLICT(activity_date,reader_id) DO NOTHING`, day.Format(time.DateOnly), readerID, at)
+	if err != nil {
+		return err
+	}
+	_, err = r.DB.ExecContext(ctx, `INSERT INTO reader_operation_events(reader_id,event_type,event_name,detail,created_at) VALUES($1,'login','登录','读者登录成功',$2)`, readerID, at)
 	return err
 }
 

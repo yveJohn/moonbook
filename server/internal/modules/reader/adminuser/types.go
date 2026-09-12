@@ -14,6 +14,7 @@ type Operation struct {
 	Body, ErrorMessage                             string
 	OperatorID, OperatorUsername, OperatorNickname string
 	OperatorName, Action, Summary                  string
+	Source, EventType, TargetID                    string
 }
 
 type Repository interface {

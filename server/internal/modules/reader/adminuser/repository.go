@@ -105,7 +105,7 @@ func (r SQLRepository) ListOperations(ctx context.Context, id int64, p, n int) (
 	readerID := strconv.FormatInt(id, 10)
 	where := ` WHERE r.deleted_at IS NULL AND (r.path LIKE '%/reader/users/' || $1 || '/%' OR r.path LIKE '%/reader/wallets/' || $1 || '/%')`
 	var total int64
-	if err := r.DB.QueryRowContext(ctx, `SELECT count(*) FROM sys_operation_records r`+where, readerID).Scan(&total); err != nil {
+	if err := r.DB.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM sys_operation_records r`+where+`) + (SELECT count(*) FROM reader_operation_events WHERE reader_id=$1)`, readerID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := r.DB.QueryContext(ctx, `
@@ -135,5 +135,21 @@ LIMIT $2 OFFSET $3`, readerID, n, (p-1)*n)
 		}
 		items = append(items, op)
 	}
-	return items, total, rows.Err()
+	if rows.Err() != nil {
+		return nil, 0, rows.Err()
+	}
+	events, err := r.DB.QueryContext(ctx, `SELECT id::text,created_at::text,event_type,event_name,COALESCE(target_id::text,''),detail FROM reader_operation_events WHERE reader_id=$1 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, readerID, n, (p-1)*n)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer events.Close()
+	for events.Next() {
+		var op Operation
+		if err := events.Scan(&op.ID, &op.CreatedAt, &op.EventType, &op.Action, &op.TargetID, &op.Summary); err != nil {
+			return nil, 0, err
+		}
+		op.Source = "reader"
+		items = append(items, op)
+	}
+	return items, total, events.Err()
 }
