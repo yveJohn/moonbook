@@ -79,6 +79,10 @@ type Transactor interface {
 	Within(context.Context, func(context.Context) error) error
 }
 
+type FeedbackNotifier interface {
+	NotifyFeedback(context.Context, int64, int64, time.Time, string) error
+}
+
 type SQLRepository struct{ DB *sql.DB }
 
 var _ Repository = SQLRepository{}

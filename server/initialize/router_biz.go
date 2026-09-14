@@ -55,6 +55,7 @@ import (
 	readerpublic "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/reader/public"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/jobmonitor"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/secretcrypto"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/serverchan"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/transaction"
 	"github.com/flipped-aurora/gin-vue-admin/server/router"
 	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
@@ -86,7 +87,11 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	readerauth.RegisterRoutes(publicGroup, readerauth.NewHandler(readerService, registration))
 	display := novelprovider.NewDisplay(db)
 	likes := novelprovider.NewLikes(db)
-	readerme.RegisterRoutes(publicGroup, readerme.NewService(readerme.SQLRepository{DB: db}, display, transactor, likes, likes), readerService)
+	appCipher, _ := secretcrypto.NewFromEnv(os.LookupEnv)
+	feedbackNotifier := serverchan.NewNotifier(serverchan.SQLConfigLoader{DB: db, Cipher: appCipher}, serverchan.NewClient())
+	readerMeService := readerme.NewService(readerme.SQLRepository{DB: db}, display, transactor, likes, likes)
+	readerMeService.SetFeedbackNotifier(feedbackNotifier)
+	readerme.RegisterRoutes(publicGroup, readerMeService, readerService)
 	accountSummary := commerceprovider.NewAccountSummary(db)
 	readeraccount.RegisterRoutes(publicGroup, db, readerService, accountSummary, accountSummary)
 	readerAccounts := readerprovider.NewAccount(db)
@@ -94,8 +99,7 @@ func initBizRouter(privateGroup, publicGroup *gin.RouterGroup, callbackAuditConf
 	purchaseTargets := novelprovider.NewPurchase(db)
 	walletReader := commerceprovider.NewWallet(wallet.NewService(wallet.SQLRepository{DB: db}))
 	commercecompat.RegisterWalletRoutes(publicGroup, walletReader, readerService)
-	paymentCipher, _ := secretcrypto.NewFromEnv(os.LookupEnv)
-	paymentStore := adminpayment.SQLRepository{DB: db, Cipher: paymentCipher}
+	paymentStore := adminpayment.SQLRepository{DB: db, Cipher: appCipher}
 	loadGateway := func(ctx context.Context) (recharge.Gateway, recharge.GatewaySnapshot, error) {
 		runtimeConfig, loadErr := paymentStore.Runtime(ctx)
 		if loadErr != nil {

@@ -86,6 +86,7 @@ func SanitizeBody(contentType, body string) string {
 func maskSensitiveBody(v any) {
 	switch t := v.(type) {
 	case map[string]any:
+		maskSensitiveParameterValue(t)
 		for k, val := range t {
 			if _, ok := sensitiveBodyKeys[normalizeBodyKey(k)]; ok {
 				t[k] = maskValue
@@ -96,6 +97,25 @@ func maskSensitiveBody(v any) {
 	case []any:
 		for _, item := range t {
 			maskSensitiveBody(item)
+		}
+	}
+}
+
+func maskSensitiveParameterValue(value map[string]any) {
+	var key string
+	for field, raw := range value {
+		if normalizeBodyKey(field) != "key" {
+			continue
+		}
+		key, _ = raw.(string)
+		break
+	}
+	if key != "serverchan.send_key" {
+		return
+	}
+	for field := range value {
+		if normalizeBodyKey(field) == "value" {
+			value[field] = maskValue
 		}
 	}
 }

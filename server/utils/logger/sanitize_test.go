@@ -53,3 +53,15 @@ func TestSanitizeBodyMasksPaymentCredentials(t *testing.T) {
 		t.Fatalf("non-secret status was unexpectedly masked: %s", got)
 	}
 }
+
+func TestSanitizeBodyMasksServerChanSystemParameterValue(t *testing.T) {
+	body := `{"name":"Server酱 SendKey","key":"serverchan.send_key","value":"SCT_plaintext_secret","desc":"反馈通知"}`
+	got := SanitizeBody("application/json", body)
+	if strings.Contains(got, "SCT_plaintext_secret") || !strings.Contains(got, `"value":"***"`) {
+		t.Fatalf("ServerChan SendKey was not masked: %s", got)
+	}
+	ordinary := `{"key":"reader.invite.shareText","value":"公开邀请文案"}`
+	if got = SanitizeBody("application/json", ordinary); !strings.Contains(got, "公开邀请文案") {
+		t.Fatalf("ordinary parameter was unexpectedly masked: %s", got)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	novelcontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/contract"
+	"github.com/flipped-aurora/gin-vue-admin/server/internal/testutil"
 )
 
 type fakeRepo struct {
@@ -18,6 +19,8 @@ type fakeRepo struct {
 	likeErr                    error
 	unlikeResult               BookLike
 	unlikeErr                  error
+	feedbackResult             Feedback
+	feedbackErr                error
 }
 
 type fakeDisplay struct {
@@ -59,8 +62,11 @@ func (f *fakeRepo) Like(context.Context, int64, int64) (BookLike, error) {
 func (f *fakeRepo) Unlike(context.Context, int64, int64) (BookLike, error) {
 	return f.unlikeResult, f.unlikeErr
 }
-func (f *fakeRepo) CreateFeedback(context.Context, int64, string) (Feedback, error) {
-	return Feedback{ID: 1, CreatedAt: time.Now()}, nil
+func (f *fakeRepo) CreateFeedback(_ context.Context, _ int64, content string) (Feedback, error) {
+	if f.feedbackResult.ID == 0 {
+		f.feedbackResult = Feedback{ID: 1, Content: content, CreatedAt: time.Now()}
+	}
+	return f.feedbackResult, f.feedbackErr
 }
 func (f *fakeRepo) ListFeedbacks(_ context.Context, _ int64, p, s int) ([]Feedback, int64, error) {
 	f.feedbackPage = p
@@ -156,6 +162,50 @@ func TestFeedbackPaginationBounds(t *testing.T) {
 	_, _, e := s.ListFeedbacks(context.Background(), 1, 0, 1000)
 	if e != nil || f.feedbackPage != 1 || f.feedbackSize != 100 {
 		t.Fatalf("page=%d size=%d err=%v", f.feedbackPage, f.feedbackSize, e)
+	}
+}
+
+type feedbackNotifierStub struct {
+	calls      int
+	feedbackID int64
+	readerID   int64
+	createdAt  time.Time
+	content    string
+	err        error
+}
+
+func (stub *feedbackNotifierStub) NotifyFeedback(_ context.Context, feedbackID, readerID int64, createdAt time.Time, content string) error {
+	stub.calls++
+	stub.feedbackID, stub.readerID, stub.createdAt, stub.content = feedbackID, readerID, createdAt, content
+	return stub.err
+}
+
+func TestCreateFeedbackNotifiesAfterWriteAndIgnoresNotificationFailure(t *testing.T) {
+	testutil.InitNopLogger()
+	createdAt := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{feedbackResult: Feedback{ID: 9223372036854775807, Content: "反馈内容", Status: "pending", CreatedAt: createdAt}}
+	notifier := &feedbackNotifierStub{err: errors.New("notification unavailable")}
+	service := newTestService(repo, &fakeDisplay{})
+	service.SetFeedbackNotifier(notifier)
+
+	feedback, err := service.CreateFeedback(context.Background(), 9007199254740993, "  反馈内容  ")
+	if err != nil || feedback.ID != repo.feedbackResult.ID {
+		t.Fatalf("feedback=%+v err=%v", feedback, err)
+	}
+	if notifier.calls != 1 || notifier.feedbackID != feedback.ID || notifier.readerID != 9007199254740993 || notifier.createdAt != createdAt || notifier.content != "反馈内容" {
+		t.Fatalf("notifier=%+v", notifier)
+	}
+}
+
+func TestCreateFeedbackDoesNotNotifyWhenWriteFails(t *testing.T) {
+	want := errors.New("write failed")
+	repo := &fakeRepo{feedbackErr: want}
+	notifier := &feedbackNotifierStub{}
+	service := newTestService(repo, &fakeDisplay{})
+	service.SetFeedbackNotifier(notifier)
+
+	if _, err := service.CreateFeedback(context.Background(), 1, "反馈内容"); !errors.Is(err, want) || notifier.calls != 0 {
+		t.Fatalf("err=%v calls=%d", err, notifier.calls)
 	}
 }
 

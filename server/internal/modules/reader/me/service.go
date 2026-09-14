@@ -11,6 +11,7 @@ import (
 
 	novelcontract "github.com/flipped-aurora/gin-vue-admin/server/internal/modules/novel/contract"
 	"github.com/flipped-aurora/gin-vue-admin/server/internal/platform/apperror"
+	"github.com/flipped-aurora/gin-vue-admin/server/utils/logger"
 )
 
 var (
@@ -27,10 +28,15 @@ type Service struct {
 	tx          Transactor
 	likeLocker  novelcontract.LikeBookLocker
 	likeSummary novelcontract.LikeSummaryWriter
+	notifier    FeedbackNotifier
 }
 
 func NewService(repo Repository, display novelcontract.DisplayReader, transactor Transactor, likeLocker novelcontract.LikeBookLocker, likeSummary novelcontract.LikeSummaryWriter) *Service {
 	return &Service{repo: repo, display: display, tx: transactor, likeLocker: likeLocker, likeSummary: likeSummary}
+}
+
+func (s *Service) SetFeedbackNotifier(notifier FeedbackNotifier) {
+	s.notifier = notifier
 }
 func (s *Service) ListBookshelf(ctx context.Context, id int64) ([]Bookshelf, error) {
 	items, err := s.repo.ListBookshelf(ctx, id)
@@ -167,7 +173,20 @@ func (s *Service) CreateFeedback(ctx context.Context, id int64, content string) 
 	if content == "" || len([]rune(content)) > 5000 {
 		return Feedback{}, ErrInvalidInput
 	}
-	return s.repo.CreateFeedback(ctx, id, content)
+	feedback, err := s.repo.CreateFeedback(ctx, id, content)
+	if err != nil {
+		return Feedback{}, err
+	}
+	if s.notifier != nil {
+		if notifyErr := s.notifier.NotifyFeedback(ctx, feedback.ID, id, feedback.CreatedAt, feedback.Content); notifyErr != nil {
+			logger.WithCtx(ctx).Mod("serverchan").
+				Field("feedback_id", strconv.FormatInt(feedback.ID, 10)).
+				Field("reader_id", strconv.FormatInt(id, 10)).
+				Err(notifyErr).
+				Warn("用户反馈通知发送失败")
+		}
+	}
+	return feedback, nil
 }
 func (s *Service) ListFeedbacks(ctx context.Context, id int64, page, size int) ([]Feedback, int64, error) {
 	if page < 1 {

@@ -37,7 +37,7 @@ func TestNotifierSkipsDisabledAndFormatsFeedback(t *testing.T) {
 		t.Fatalf("disabled calls=%d err=%v", sender.calls, err)
 	}
 
-	notifier = NewNotifier(configLoaderStub{config: Config{Enabled: true, SendKey: "SCT_test_secret_123456"}}, sender)
+	notifier = NewNotifier(configLoaderStub{config: Config{Enabled: true, SendKey: "abcdefgh"}}, sender)
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	content := strings.Repeat("月", 1001) + "\n末尾"
@@ -62,7 +62,7 @@ func TestNotifierReturnsConfigurationAndSenderErrors(t *testing.T) {
 	if err := notifier.NotifyFeedback(context.Background(), 1, 2, time.Now(), "内容"); !errors.Is(err, ErrConfiguration) || sender.calls != 0 {
 		t.Fatalf("config err=%v calls=%d", err, sender.calls)
 	}
-	notifier = NewNotifier(configLoaderStub{config: Config{Enabled: true, SendKey: "SCT_test_secret_123456"}}, sender)
+	notifier = NewNotifier(configLoaderStub{config: Config{Enabled: true, SendKey: "abcdefgh"}}, sender)
 	if err := notifier.NotifyFeedback(context.Background(), 1, 2, time.Now(), "内容"); !errors.Is(err, want) || sender.calls != 1 {
 		t.Fatalf("sender err=%v calls=%d", err, sender.calls)
 	}

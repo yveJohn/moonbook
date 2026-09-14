@@ -321,3 +321,12 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 实现提交 `243df5d566f3`。
 - 服务影响：后端 `server` 需迁移并重建；管理前端/读者端无业务改动，但发布脚本仍会替换对应镜像。生产已完成更新，无需额外重启。
 - 上述改动于 2026-09-11 13:31（UTC+8）由 `scripts/deploy-production.sh` 发布生产：固定提交 `243df5d566f3`，镜像 `moonbook/server:243df5d566f3`（`sha256:b82bbd73a3a3…`）、`moonbook/web:243df5d566f3`（`sha256:58498456d947…`）、`moonbook/reader-ui:243df5d566f3`（与既有 reader-ui 层缓存命中，ID `1764382789b3`）。脚本已执行版本化 migrate，`moonbook_schema_version` 当前为 78，`sys_params.reader.invite.shareText` 已存在。随后重建 Server、Web、Reader、Gateway，四容器 healthy、restart=0。源站 gateway-health / API ready / reader health 均为 HTTP 200，公网管理首页、网关健康、API readiness、读者首页与读者健康均为 HTTP 200；发布后 Server 精确 error/fatal/panic 计数为 0。旧镜像保留：`server:4e7954befb5c`、`web:4e7954befb5c`、`reader-ui:4e7954befb5c`。生产更新已完成，无需额外重启；本条发布记录为文档变更，不影响服务，无需重启。
+
+## 2026-09-14 用户反馈 Server酱通知
+
+- 新反馈成功写入 `reader_feedback` 后立即调用 Server酱；通知失败只记录反馈 ID、读者 ID 和归一化错误，不回滚反馈，也不改变冻结版 Reader API 响应。
+- 管理员通过参数管理维护 `serverchan.enabled` 和 `serverchan.send_key`。SendKey 复用 `MOONBOOK_APP_MASTER_KEY` 加密落库，列表、详情和按键查询均只返回 `********`，掩码更新保留原密文。
+- Server酱客户端固定访问 `https://sctapi.ftqq.com`，3 秒总超时且不重试；标题固定，正文包含字符串 ID、提交时间和最多 1,000 个 Unicode 字符的反馈内容。
+- 验证：参数加密/掩码/轮换/保留键保护测试，配置解密、固定请求、响应校验、超时、截断及秘密不泄漏测试，反馈写入成功/失败/通知失败服务测试，以及既有反馈 HTTP 契约回归。
+- 本地未配置项目专用 PostgreSQL 测试 DSN，真实库集成未执行。全量 Go 测试仍被既有问题阻塞：两个已提交的 `00061` 迁移版本冲突且行为日志迁移缺少 forward-only Down、SQL 所有权登记与既有查询不一致、MCP 测试依赖未启动的 `localhost:8888`，以及 GVA 模板/插件基线断言失败；本功能相关单元测试、`go vet`、后端构建和秘密扫描均通过。
+- 服务影响：仅后端 `server` 需要重新构建并重启；参数变更实时生效。管理前端复用现有页面，`reader-ui`、PostgreSQL schema、Redis 和 MinIO 无变更，无需重启。
