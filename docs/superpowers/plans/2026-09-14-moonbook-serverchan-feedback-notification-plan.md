@@ -14,16 +14,15 @@
 
 ### 任务一：系统参数敏感值保护
 
-- [ ] 确认当前最高 PostgreSQL 迁移版本，新增更高版本迁移，为未删除的 `serverchan.enabled` 和 `serverchan.send_key` 建立局部唯一约束。
-- [ ] 更新迁移 manifest 和迁移契约测试，验证空库、升级及重复执行路径。
-- [ ] 在系统参数服务中定义保留键、掩码和稳定的 `secretcrypto.Scope`。
-- [ ] 创建 SendKey 时校验非空值，通过统一主密钥加密后再写入 `sys_params.value`。
-- [ ] 更新 SendKey 时支持掩码保留原值和新明文重新加密；限制保留键改名及普通参数改为保留键。
-- [ ] 严格校验 `serverchan.enabled` 只能为 `true` 或 `false`。
-- [ ] 对参数列表、详情和按键查询结果统一掩码 SendKey。
-- [ ] 添加服务测试，覆盖加密、掩码、保留、轮换、非法开关、改名和重复键。
-- [ ] 格式化并执行参数服务及迁移定向测试。
-- [ ] 提交：`保护Server酱参数密钥`。
+- [x] 在 PostgreSQL 事务中使用保留键 advisory lock 串行化创建，并在写入前检查未删除记录，保证 `serverchan.enabled` 和 `serverchan.send_key` 各自唯一且不引入 schema 变更。
+- [x] 在系统参数服务中定义保留键、掩码和稳定的 `secretcrypto.Scope`。
+- [x] 创建 SendKey 时校验非空值，通过统一主密钥加密后再写入 `sys_params.value`。
+- [x] 更新 SendKey 时支持掩码保留原值和新明文重新加密；限制保留键改名及普通参数改为保留键。
+- [x] 严格校验 `serverchan.enabled` 只能为 `true` 或 `false`。
+- [x] 对参数列表、详情和按键查询结果统一掩码 SendKey。
+- [x] 添加服务测试，覆盖加密、掩码、保留、轮换、非法开关、改名和重复键。
+- [x] 格式化并执行参数服务定向测试。
+- [x] 提交：`保护Server酱参数密钥`。
 
 ### 任务二：Server酱通知组件
 
@@ -61,7 +60,7 @@
 ## 4. 服务影响
 
 - `server`：需要重新构建并重启，以加载参数保护和反馈通知代码。
-- PostgreSQL：新增仅针对两个 Server酱保留参数键的局部唯一索引，不修改现有业务数据。
+- PostgreSQL：不变更 schema 或现有业务数据；创建保留参数时使用事务级 advisory lock 保证并发唯一性。
 - `web`：复用现有参数管理页面，无代码变更，无需因本功能单独重启；若与后端一起发布静态资源也不需要额外配置。
 - `reader-ui`、Redis 和 MinIO：无代码或配置变更，无需重启。
 - 参数在后端请求时实时读取，后续开关或 SendKey 调整无需重启服务。
