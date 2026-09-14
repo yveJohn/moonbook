@@ -328,5 +328,5 @@ M3 已满足退出条件：冻结 `reader-ui` 业务树无差异，全部冻结�
 - 管理员通过参数管理维护 `serverchan.enabled` 和 `serverchan.send_key`。SendKey 复用 `MOONBOOK_APP_MASTER_KEY` 加密落库，列表、详情和按键查询均只返回 `********`，掩码更新保留原密文。
 - Server酱客户端固定访问 `https://sctapi.ftqq.com`，3 秒总超时且不重试；标题固定，正文包含字符串 ID、提交时间和最多 1,000 个 Unicode 字符的反馈内容。
 - 验证：参数加密/掩码/轮换/保留键保护测试，配置解密、固定请求、响应校验、超时、截断及秘密不泄漏测试，反馈写入成功/失败/通知失败服务测试，以及既有反馈 HTTP 契约回归。
-- 本地未配置项目专用 PostgreSQL 测试 DSN，真实库集成未执行。全量 Go 测试仍被既有问题阻塞：两个已提交的 `00061` 迁移版本冲突且行为日志迁移缺少 forward-only Down、SQL 所有权登记与既有查询不一致、MCP 测试依赖未启动的 `localhost:8888`，以及 GVA 模板/插件基线断言失败；本功能相关单元测试、`go vet`、后端构建和秘密扫描均通过。
+- 本地未配置项目专用 PostgreSQL 测试 DSN，真实库集成未执行。发布前检查发现尚未部署的行为日志迁移误用了重复版本 `00061`，经用户明确授权后改为 `00079` 并补齐 forward-only Down、迁移清单及 Reader 表所有权登记。全量 Go 测试仍被其他既有问题阻塞：Commerce 跨域 SQL、MCP 测试依赖未启动的 `localhost:8888`，以及 GVA 模板/插件基线断言失败；本功能相关单元测试、`go vet`、后端构建和秘密扫描均通过。
 - 服务影响：仅后端 `server` 需要重新构建并重启；参数变更实时生效。管理前端复用现有页面，`reader-ui`、PostgreSQL schema、Redis 和 MinIO 无变更，无需重启。

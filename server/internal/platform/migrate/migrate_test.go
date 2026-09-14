@@ -124,9 +124,33 @@ func TestEmbeddedMigrationManifest(t *testing.T) {
 		"00076_reader_invite_reward_detail_repair.sql",
 		"00077_reader_user_operations_admin.sql",
 		"00078_reader_invite_share_text.sql",
+		"00079_reader_operation_events.sql",
 	}
 	if strings.Join(names, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("migration manifest = %v, want %v", names, want)
+	}
+}
+
+func TestReaderOperationEventsMigrationContract(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/00079_reader_operation_events.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"CREATE TABLE reader_operation_events",
+		"reader_operation_events_reader_created_idx",
+		"REFERENCES reader_accounts(id)",
+		"Moonbook migrations are forward-only",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("reader operation events migration missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"TRUNCATE", "DELETE FROM reader_operation_events", "DROP TABLE"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("reader operation events migration contains forbidden statement %q", forbidden)
+		}
 	}
 }
 

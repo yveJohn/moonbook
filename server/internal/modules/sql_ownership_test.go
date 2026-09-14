@@ -32,6 +32,7 @@ var tableOwners = map[string]dataOwner{
 	"reader_feedback":                   readerOwner,
 	"reader_daily_activity":             readerOwner,
 	"reader_activity_settings":          readerOwner,
+	"reader_operation_events":           readerOwner,
 	"commerce_products":                 commerceOwner,
 	"commerce_chapter_pricing_config":   commerceOwner,
 	"commerce_membership_grants":        commerceOwner,
